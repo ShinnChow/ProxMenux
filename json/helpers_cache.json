@@ -3109,6 +3109,36 @@
     "os": "debian"
   },
   {
+    "name": "Dashy",
+    "slug": "dashy",
+    "desc": "Dashy is a solution that helps you organize your self-hosted services by centralizing access to them through a single interface.",
+    "script": "ct/dashy.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dashy.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dashy.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00010"
+    ],
+    "category_names": [
+      "Dashboards & Frontends"
+    ],
+    "notes": [],
+    "port": 4000,
+    "website": "https://dashy.to/",
+    "documentation": "https://dashy.to/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/dashy.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/dashy/user-data/conf.yml",
+    "os": "debian"
+  },
+  {
     "name": "Databasus",
     "slug": "databasus",
     "desc": "Free, open source and self-hosted solution for automated PostgreSQL backups. With multiple storage options, notifications, scheduling, and a beautiful web interface for managing database backups across multiple PostgreSQL instances.",
@@ -3904,6 +3934,36 @@
     "os": "ubuntu"
   },
   {
+    "name": "DrawDB",
+    "slug": "drawdb",
+    "desc": "DrawDB is a free, simple, and intuitive database entity relationship (DBER) editor right in your browser. Build diagrams with a few clicks, export SQL scripts, and customize your editor.",
+    "script": "ct/drawdb.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/drawdb.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/drawdb.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://drawdb.vercel.app",
+    "documentation": "https://github.com/drawdb-io/drawdb",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/drawdb.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": "debian"
+  },
+  {
     "name": "Draw.IO",
     "slug": "drawio",
     "desc": "draw.io is a configurable diagramming and whiteboarding application, jointly owned and developed by draw.io Ltd (previously named JGraph) and draw.io AG.",
@@ -4610,6 +4670,40 @@
       "pve"
     ],
     "config_path": "/opt/firefly/.env",
+    "os": "debian"
+  },
+  {
+    "name": "fireshare",
+    "slug": "fireshare",
+    "desc": "Fireshare is a self-hosted app that lets you share videos — particularly gaming clips — via unique links. You upload videos to a folder, and the app generates shareable URLs for each one. It's designed as a lightweight alternative to services like Medal or YouTube for people who want full control over their content without relying on third-party platforms.",
+    "script": "ct/fireshare.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/fireshare.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/fireshare.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00006"
+    ],
+    "category_names": [
+      "Authentication & Security"
+    ],
+    "notes": [
+      "Type `cat ~/fireshare.creds` to get admin username and password.",
+      "To enable GPU transcoding, you need to set proper variable in `/opt/fireshare/fireshare.env`.",
+      "The installation is compiling `ffmpeg`, `SVT-AV1` and NVIDIA headers from source, this may take a while, depending on your host speed. If possible, increase CPU cores allocated to the LXC container."
+    ],
+    "port": 9000,
+    "website": "https://github.com/ShaneIsrael/fireshare",
+    "documentation": "https://github.com/ShaneIsrael/fireshare/blob/develop/README.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/fireshare.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/fireshare/fireshare.env",
     "os": "debian"
   },
   {
@@ -6326,7 +6420,7 @@
     "port": 3000,
     "website": "https://github.com/Pouzor/homelable",
     "documentation": "https://github.com/Pouzor/homelable/blob/main/INSTALLATION.md",
-    "logo": "https://raw.githubusercontent.com/Pouzor/homelable/main/frontend/public/logo.svg",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/homelable.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -9800,6 +9894,38 @@
     "os": "debian"
   },
   {
+    "name": "Nametag",
+    "slug": "nametag",
+    "desc": "Nametag is a personal relationships manager that helps you remember the people in your life. Track birthdays, contact info, relationships, and visualize your network as an interactive graph.",
+    "script": "ct/nametag.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nametag.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nametag.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000"
+    ],
+    "category_names": [
+      "Miscellaneous"
+    ],
+    "notes": [
+      "Create your first account via the web UI — self-hosted accounts are auto-verified."
+    ],
+    "port": 3000,
+    "website": "https://nametag.one",
+    "documentation": "https://github.com/mattogodoy/nametag",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/nametag.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/nametag/.env",
+    "os": "debian"
+  },
+  {
     "name": "Navidrome",
     "slug": "navidrome",
     "desc": "Navidrome is a music server solution that makes your music collection accessible from anywhere. It provides a modern web-based user interface and compatibility with a range of third-party mobile apps for both iOS and Android devices. With Navidrome, users can access their music collection from anywhere, whether at home or on the go. The software supports a variety of music formats, making it easy for users to play their favorite songs and albums. Navidrome provides a simple and user-friendly interface for managing and organizing music collections, making it a valuable tool for music lovers who want to access their music from anywhere. The software is designed to be easy to set up and use, making it a popular choice for those who want to host their own music server and enjoy their music collection from anywhere.",
@@ -11181,6 +11307,40 @@
       "username": "admin",
       "password": "admin"
     },
+    "os": "debian"
+  },
+  {
+    "name": "OpenThread Border Router",
+    "slug": "openthread-br",
+    "desc": "OpenThread Border Router (OTBR) connects a Thread network to other IP-based networks such as Wi-Fi or Ethernet, providing bidirectional connectivity, mDNS/SRP service discovery, NAT64, and external Thread commissioning.",
+    "script": "ct/openthread-br.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/openthread-br.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/openthread-br.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00017"
+    ],
+    "category_names": [
+      "ZigBee, Z-Wave & Matter"
+    ],
+    "notes": [
+      "Requires a Thread Radio Co-Processor (RCP) USB device passed through to the LXC container (e.g. /dev/ttyACM0). Edit /etc/default/otbr-agent to configure the RCP device path.",
+      "This container runs in privileged mode for network administration (iptables, ipset, tun device access).",
+      "Services are not started automatically on first boot. Connect your RCP device, configure /etc/default/otbr-agent, then run: systemctl start otbr-agent && systemctl start otbr-web"
+    ],
+    "port": 80,
+    "website": "https://openthread.io/",
+    "documentation": "https://openthread.io/guides/border-router",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/openthread.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/etc/default/otbr-agent",
     "os": "debian"
   },
   {
@@ -16594,6 +16754,38 @@
     ],
     "config_path": "Debian `/etc/transmission-daemon/settings.json` | Alpine `/var/lib/transmission/config/settings.json`",
     "os": "alpine"
+  },
+  {
+    "name": "Transmute",
+    "slug": "transmute",
+    "desc": "Transmute is a free, open-source, self-hosted file converter built for privacy. Convert images, video, audio, documents, spreadsheets, subtitles, and fonts locally with no file size limits.",
+    "script": "ct/transmute.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/transmute.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/transmute.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00011"
+    ],
+    "category_names": [
+      "Files & Downloads"
+    ],
+    "notes": [
+      "Create your first account via the web UI — it becomes the admin account."
+    ],
+    "port": 3313,
+    "website": "https://transmute.sh",
+    "documentation": "https://transmute.sh/docs/getting-started/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/transmute.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/transmute/backend/.env",
+    "os": "debian"
   },
   {
     "name": "Trilium Notes",
