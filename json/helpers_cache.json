@@ -4682,10 +4682,10 @@
     "type": "lxc",
     "type_id": "nm9bra8mzye2scg",
     "categories": [
-      "scriptcat00006"
+      "scriptcat00013"
     ],
     "category_names": [
-      "Authentication & Security"
+      "Media & Streaming"
     ],
     "notes": [
       "Type `cat ~/fireshare.creds` to get admin username and password.",
