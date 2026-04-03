@@ -683,6 +683,39 @@
     "os": "debian"
   },
   {
+    "name": "Anchor",
+    "slug": "anchor",
+    "desc": "Anchor is an offline-first, self-hosted note-taking application with rich text editing, real-time sync across devices, note sharing, tags, attachments, OIDC authentication, and admin panel.",
+    "script": "ct/anchor.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/anchor.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/anchor.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [
+      "The first user to register becomes the admin.",
+      "OIDC can be configured via environment variables in `/opt/anchor/.env` or the admin panel."
+    ],
+    "port": 3000,
+    "website": "https://github.com/ZhFahim/anchor",
+    "documentation": "https://github.com/ZhFahim/anchor#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/anchor.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/anchor/.env",
+    "os": "debian"
+  },
+  {
     "name": "Anytype Server",
     "slug": "anytype-server",
     "desc": "Anytype is a local-first, privacy-focused alternative to Notion. This script deploys the any-sync-bundle which provides a self-hosted sync server for Anytype clients with external MongoDB and Redis Stack.",
@@ -8585,7 +8618,7 @@
     "port": 3210,
     "website": "https://lobehub.com/",
     "documentation": "https://lobehub.com/docs",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/lobehub.webp",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/lobechat.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -11326,16 +11359,15 @@
       "ZigBee, Z-Wave & Matter"
     ],
     "notes": [
-      "Requires a Thread Radio Co-Processor (RCP) USB device passed through to the LXC container (e.g. /dev/ttyACM0). Edit /etc/default/otbr-agent to configure the RCP device path.",
-      "This container runs in privileged mode for network administration (iptables, ipset, tun device access).",
-      "Services are not started automatically on first boot. Connect your RCP device, configure /etc/default/otbr-agent, then run: systemctl start otbr-agent && systemctl start otbr-web"
+      "Requires a Thread Radio Co-Processor (RCP) device. USB: pass through to LXC (e.g. /dev/ttyACM0). TCP: use `spinel+hdlc+uart://IP:PORT` format.",
+      "Services are enabled but not started at install. Configure `/etc/default/otbr-agent` with your RCP device, then run: `systemctl start otbr-agent && systemctl start otbr-web`"
     ],
     "port": 80,
     "website": "https://openthread.io/",
     "documentation": "https://openthread.io/guides/border-router",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/openthread.webp",
     "updateable": true,
-    "privileged": false,
+    "privileged": true,
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
@@ -14947,6 +14979,39 @@
     "os": "debian"
   },
   {
+    "name": "Slink",
+    "slug": "slink",
+    "desc": "Slink is a self-hosted image sharing platform built with Symfony and SvelteKit. It supports multi-file uploads, image compression, URL shortening, collections, tags, comments, SSO/OIDC, dark mode, and S3 storage.",
+    "script": "ct/slink.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/slink.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/slink.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00011"
+    ],
+    "category_names": [
+      "Files & Downloads"
+    ],
+    "notes": [
+      "API runs on Caddy+PHP-FPM (port 8080), client on Node.js (port 3000).",
+      "Mercure real-time notifications are not available in this bare-metal setup."
+    ],
+    "port": 3000,
+    "website": "https://github.com/andrii-kryvoviaz/slink",
+    "documentation": "https://slink.pages.dev",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/slink.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/slink/services/api/.env",
+    "os": "debian"
+  },
+  {
     "name": "Slskd",
     "slug": "slskd",
     "desc": "A modern client-server application for the Soulseek file sharing network. ",
@@ -15170,6 +15235,39 @@
       "pve"
     ],
     "config_path": "/etc/sonobarr/.env",
+    "os": "debian"
+  },
+  {
+    "name": "SoulSync",
+    "slug": "soulsync",
+    "desc": "SoulSync is an intelligent music discovery and automation platform. It monitors artists, generates playlists, downloads missing tracks from multiple sources, verifies audio fingerprints, enriches metadata, and syncs with your media server.",
+    "script": "ct/soulsync.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/soulsync.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/soulsync.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [
+      "Requires a running slskd instance for Soulseek downloads. Configure in Settings → Downloads.",
+      "Spotify API credentials are optional but recommended for discovery features. Configure at `http://IP:8008` → Settings."
+    ],
+    "port": 8008,
+    "website": "https://github.com/Nezreka/SoulSync",
+    "documentation": "https://github.com/Nezreka/SoulSync#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/soulsync.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/soulsync/config",
     "os": "debian"
   },
   {
@@ -16789,6 +16887,39 @@
     "os": "debian"
   },
   {
+    "name": "TREK",
+    "slug": "trek",
+    "desc": "TREK is a self-hosted, real-time collaborative travel planner with interactive maps, budgets, packing lists, weather forecasts, PWA support, and multi-user collaboration via WebSocket.",
+    "script": "ct/trek.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/trek.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/trek.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000"
+    ],
+    "category_names": [
+      "Miscellaneous"
+    ],
+    "notes": [
+      "The first user to register becomes the admin.",
+      "ENCRYPTION_KEY is auto-generated during setup. See `/opt/trek/server/.env`."
+    ],
+    "port": 3000,
+    "website": "https://github.com/mauriceboe/TREK",
+    "documentation": "https://github.com/mauriceboe/TREK#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/trek.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/trek/server/.env",
+    "os": "debian"
+  },
+  {
     "name": "Trilium Notes",
     "slug": "trilium",
     "desc": "Trilium Notes is the latest and officially maintained version of the powerful, self-hosted note-taking and personal knowledge management application. It enables users to organize information in a hierarchical tree structure and supports rich text editing, internal linking, images, attachments, and powerful scripting capabilities. This version reflects the most current development efforts under the TriliumNext organization and replaces all prior forks or legacy variants. Trilium is ideal for building personal wikis, structured documentation, and long-term knowledge archives, giving users full local control and privacy.",
@@ -17642,7 +17773,7 @@
   {
     "name": "UpSnap",
     "slug": "upsnap",
-    "desc": "UpSnap is a self-hosted web app that lets you wake up, manage and monitor devices on your network with ease. Built with SvelteKit, Go and PocketBase, it offers a clean dashboard, scheduled wake-ups, device discovery and secure user management.",
+    "desc": "UpSnap is a simple Wake-on-LAN web app with device dashboard, scheduled wake events via cron, network scanning with nmap, custom shutdown commands, user management, and 35 themes.",
     "script": "ct/upsnap.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/upsnap.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/upsnap.sh",
@@ -17655,7 +17786,8 @@
       "Network & Firewall"
     ],
     "notes": [
-      "The first user you register will be the admin user."
+      "The first user to register becomes the admin (visit `http://IP:8090/_/`).",
+      "Do not expose UpSnap to the internet — shutdown commands can execute shell commands. Use a VPN for remote access."
     ],
     "port": 8090,
     "website": "https://github.com/seriousm4x/UpSnap",
@@ -17664,9 +17796,9 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": false,
+    "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "",
     "os": "debian"
