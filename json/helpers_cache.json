@@ -11344,39 +11344,6 @@
     "os": "debian"
   },
   {
-    "name": "OpenThread Border Router",
-    "slug": "openthread-br",
-    "desc": "OpenThread Border Router (OTBR) connects a Thread network to other IP-based networks such as Wi-Fi or Ethernet, providing bidirectional connectivity, mDNS/SRP service discovery, NAT64, and external Thread commissioning.",
-    "script": "ct/openthread-br.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/openthread-br.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/openthread-br.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00017"
-    ],
-    "category_names": [
-      "ZigBee, Z-Wave & Matter"
-    ],
-    "notes": [
-      "Requires a Thread Radio Co-Processor (RCP) device. USB: pass through to LXC (e.g. /dev/ttyACM0). TCP: use `spinel+hdlc+uart://IP:PORT` format.",
-      "Services are enabled but not started at install. Configure `/etc/default/otbr-agent` with your RCP device, then run: `systemctl start otbr-agent && systemctl start otbr-web`"
-    ],
-    "port": 80,
-    "website": "https://openthread.io/",
-    "documentation": "https://openthread.io/guides/border-router",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/openthread.webp",
-    "updateable": true,
-    "privileged": true,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "/etc/default/otbr-agent",
-    "os": "debian"
-  },
-  {
     "name": "Open WebUI",
     "slug": "openwebui",
     "desc": "OpenWebUI is a self-hosted, web-based interface that allows you to run AI models entirely offline. It integrates with various LLM runners, such as OpenAI and Ollama, and supports features like markdown and LaTeX rendering, model management, and voice/video calls. It also offers multilingual support and the ability to generate images using APIs like DALL-E or ComfyUI",
