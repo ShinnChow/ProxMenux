@@ -14995,6 +14995,7 @@
     ],
     "notes": [
       "API runs on Caddy+PHP-FPM (port 8080), client on Node.js (port 3000).",
+      "Credentials are saved to `~/slink.creds`.",
       "Mercure real-time notifications are not available in this bare-metal setup."
     ],
     "port": 3000,
@@ -15009,6 +15010,10 @@
       "lxc"
     ],
     "config_path": "/opt/slink/services/api/.env",
+    "default_credentials": {
+      "username": "admin@localhost",
+      "password": "auto-generated"
+    },
     "os": "debian"
   },
   {
