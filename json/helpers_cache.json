@@ -427,6 +427,38 @@
     "os": "debian"
   },
   {
+    "name": "AllStarLink",
+    "slug": "allstarlink-vm",
+    "desc": "AllStarLink is a network of Amateur Radio repeaters, remote base stations and hot spots accessible to each other via Voice over Internet Protocol.",
+    "script": "vm/allstarlink-vm.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/allstarlink-vm.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/vm/allstarlink-vm.sh",
+    "type": "vm",
+    "type_id": "lte524abgx960bd",
+    "categories": [
+      "scriptcat00024"
+    ],
+    "category_names": [
+      "Gaming & Leisure"
+    ],
+    "notes": [
+      "Options to Install Allmon3"
+    ],
+    "port": 0,
+    "website": "https://www.allstarlink.org/",
+    "documentation": "https://allstarlink.github.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/allstar-link.webp",
+    "updateable": false,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "vm"
+    ],
+    "config_path": "",
+    "os": "debian"
+  },
+  {
     "name": "AlmaLinux 10",
     "slug": "almalinux-10-vm",
     "desc": "AlmaLinux 10 (Heliotrope Lion) is a community-driven, RHEL-compatible enterprise Linux distribution. It provides a stable, production-ready platform with long-term support, making it ideal for servers, workloads, and cloud deployments.",
@@ -6458,7 +6490,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -7489,6 +7521,39 @@
       "pve"
     ],
     "config_path": "",
+    "os": "debian"
+  },
+  {
+    "name": "Kan",
+    "slug": "kan",
+    "desc": "Kan is an open-source Kanban board and project management tool built with Next.js and PostgreSQL.",
+    "script": "ct/kan.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/kan.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/kan.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [
+      "Building from source requires significant resources and may take several minutes.",
+      "Update NEXT_PUBLIC_BASE_URL in /opt/kan/.env if accessing from a different hostname."
+    ],
+    "port": 3000,
+    "website": "https://kan.bn/",
+    "documentation": "https://github.com/kanbn/kan#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/kan.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/kan/.env",
     "os": "debian"
   },
   {
@@ -8788,6 +8853,39 @@
       "pve"
     ],
     "config_path": "",
+    "os": "debian"
+  },
+  {
+    "name": "Lychee",
+    "slug": "lychee",
+    "desc": "Lychee is a free, self-hosted photo management tool that allows you to upload, manage, and share photos with a beautiful web interface.",
+    "script": "ct/lychee.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/lychee.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/lychee.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [
+      "Create your admin account on first login via the web interface.",
+      "Photo storage uses disk space under /opt/lychee/storage. Plan disk size accordingly."
+    ],
+    "port": 80,
+    "website": "https://lycheeorg.github.io/",
+    "documentation": "https://lycheeorg.dev/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/lychee.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/lychee/.env",
     "os": "debian"
   },
   {
@@ -11370,7 +11468,7 @@
     "updateable": true,
     "privileged": true,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
