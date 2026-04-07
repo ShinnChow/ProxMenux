@@ -782,36 +782,6 @@
     "os": "ubuntu"
   },
   {
-    "name": "Apache-Cassandra",
-    "slug": "apache-cassandra",
-    "desc": "Apache-Cassandra is an open source NoSQL distributed database trusted by thousands of companies for scalability and high availability without compromising performance.",
-    "script": "ct/apache-cassandra.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/apache-cassandra.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/apache-cassandra.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00008"
-    ],
-    "category_names": [
-      "Databases"
-    ],
-    "notes": [],
-    "port": 0,
-    "website": "https://cassandra.apache.org/",
-    "documentation": "https://cassandra.apache.org/doc/latest/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/apache-cassandra.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "/etc/cassandra/cassandra.yaml",
-    "os": "debian"
-  },
-  {
     "name": "Apache CouchDB",
     "slug": "apache-couchdb",
     "desc": "Apache CouchDB Seamless multi-master sync, that scales from Big Data to Mobile, with an Intuitive HTTP/JSON API and designed for Reliability.",
@@ -1105,36 +1075,6 @@
       "pve"
     ],
     "config_path": "",
-    "os": "debian"
-  },
-  {
-    "name": "Argus",
-    "slug": "argus",
-    "desc": "Argus will query websites at a user defined interval for new software releases and then trigger Gotify/Slack/Other notification(s) and/or WebHook(s) when one has been found. For example, you could set it to monitor the Argus repo (release-argus/argus). This will query the GitHub API and track the tag_name variable. When this variable changes from what it was on a previous query, a GitHub-style WebHook could be sent that triggers something (like AWX) to update Argus on your server.",
-    "script": "ct/argus.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/argus.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/argus.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00011"
-    ],
-    "category_names": [
-      "Files & Downloads"
-    ],
-    "notes": [],
-    "port": 8080,
-    "website": "https://release-argus.io/",
-    "documentation": "https://release-argus.io/docs/overview/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/argus.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "/opt/argus/config.yml",
     "os": "debian"
   },
   {
@@ -2636,40 +2576,6 @@
     "os": "debian"
   },
   {
-    "name": "CommaFeed",
-    "slug": "commafeed",
-    "desc": "CommaFeed is a Google Reader inspired self-hosted RSS reader.",
-    "script": "ct/commafeed.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/commafeed.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/commafeed.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00012"
-    ],
-    "category_names": [
-      "Documents & Notes"
-    ],
-    "notes": [],
-    "port": 8082,
-    "website": "https://www.commafeed.com/",
-    "documentation": "https://athou.github.io/commafeed/documentation/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/commafeed.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "",
-    "default_credentials": {
-      "username": "admin",
-      "password": "admin"
-    },
-    "os": "debian"
-  },
-  {
     "name": "Configarr",
     "slug": "configarr",
     "desc": "Configarr is an open-source tool designed to simplify configuration and synchronization for Sonarr and Radarr (and other experimental). It integrates with TRaSH Guides to automate updates of custom formats, quality profiles, and other settings, while also supporting user-defined configurations.",
@@ -3141,36 +3047,6 @@
       "pve"
     ],
     "config_path": "/opt/cryptpad/config/config.js",
-    "os": "debian"
-  },
-  {
-    "name": "Daemon Sync Server",
-    "slug": "daemonsync",
-    "desc": "Sync files from app to server, share photos & videos, back up your data and stay secure inside local network.",
-    "script": "ct/daemonsync.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/daemonsync.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/daemonsync.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00019"
-    ],
-    "category_names": [
-      "Automation & Scheduling"
-    ],
-    "notes": [],
-    "port": 8084,
-    "website": "https://daemonsync.me/",
-    "documentation": "",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/daemon-sync.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "",
     "os": "debian"
   },
   {
@@ -5659,36 +5535,6 @@
     "os": "debian"
   },
   {
-    "name": "GlobaLeaks",
-    "slug": "globaleaks",
-    "desc": "GlobaLeaks is a free and open-source whistleblowing software enabling anyone to easily set up and maintain a secure reporting platform.",
-    "script": "ct/globaleaks.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/globaleaks.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/globaleaks.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00000"
-    ],
-    "category_names": [
-      "Miscellaneous"
-    ],
-    "notes": [],
-    "port": 443,
-    "website": "https://www.globaleaks.org/",
-    "documentation": "https://docs.globaleaks.org",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/globaleaks.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "",
-    "os": "debian"
-  },
-  {
     "name": "GLPI",
     "slug": "glpi",
     "desc": "GLPI is a Free Asset and IT Management Software package, Data center management, ITIL Service Desk, licenses tracking and software auditing.",
@@ -6260,38 +6106,6 @@
     "documentation": "https://github.com/heiher/hev-socks5-server/blob/main/README.md",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hev.webp",
     "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "/opt/hivemq/conf/config.xml",
-    "os": "debian"
-  },
-  {
-    "name": "HiveMQ CE",
-    "slug": "hivemq",
-    "desc": "HiveMQ CE is a Java-based open source MQTT broker that fully supports MQTT 3.x and MQTT 5.",
-    "script": "ct/hivemq.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hivemq.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hivemq.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00018"
-    ],
-    "category_names": [
-      "MQTT & Messaging"
-    ],
-    "notes": [
-      "To check if HiveMQ is listening to the default port for MQTT `lsof -i :1883`"
-    ],
-    "port": 1883,
-    "website": "https://www.hivemq.com/",
-    "documentation": "https://github.com/hivemq/hivemq-community-edition/wiki",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hivemq.webp",
-    "updateable": false,
     "privileged": false,
     "has_arm": false,
     "is_dev": false,
@@ -6923,36 +6737,6 @@
       "pve"
     ],
     "config_path": "",
-    "os": "debian"
-  },
-  {
-    "name": "InspIRCd 4",
-    "slug": "inspircd",
-    "desc": "InspIRCd is a modular C++ Internet Relay Chat (IRC) server for UNIX-like and Windows systems.",
-    "script": "ct/inspircd.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/inspircd.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/inspircd.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00024"
-    ],
-    "category_names": [
-      "Gaming & Leisure"
-    ],
-    "notes": [],
-    "port": 6667,
-    "website": "https://www.inspircd.org/",
-    "documentation": "https://docs.inspircd.org/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/inspircd.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "/etc/inspircd/inspircd.conf",
     "os": "debian"
   },
   {
@@ -8048,36 +7832,6 @@
       "vm"
     ],
     "config_path": "/opt/komodo/compose.env",
-    "os": "debian"
-  },
-  {
-    "name": "Kubo",
-    "slug": "kubo",
-    "desc": "Kubo, developed by IPFS, is a decentralized file storage and sharing protocol. It implements the IPFS protocol, allowing users to manage files across a distributed network, ensuring data integrity and availability. Kubo supports file versioning, pinning, provides APIs and CLI tools for developers, and allows customizable node configurations for enhanced privacy and control.",
-    "script": "ct/kubo.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/kubo.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/kubo.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00004"
-    ],
-    "category_names": [
-      "Network & Firewall"
-    ],
-    "notes": [],
-    "port": 5001,
-    "website": "https://github.com/ipfs/kubo",
-    "documentation": "https://docs.ipfs.tech/how-to/command-line-quick-start/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/ipfs.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "~/.ipfs/config",
     "os": "debian"
   },
   {
@@ -10090,40 +9844,6 @@
     "os": "debian"
   },
   {
-    "name": "Neo4j",
-    "slug": "neo4j",
-    "desc": "Neo4j is a graph database designed to manage complex data relationships. It uses nodes, relationships, and properties to store and analyze connected data, making it ideal for applications like recommendation engines, fraud detection, and network analysis. Its structure allows for fast querying and deep data insights through native graph storage.",
-    "script": "ct/neo4j.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/neo4j.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/neo4j.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00008"
-    ],
-    "category_names": [
-      "Databases"
-    ],
-    "notes": [],
-    "port": 7474,
-    "website": "https://neo4j.com/product/neo4j-graph-database/",
-    "documentation": "https://neo4j.com/docs/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/neo4j.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "/etc/neo4j/neo4j.conf",
-    "default_credentials": {
-      "username": "neo4j",
-      "password": "neo4j"
-    },
-    "os": "debian"
-  },
-  {
     "name": "NetBird",
     "slug": "netbird",
     "desc": "NetBird is an open source VPN management platform that creates secure peer-to-peer networks using WireGuard. It enables secure connectivity between devices anywhere in the world without complex firewall configurations or port forwarding. NetBird offers features like zero-configuration networking, SSO integration, access control policies, and a centralized management dashboard. It's designed to be simple to deploy and manage, making it ideal for connecting remote teams, securing IoT devices, or building secure infrastructure networks.",
@@ -10651,44 +10371,6 @@
     ],
     "config_path": "~/.node-red/settings.js",
     "os": "alpine"
-  },
-  {
-    "name": "NodeBB",
-    "slug": "nodebb",
-    "desc": "NodeBB Forum Software is powered by Node.js and supports either Redis, MongoDB, or a PostgreSQL database. It utilizes web sockets for instant interactions and real-time notifications. NodeBB takes the best of the modern web: real-time streaming discussions, mobile responsiveness, and rich RESTful read/write APIs, while staying true to the original bulletin board/forum format → categorical hierarchies, local user accounts, and asynchronous messaging.",
-    "script": "ct/nodebb.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nodebb.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nodebb.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00010",
-      "scriptcat00025"
-    ],
-    "category_names": [
-      "Dashboards & Frontends",
-      "Business & ERP"
-    ],
-    "notes": [
-      "Only use Ubuntu 24.04!"
-    ],
-    "port": 4567,
-    "website": "https://nodebb.org/",
-    "documentation": "https://docs.nodebb.org/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/nodebb.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "",
-    "default_credentials": {
-      "username": "admin@community-scripts.org",
-      "password": "community-scripts"
-    },
-    "os": "ubuntu"
   },
   {
     "name": "nodecast-tv",
@@ -17494,7 +17176,9 @@
     "category_names": [
       "Media & Streaming"
     ],
-    "notes": [],
+    "notes": [
+      "There is no web interface for this service, it only serves as a backend for the UHF app."
+    ],
     "port": 7568,
     "website": "https://www.uhfapp.com/",
     "documentation": "https://www.uhfapp.com/server",
