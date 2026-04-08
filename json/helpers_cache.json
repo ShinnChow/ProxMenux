@@ -651,6 +651,39 @@
     "os": "debian"
   },
   {
+    "name": "Valkey",
+    "slug": "alpine-valkey",
+    "desc": "Valkey is an open source (BSD) high-performance key/value datastore that supports a variety of workloads such as caching, message queues, and can act as a primary database. The project is backed by the Linux Foundation, ensuring it will remain open source forever.",
+    "script": "ct/alpine-valkey.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/alpine-valkey.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/alpine-valkey.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [
+      "Show Login Credentials, type `cat ~/valkey.creds` in the LXC console",
+      "Alpines Valkey package is compiled without TLS support. For TLS, use the Debian-based valkey script instead."
+    ],
+    "port": 6379,
+    "website": "https://valkey.io/",
+    "documentation": "https://valkey.io/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/valkey.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "pve"
+    ],
+    "config_path": "/etc/valkey/valkey.conf",
+    "os": "alpine"
+  },
+  {
     "name": "Alpine-Wakapi",
     "slug": "alpine-wakapi",
     "desc": "Wakapi is an open-source tool that helps you keep track of the time you have spent coding on different projects in different programming languages and more. Ideal for statistics freaks and anyone else.",
@@ -17653,72 +17686,6 @@
     ],
     "config_path": "",
     "os": "debian"
-  },
-  {
-    "name": "Valkey",
-    "slug": "valkey",
-    "desc": "Valkey is an open source (BSD) high-performance key/value datastore that supports a variety of workloads such as caching, message queues, and can act as a primary database. The project is backed by the Linux Foundation, ensuring it will remain open source forever.",
-    "script": "ct/valkey.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/valkey.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/valkey.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00008"
-    ],
-    "category_names": [
-      "Databases"
-    ],
-    "notes": [
-      "Show Login Credentials, type `cat ~/valkey.creds` in the LXC console",
-      "Alpines Valkey package is compiled without TLS support. For TLS, use the Debian-based valkey script instead."
-    ],
-    "port": 6379,
-    "website": "https://valkey.io/",
-    "documentation": "https://valkey.io/docs/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/valkey.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "/etc/valkey/valkey.conf",
-    "os": "debian"
-  },
-  {
-    "name": "Valkey",
-    "slug": "valkey",
-    "desc": "Valkey is an open source (BSD) high-performance key/value datastore that supports a variety of workloads such as caching, message queues, and can act as a primary database. The project is backed by the Linux Foundation, ensuring it will remain open source forever.",
-    "script": "ct/valkey.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/valkey.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/valkey.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00008"
-    ],
-    "category_names": [
-      "Databases"
-    ],
-    "notes": [
-      "Show Login Credentials, type `cat ~/valkey.creds` in the LXC console",
-      "Alpines Valkey package is compiled without TLS support. For TLS, use the Debian-based valkey script instead."
-    ],
-    "port": 6379,
-    "website": "https://valkey.io/",
-    "documentation": "https://valkey.io/docs/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/valkey.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": false,
-    "execute_in": [
-      "pve"
-    ],
-    "config_path": "/etc/valkey/valkey.conf",
-    "os": "alpine"
   },
   {
     "name": "Vaultwarden",
