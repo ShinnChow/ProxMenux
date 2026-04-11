@@ -3562,7 +3562,9 @@
     "category_names": [
       "Containers & Docker"
     ],
-    "notes": [],
+    "notes": [
+      "The update function may modify or recreate Portainer containers (portainer/portainer-ce), even if they were created manually."
+    ],
     "port": 0,
     "website": "https://www.docker.com/",
     "documentation": "",
@@ -3592,7 +3594,9 @@
     "category_names": [
       "Containers & Docker"
     ],
-    "notes": [],
+    "notes": [
+      "The update function may modify or recreate Portainer containers (portainer/portainer-ce), even if they were created manually."
+    ],
     "port": 0,
     "website": "https://www.docker.com/",
     "documentation": "",
