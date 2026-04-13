@@ -9881,6 +9881,43 @@
     "os": "debian"
   },
   {
+    "name": "Neko",
+    "slug": "neko",
+    "desc": "A self-hosted virtual browser that uses WebRTC to stream a desktop environment to multiple users for watch parties, collaborative browsing, and interactive presentations.",
+    "script": "ct/neko.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/neko.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/neko.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [
+      "Login is password-only: 'admin' for admin, 'neko' for regular user. Change both in /etc/neko/neko.yaml.",
+      "Firefox ESR is installed as the default browser. The virtual display runs at 1280x720."
+    ],
+    "port": 8080,
+    "website": "https://neko.m1k1o.net/",
+    "documentation": "https://neko.m1k1o.net/docs/v3/configuration",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/neko.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/etc/neko/neko.yaml",
+    "default_credentials": {
+      "username": "",
+      "password": "admin"
+    },
+    "os": "debian"
+  },
+  {
     "name": "NetBird",
     "slug": "netbird",
     "desc": "NetBird is an open source VPN management platform that creates secure peer-to-peer networks using WireGuard. It enables secure connectivity between devices anywhere in the world without complex firewall configurations or port forwarding. NetBird offers features like zero-configuration networking, SSO integration, access control policies, and a centralized management dashboard. It's designed to be simple to deploy and manage, making it ideal for connecting remote teams, securing IoT devices, or building secure infrastructure networks.",
@@ -11497,6 +11534,39 @@
       "username": "admin",
       "password": ""
     },
+    "os": "debian"
+  },
+  {
+    "name": "Ownfoil",
+    "slug": "ownfoil",
+    "desc": "Ownfoil is a Nintendo Switch library manager, that will also turn your library into a fully customizable and self-hosted Shop, supporting multiple clients like Tinfoil, Cyberfoil and Sphaira.",
+    "script": "ct/ownfoil.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/ownfoil.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/ownfoil.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00024"
+    ],
+    "category_names": [
+      "Gaming & Leisure"
+    ],
+    "notes": [
+      "Ownfoil requires an admin user to be created to enable Authentication. Go to the Settings tab to create a first user that will have admin rights.",
+      "More CPU/RAM may be required depening on library size and number of concurrent users"
+    ],
+    "port": 8465,
+    "website": " https://github.com/a1ex4/ownfoil",
+    "documentation": "https://github.com/a1ex4/ownfoil",
+    "logo": "",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "/opt/ownfoil/app/config/settings.yaml",
     "os": "debian"
   },
   {
