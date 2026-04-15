@@ -8414,6 +8414,36 @@
     "os": ""
   },
   {
+    "name": "Mini QR",
+    "slug": "mini-qr",
+    "desc": "Create & scan cute qr codes easily.",
+    "script": "ct/mini-qr.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/mini-qr.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/mini-qr.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000"
+    ],
+    "category_names": [
+      "Miscellaneous"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://mini-qr-code-generator.vercel.app/",
+    "documentation": "https://github.com/lyqht/mini-qr",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/mini-qr.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Miniflux",
     "slug": "miniflux",
     "desc": "Miniflux is a minimalist and opinionated feed reader.",
@@ -12642,6 +12672,36 @@
     "os": ""
   },
   {
+    "name": "RSS-Bridge",
+    "slug": "rss-bridge",
+    "desc": "RSS-Bridge is a PHP web application that generates web feeds for websites that don't have one, supporting over 400 bridges for various platforms and services.",
+    "script": "ct/rss-bridge.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/rss-bridge.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/rss-bridge.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000"
+    ],
+    "category_names": [
+      "Miscellaneous"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://rss-bridge.org/",
+    "documentation": "https://rss-bridge.github.io/rss-bridge/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/rss-bridge.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Runtipi",
     "slug": "runtipi",
     "desc": "Runtipi lets you install all your favorite self-hosted apps without the hassle of configuring and managing each service. One-click installs and updates for more than 180 popular apps.",
@@ -16417,6 +16477,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "WhoDB",
+    "slug": "whodb",
+    "desc": "WhoDB is a lightweight next-gen database management tool built with Go and React, supporting PostgreSQL, MySQL, SQLite, MongoDB, Redis, MariaDB, ElasticSearch, and ClickHouse with AI-powered natural language queries.",
+    "script": "ct/whodb.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/whodb.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/whodb.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://whodb.com/",
+    "documentation": "https://docs.whodb.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/whodb.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
