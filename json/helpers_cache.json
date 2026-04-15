@@ -265,7 +265,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/affine/.env",
     "os": ""
@@ -298,6 +298,36 @@
       "pve"
     ],
     "config_path": "/opt/agentdvr/agent/Media/XML/config.json",
+    "os": ""
+  },
+  {
+    "name": "Akaunting",
+    "slug": "akaunting",
+    "desc": "Akaunting is a free, open-source online accounting software designed for small businesses and freelancers, featuring invoicing, expense tracking, and financial reporting.",
+    "script": "ct/akaunting.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/akaunting.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/akaunting.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00023"
+    ],
+    "category_names": [
+      "Finance & Budgeting"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://akaunting.com/",
+    "documentation": "https://akaunting.com/hc/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/akaunting.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -385,7 +415,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "vm"
     ],
     "config_path": "",
     "os": ""
@@ -510,6 +540,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Alpine-ntfy",
+    "slug": "alpine-ntfy",
+    "desc": "ntfy is a simple HTTP-based pub-sub notification service that lets you send push notifications to your phone or desktop via scripts, without signup or cost.",
+    "script": "ct/alpine-ntfy.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/alpine-ntfy.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/alpine-ntfy.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00018"
+    ],
+    "category_names": [
+      "MQTT & Messaging"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://ntfy.sh/",
+    "documentation": "https://docs.ntfy.sh/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/ntfy.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -663,6 +723,36 @@
     "os": ""
   },
   {
+    "name": "Anytype",
+    "slug": "anytype",
+    "desc": "Anytype is a local-first, privacy-focused alternative to Notion. This script deploys the any-sync-bundle which provides a self-hosted sync server for Anytype clients with external MongoDB and Redis Stack.",
+    "script": "ct/anytype.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/anytype.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/anytype.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 33010,
+    "website": "https://anytype.io/",
+    "documentation": "https://doc.anytype.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/anytype.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Anytype Server",
     "slug": "anytype-server",
     "desc": "Anytype is a local-first, privacy-focused alternative to Notion. This script deploys the any-sync-bundle which provides a self-hosted sync server for Anytype clients with external MongoDB and Redis Stack.",
@@ -690,6 +780,36 @@
       "pve"
     ],
     "config_path": "/opt/anytype/.env",
+    "os": ""
+  },
+  {
+    "name": "Apache-Cassandra",
+    "slug": "apache-cassandra",
+    "desc": "Apache-Cassandra is an open source NoSQL distributed database trusted by thousands of companies for scalability and high availability without compromising performance.",
+    "script": "ct/apache-cassandra.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/apache-cassandra.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/apache-cassandra.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://cassandra.apache.org/",
+    "documentation": "https://cassandra.apache.org/doc/latest/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/apache-cassandra.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -835,7 +955,7 @@
     "port": 8000,
     "website": "https://appriseit.com/api/",
     "documentation": "https://appriseit.com/api/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/apprise.webp",
+    "logo": "https://appriseit.com/_s/apprise-full-logo-light.DZmBGJFz.svg",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -976,6 +1096,36 @@
     "os": ""
   },
   {
+    "name": "Argus",
+    "slug": "argus",
+    "desc": "Argus will query websites at a user defined interval for new software releases and then trigger Gotify/Slack/Other notification(s) and/or WebHook(s) when one has been found. For example, you could set it to monitor the Argus repo (release-argus/argus). This will query the GitHub API and track the tag_name variable. When this variable changes from what it was on a previous query, a GitHub-style WebHook could be sent that triggers something (like AWX) to update Argus on your server.",
+    "script": "ct/argus.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/argus.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/argus.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00011"
+    ],
+    "category_names": [
+      "Files & Downloads"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://release-argus.io/",
+    "documentation": "https://release-argus.io/docs/overview/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/argus.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Aria2",
     "slug": "aria2",
     "desc": "Aria2 is a lightweight multi-protocol & multi-source, cross platform download utility operated in command-line. It supports HTTP/HTTPS, FTP, SFTP, BitTorrent and Metalink.",
@@ -1003,6 +1153,40 @@
       "pve"
     ],
     "config_path": "/root/aria2.daemon",
+    "os": ""
+  },
+  {
+    "name": "ARM",
+    "slug": "arm",
+    "desc": "Automatic Ripping Machine (ARM) automatically detects and rips Blu-rays, DVDs, and CDs. It identifies disc type, retrieves metadata, and handles transcoding with MakeMKV and HandBrake.",
+    "script": "ct/arm.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/arm.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/arm.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://github.com/automatic-ripping-machine/automatic-ripping-machine",
+    "documentation": "https://github.com/automatic-ripping-machine/automatic-ripping-machine/wiki",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/arm.webp",
+    "updateable": true,
+    "privileged": true,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": "password"
+    },
     "os": ""
   },
   {
@@ -1124,7 +1308,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/etc/authentik/config.yml",
     "os": ""
@@ -1596,6 +1780,36 @@
     "os": ""
   },
   {
+    "name": "Blinko",
+    "slug": "blinko",
+    "desc": "Blinko is an AI-powered card note-taking tool designed for capturing and organizing fleeting thoughts with natural language search powered by RAG technology.",
+    "script": "ct/blinko.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/blinko.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/blinko.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 1111,
+    "website": "https://blinko.space/",
+    "documentation": "https://docs.blinko.space/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/blinko.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Blocky",
     "slug": "blocky",
     "desc": "Blocky is a software tool designed for blocking unwanted ads and trackers on local networks. It functions as a DNS proxy and runs on the Go programming language. Blocky intercepts requests to advertisements and other unwanted content and blocks them before they reach the end user. This results in a cleaner, faster, and more secure online experience for users connected to the local network. Blocky is open-source, easy to configure and can be run on a variety of devices, making it a versatile solution for small to medium-sized local networks.",
@@ -1834,7 +2048,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/caddymanager/caddymanager.env",
     "default_credentials": {
@@ -1905,6 +2119,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Certimate",
+    "slug": "certimate",
+    "desc": "Certimate is an open-source SSL certificate management tool that automates the application, deployment, and renewal of SSL certificates, supporting integration with various cloud providers and deployment targets.",
+    "script": "ct/certimate.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/certimate.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/certimate.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00006"
+    ],
+    "category_names": [
+      "Authentication & Security"
+    ],
+    "notes": [],
+    "port": 8090,
+    "website": "https://certimate.me/",
+    "documentation": "https://docs.certimate.me/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/certimate.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin@certimate.fun",
+      "password": "1234567890"
+    },
     "os": ""
   },
   {
@@ -2115,6 +2363,40 @@
       "pve"
     ],
     "config_path": "/opt/cleanuparr/config",
+    "os": ""
+  },
+  {
+    "name": "ClickHouse",
+    "slug": "clickhouse",
+    "desc": "ClickHouse is an open-source, high-performance columnar database management system designed for real-time analytics and data processing using SQL queries.",
+    "script": "ct/clickhouse.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/clickhouse.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/clickhouse.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 8123,
+    "website": "https://clickhouse.com/",
+    "documentation": "https://clickhouse.com/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/clickhouse.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "default",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -2331,6 +2613,40 @@
       "pve"
     ],
     "config_path": "/opt",
+    "os": ""
+  },
+  {
+    "name": "CommaFeed",
+    "slug": "commafeed",
+    "desc": "CommaFeed is a Google Reader inspired self-hosted RSS reader.",
+    "script": "ct/commafeed.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/commafeed.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/commafeed.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 8082,
+    "website": "https://www.commafeed.com/",
+    "documentation": "https://athou.github.io/commafeed/documentation/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/commafeed.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": "admin"
+    },
     "os": ""
   },
   {
@@ -2744,6 +3060,36 @@
     "os": ""
   },
   {
+    "name": "Dagu",
+    "slug": "dagu",
+    "desc": "Dagu is a powerful, developer-friendly workflow engine that allows you to define DAGs (Directed Acyclic Graphs) in a simple YAML format for scheduling and running complex job dependencies.",
+    "script": "ct/dagu.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dagu.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dagu.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://dagu.sh/",
+    "documentation": "https://docs.dagu.sh/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/dagu.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Dashy",
     "slug": "dashy",
     "desc": "Dashy is a solution that helps you organize your self-hosted services by centralizing access to them through a single interface.",
@@ -2844,17 +3190,17 @@
   {
     "name": "ddclient",
     "slug": "ddclient",
-    "desc": "<p>ddclient is a Perl client used to update dynamic DNS entries for accounts on a wide range of dynamic DNS service providers. It supports multiple protocols and providers, allowing automatic IP address updates for your domain names.</p>",
+    "desc": "ddclient is a Perl client used to update dynamic DNS entries for accounts on a wide range of dynamic DNS service providers. It supports multiple protocols and providers, allowing automatic IP address updates for your domain names.",
     "script": "ct/ddclient.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/ddclient.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/ddclient.sh",
     "type": "lxc",
     "type_id": "nm9bra8mzye2scg",
     "categories": [
-      "scriptcat00005"
+      "scriptcat00004"
     ],
     "category_names": [
-      "Adblock & DNS"
+      "Network & Firewall"
     ],
     "notes": [],
     "port": 0,
@@ -2864,8 +3210,10 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": false,
-    "execute_in": [],
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
     "config_path": "/etc/ddclient.conf",
     "os": ""
   },
@@ -3147,7 +3495,7 @@
     "config_path": "/opt/discourse/.env",
     "default_credentials": {
       "username": "admin",
-      "password": "ChangeMe12345678"
+      "password": ""
     },
     "os": ""
   },
@@ -4240,6 +4588,36 @@
     "os": ""
   },
   {
+    "name": "Fleet",
+    "slug": "fleet",
+    "desc": "Fleet is an open-source device management platform for IT and security teams to manage and monitor servers, laptops, and other devices with osquery.",
+    "script": "ct/fleet.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/fleet.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/fleet.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://fleetdm.com/",
+    "documentation": "https://fleetdm.com/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/fleet.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "FlowiseAI",
     "slug": "flowiseai",
     "desc": "FlowiseAI is an open source low-code tool for developers to build customized LLM orchestration flow & AI agents",
@@ -4805,9 +5183,9 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/actions-runner",
     "os": ""
@@ -4871,6 +5249,36 @@
       "vm"
     ],
     "config_path": "/usr/local/share/doc/glances/glances.conf",
+    "os": ""
+  },
+  {
+    "name": "GlobaLeaks",
+    "slug": "globaleaks",
+    "desc": "GlobaLeaks is a free and open-source whistleblowing software enabling anyone to easily set up and maintain a secure reporting platform.",
+    "script": "ct/globaleaks.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/globaleaks.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/globaleaks.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000"
+    ],
+    "category_names": [
+      "Miscellaneous"
+    ],
+    "notes": [],
+    "port": 443,
+    "website": "https://www.globaleaks.org/",
+    "documentation": "https://docs.globaleaks.org",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/globaleaks.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -4963,6 +5371,36 @@
       "pve"
     ],
     "config_path": "/opt/go2rtc/go2rtc.yaml",
+    "os": ""
+  },
+  {
+    "name": "GoDoxy",
+    "slug": "godoxy",
+    "desc": "GoDoxy Agent is a lightweight system agent that connects Proxmox nodes and LXC containers to a GoDoxy main server, enabling automatic route binding, LXC lifecycle control, and real-time log streaming.",
+    "script": "ct/godoxy.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/godoxy.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/godoxy.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00021"
+    ],
+    "category_names": [
+      "Webservers & Proxies"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://github.com/yusing/godoxy",
+    "documentation": "https://docs.godoxy.dev",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/godoxy.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -5432,6 +5870,36 @@
     "os": ""
   },
   {
+    "name": "HiveMQ CE",
+    "slug": "hivemq",
+    "desc": "HiveMQ CE is a Java-based open source MQTT broker that fully supports MQTT 3.x and MQTT 5.",
+    "script": "ct/hivemq.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hivemq.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hivemq.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00018"
+    ],
+    "category_names": [
+      "MQTT & Messaging"
+    ],
+    "notes": [],
+    "port": 1883,
+    "website": "https://www.hivemq.com/",
+    "documentation": "https://github.com/hivemq/hivemq-community-edition/wiki",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hivemq.webp",
+    "updateable": false,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Homarr",
     "slug": "homarr",
     "desc": "Homarr is a sleek, modern dashboard that puts all of your apps and services at your fingertips.",
@@ -5705,7 +6173,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/hoodik/.env",
     "os": ""
@@ -6012,6 +6480,36 @@
     "os": ""
   },
   {
+    "name": "InspIRCd 4",
+    "slug": "inspircd",
+    "desc": "InspIRCd is a modular C++ Internet Relay Chat (IRC) server for UNIX-like and Windows systems.",
+    "script": "ct/inspircd.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/inspircd.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/inspircd.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00024"
+    ],
+    "category_names": [
+      "Gaming & Leisure"
+    ],
+    "notes": [],
+    "port": 6667,
+    "website": "https://www.inspircd.org/",
+    "documentation": "https://docs.inspircd.org/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/inspircd.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "InvenTree",
     "slug": "inventree",
     "desc": "InvenTree is an open-source inventory management system which provides intuitive parts management and stock control. It is designed to be lightweight and easy to use for SME or hobbyist applications.",
@@ -6076,6 +6574,36 @@
     "os": ""
   },
   {
+    "name": "Invidious",
+    "slug": "invidious",
+    "desc": "A self-hosted alternative frontend for YouTube",
+    "script": "ct/invidious.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/invidious.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/invidious.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://invidious.io",
+    "documentation": "https:/docs.invidious.io",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/invidious.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "InvoiceNinja",
     "slug": "invoiceninja",
     "desc": "Invoice Ninja is a free, open-source invoicing, quotes, expenses and time-tracking application for freelancers and businesses. Features include recurring invoices, online payments, client portal, and multi-company support.",
@@ -6103,6 +6631,36 @@
       "pve"
     ],
     "config_path": "/opt/invoiceninja/.env",
+    "os": ""
+  },
+  {
+    "name": "InvoiceShelf",
+    "slug": "invoiceshelf",
+    "desc": "InvoiceShelf is an open-source web and mobile app that helps you track expenses, payments and create professional invoices and estimates.",
+    "script": "ct/invoiceshelf.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/invoiceshelf.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/invoiceshelf.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00023"
+    ],
+    "category_names": [
+      "Finance & Budgeting"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://invoiceshelf.com/",
+    "documentation": "https://docs.invoiceshelf.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/invoiceshelf.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -7002,6 +7560,36 @@
     "os": ""
   },
   {
+    "name": "Kubo",
+    "slug": "kubo",
+    "desc": "Kubo, developed by IPFS, is a decentralized file storage and sharing protocol. It implements the IPFS protocol, allowing users to manage files across a distributed network, ensuring data integrity and availability. Kubo supports file versioning, pinning, provides APIs and CLI tools for developers, and allows customizable node configurations for enhanced privacy and control.",
+    "script": "ct/kubo.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/kubo.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/kubo.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00004"
+    ],
+    "category_names": [
+      "Network & Firewall"
+    ],
+    "notes": [],
+    "port": 5001,
+    "website": "https://github.com/ipfs/kubo",
+    "documentation": "https://docs.ipfs.tech/how-to/command-line-quick-start/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/ipfs.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Kutt",
     "slug": "kutt",
     "desc": "Kutt is a modern URL shortener with support for custom domains. Create and edit links, view statistics, manage users, and more.",
@@ -7154,7 +7742,7 @@
   {
     "name": "LibreChat",
     "slug": "librechat",
-    "desc": "<div>\r\n<div>LibreChat is an open-source AI chat platform that supports multiple AI providers including OpenAI, Anthropic, Google, and more. It features conversation history, multi-modal support, custom endpoints, and a plugin system.</div>\r\n</div>",
+    "desc": "LibreChat is an open-source AI chat platform that supports multiple AI providers including OpenAI, Anthropic, Google, and more. It features conversation history, multi-modal support, custom endpoints, and a plugin system.",
     "script": "ct/librechat.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/librechat.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/librechat.sh",
@@ -7167,8 +7755,8 @@
       "AI / Coding & Dev-Tools"
     ],
     "notes": [],
-    "port": 3000,
-    "website": "https://www.librechat.ai",
+    "port": 3080,
+    "website": "https://www.librechat.ai/",
     "documentation": "https://www.librechat.ai/docs",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/librechat.webp",
     "updateable": true,
@@ -7176,7 +7764,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/librechat/.env",
     "os": ""
@@ -7602,13 +8190,13 @@
     "port": 3000,
     "website": "https://github.com/mudler/LocalAGI",
     "documentation": "https://github.com/mudler/LocalAGI#installation-options",
-    "logo": "",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/localagi.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/localagi/.env",
     "os": ""
@@ -7943,6 +8531,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Matomo",
+    "slug": "matomo",
+    "desc": "Matomo is the leading free and open-source web analytics platform, providing a privacy-respecting alternative to Google Analytics with full data ownership.",
+    "script": "ct/matomo.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/matomo.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/matomo.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://matomo.org/",
+    "documentation": "https://matomo.org/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/matomo.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -8536,7 +9154,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/var/www/MintHCM",
     "default_credentials": {
@@ -8842,7 +9460,7 @@
     "port": 3000,
     "website": "https://nametag.one",
     "documentation": "https://github.com/mattogodoy/nametag",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/nametag.webp",
+    "logo": "https://raw.githubusercontent.com/mattogodoy/nametag/master/public/android-chrome-192x192.png",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -8914,6 +9532,40 @@
     "default_credentials": {
       "username": "",
       "password": "admin"
+    },
+    "os": ""
+  },
+  {
+    "name": "Neo4j",
+    "slug": "neo4j",
+    "desc": "Neo4j is a graph database designed to manage complex data relationships. It uses nodes, relationships, and properties to store and analyze connected data, making it ideal for applications like recommendation engines, fraud detection, and network analysis. Its structure allows for fast querying and deep data insights through native graph storage.",
+    "script": "ct/neo4j.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/neo4j.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/neo4j.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 7474,
+    "website": "https://neo4j.com/product/neo4j-graph-database/",
+    "documentation": "https://neo4j.com/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/neo4j.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "neo4j",
+      "password": "neo4j"
     },
     "os": ""
   },
@@ -9376,6 +10028,42 @@
       "pve"
     ],
     "config_path": "~/.node-red/settings.js",
+    "os": ""
+  },
+  {
+    "name": "NodeBB",
+    "slug": "nodebb",
+    "desc": "NodeBB Forum Software is powered by Node.js and supports either Redis, MongoDB, or a PostgreSQL database. It utilizes web sockets for instant interactions and real-time notifications. NodeBB takes the best of the modern web: real-time streaming discussions, mobile responsiveness, and rich RESTful read/write APIs, while staying true to the original bulletin board/forum format → categorical hierarchies, local user accounts, and asynchronous messaging.",
+    "script": "ct/nodebb.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nodebb.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nodebb.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00010",
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Dashboards & Frontends",
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 4567,
+    "website": "https://nodebb.org/",
+    "documentation": "https://docs.nodebb.org/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/nodebb.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "helper-scripts",
+      "password": "helper-scripts"
+    },
     "os": ""
   },
   {
@@ -9970,7 +10658,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/opengist/config.yml",
     "os": ""
@@ -10282,7 +10970,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/ots/.env",
     "os": ""
@@ -10595,6 +11283,36 @@
       "pve"
     ],
     "config_path": "/opt/paperless/paperless.conf",
+    "os": ""
+  },
+  {
+    "name": "Papermark",
+    "slug": "papermark",
+    "desc": "Papermark is an open-source document sharing alternative to DocSend with built-in analytics, custom domains, and secure shareable links.",
+    "script": "ct/papermark.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/papermark.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/papermark.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://www.papermark.com/",
+    "documentation": "https://www.papermark.com/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/papermark.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -11836,7 +12554,9 @@
     "privileged": false,
     "has_arm": false,
     "is_dev": true,
-    "execute_in": [],
+    "execute_in": [
+      "lxc"
+    ],
     "config_path": "",
     "os": ""
   },
@@ -11993,7 +12713,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/.config/ps5-mqtt/config.json",
     "os": ""
@@ -12086,6 +12806,36 @@
       "pve"
     ],
     "config_path": "/etc/pulse",
+    "os": ""
+  },
+  {
+    "name": "Puter",
+    "slug": "puter",
+    "desc": "Puter is an open-source personal cloud and web desktop environment that runs in your browser, providing a full desktop experience with file management, app ecosystem, and cloud storage.",
+    "script": "ct/puter.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/puter.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/puter.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000"
+    ],
+    "category_names": [
+      "Miscellaneous"
+    ],
+    "notes": [],
+    "port": 4100,
+    "website": "https://puter.com/",
+    "documentation": "https://docs.puter.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/puter.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -12787,7 +13537,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/rustypaste/config.toml",
     "os": ""
@@ -13027,7 +13777,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -13305,7 +14055,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/skylite-ux/.env",
     "os": ""
@@ -13466,6 +14216,36 @@
       "pve"
     ],
     "config_path": "/opt/snowshare.env",
+    "os": ""
+  },
+  {
+    "name": "SolidTime",
+    "slug": "solidtime",
+    "desc": "SolidTime is a modern open-source time tracking application for freelancers and agencies, featuring project management, task tracking, billable rates, and multiple organizations.",
+    "script": "ct/solidtime.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/solidtime.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/solidtime.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.solidtime.io/",
+    "documentation": "https://docs.solidtime.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/solidtime.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -13894,7 +14674,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/etc/step-ca",
     "default_credentials": {
@@ -14052,7 +14832,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/streamlink-webui.env",
     "default_credentials": {
@@ -14788,7 +15568,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -14966,7 +15746,7 @@
     "port": 3313,
     "website": "https://transmute.sh",
     "documentation": "https://transmute.sh/docs/getting-started/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/transmute.webp",
+    "logo": "https://raw.githubusercontent.com/transmute-app/transmute/main/frontend/public/transmute-logo.svg",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -15648,7 +16428,7 @@
     "has_arm": false,
     "is_dev": true,
     "execute_in": [
-      "pve"
+      "vm"
     ],
     "config_path": "",
     "os": ""
@@ -15684,7 +16464,7 @@
     "os": ""
   },
   {
-    "name": "PVE LXC Apps Updater",
+    "name": "PVE LXC Apps Update",
     "slug": "update-apps",
     "desc": "This script updates community-scripts managed LXC containers on a Proxmox VE node. It detects the installed service, verifies available update scripts, and applies updates interactively or unattended. Optionally, containers can be backed up before the update process. If additional build resources (CPU/RAM) are required, the script adjusts container resources temporarily and restores them after the update. Containers requiring a reboot will be listed at the end of the process.",
     "script": "tools/pve/update-apps.sh",
@@ -15701,7 +16481,7 @@
     "notes": [],
     "port": 0,
     "website": "",
-    "documentation": "https://github.com/community-scripts/ProxmoxVE/discussions/11532",
+    "documentation": "",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/proxmox.webp",
     "updateable": true,
     "privileged": false,
@@ -15889,6 +16669,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Valkey",
+    "slug": "valkey",
+    "desc": "Valkey is an open source (BSD) high-performance key/value datastore that supports a variety of workloads such as caching, message queues, and can act as a primary database. The project is backed by the Linux Foundation, ensuring it will remain open source forever.",
+    "script": "ct/valkey.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/valkey.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/valkey.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 6379,
+    "website": "https://valkey.io/",
+    "documentation": "https://valkey.io/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/valkey.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -16278,7 +17088,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/wavelog/application/config/config.php",
     "os": ""
@@ -16692,7 +17502,7 @@
     "has_arm": false,
     "is_dev": false,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/writefreely/config.ini",
     "os": ""
@@ -16750,7 +17560,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -17065,14 +17875,14 @@
     "notes": [],
     "port": 8080,
     "website": "https://zitadel.com",
-    "documentation": "https://zitadel.com/docs",
+    "documentation": "https://zitadel.com/docs/guides/overview",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/zitadel.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": false,
+    "is_dev": true,
     "execute_in": [
-      "pve"
+      "lxc"
     ],
     "config_path": "/opt/zitadel/config.yaml",
     "default_credentials": {
