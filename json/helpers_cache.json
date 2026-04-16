@@ -6944,11 +6944,11 @@
   },
   {
     "name": "Jitsi Meet",
-    "slug": "jitsi",
+    "slug": "jitsi-meet",
     "desc": "Jitsi Meet is a set of open-source projects for secure, simple and scalable video conferences with state-of-the-art video quality and features.",
-    "script": "ct/jitsi.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/jitsi.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/jitsi.sh",
+    "script": "ct/jitsi-meet.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/jitsi-meet.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/jitsi-meet.sh",
     "type": "lxc",
     "type_id": "nm9bra8mzye2scg",
     "categories": [
