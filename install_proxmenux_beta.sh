@@ -566,6 +566,13 @@ install_beta() {
     cp "./menu" "$INSTALL_DIR/$MENU_SCRIPT"
     cp "./version.txt" "$LOCAL_VERSION_FILE" 2>/dev/null || true
 
+    # Defensive: strip CRLF and reject a broken launcher before we declare success.
+    sed -i 's/\r$//' "$INSTALL_DIR/$MENU_SCRIPT" "$UTILS_FILE" 2>/dev/null || true
+    if ! bash -n "$INSTALL_DIR/$MENU_SCRIPT" 2>/dev/null; then
+        msg_error "Installed launcher failed syntax check. Installation aborted."
+        exit 1
+    fi
+
     # Store beta version marker
     if [ -f "$TEMP_DIR/beta_version.txt" ]; then
         cp "$TEMP_DIR/beta_version.txt" "$BETA_VERSION_FILE"

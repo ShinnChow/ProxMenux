@@ -821,6 +821,13 @@ install_normal_version() {
     cp "./version.txt" "$LOCAL_VERSION_FILE"
     cp "./install_proxmenux.sh" "$BASE_DIR/install_proxmenux.sh"
 
+    # Defensive: strip CRLF and reject a broken launcher before we declare success.
+    sed -i 's/\r$//' "$INSTALL_DIR/$MENU_SCRIPT" "$UTILS_FILE" 2>/dev/null || true
+    if ! bash -n "$INSTALL_DIR/$MENU_SCRIPT" 2>/dev/null; then
+        msg_error "Installed launcher failed syntax check. Installation aborted."
+        exit 1
+    fi
+
     # Wipe the scripts tree before copying so any file removed upstream
     # (renamed, consolidated, deprecated) disappears from the user install.
     # Only $BASE_DIR/scripts/ is cleared; config.json, cache.json,
@@ -963,13 +970,19 @@ install_translation_version() {
     cp "./menu" "$INSTALL_DIR/$MENU_SCRIPT"
     cp "./version.txt" "$LOCAL_VERSION_FILE"
     cp "./install_proxmenux.sh" "$BASE_DIR/install_proxmenux.sh"
-    
+
+    sed -i 's/\r$//' "$INSTALL_DIR/$MENU_SCRIPT" "$UTILS_FILE" 2>/dev/null || true
+    if ! bash -n "$INSTALL_DIR/$MENU_SCRIPT" 2>/dev/null; then
+        msg_error "Installed launcher failed syntax check. Installation aborted."
+        exit 1
+    fi
+
     mkdir -p "$BASE_DIR/scripts"
     cp -r "./scripts/"* "$BASE_DIR/scripts/"
     chmod -R +x "$BASE_DIR/scripts/"
     chmod +x "$BASE_DIR/install_proxmenux.sh"
     msg_ok "Necessary files created."
-    
+
     chmod +x "$INSTALL_DIR/$MENU_SCRIPT"
     
     ((current_step++))
