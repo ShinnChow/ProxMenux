@@ -55,57 +55,6 @@ check_updates() {
     fi
 }
 
-# ── Safe self-update ──────────────────────────────────────
-# Validates the downloaded installer and rolls back /usr/local/bin/menu
-# if the post-install launcher fails to parse. Why: a corrupted download
-# or CRLF contamination has already left users with an unusable launcher;
-# without a rollback the only recovery is curl-reinstall by hand.
-run_installer_safely() {
-    local installer_url="$1"
-    local installer_dest="$2"
-    local launcher="/usr/local/bin/menu"
-    local tmp_installer="/tmp/proxmenux_installer_$$.sh"
-    local menu_backup="/tmp/proxmenux_menu_backup_$$"
-
-    if ! curl -fsSL "$installer_url" -o "$tmp_installer"; then
-        msg_error "Failed to download installer from $installer_url"
-        return 1
-    fi
-
-    sed -i 's/\r$//' "$tmp_installer" 2>/dev/null || true
-
-    if ! bash -n "$tmp_installer" 2>/dev/null; then
-        msg_error "Downloaded installer has invalid syntax. Update aborted."
-        rm -f "$tmp_installer"
-        return 1
-    fi
-
-    [[ -f "$launcher" ]] && cp -f "$launcher" "$menu_backup"
-
-    chmod +x "$tmp_installer"
-    if [[ -n "$installer_dest" ]]; then
-        cp -f "$tmp_installer" "$installer_dest"
-        chmod +x "$installer_dest"
-        bash "$installer_dest" --update
-    else
-        bash "$tmp_installer"
-    fi
-    local rc=$?
-
-    if [[ -f "$launcher" ]] && ! bash -n "$launcher" 2>/dev/null; then
-        msg_error "New launcher is broken. Restoring previous version."
-        if [[ -f "$menu_backup" ]]; then
-            cp -f "$menu_backup" "$launcher"
-            sed -i 's/\r$//' "$launcher" 2>/dev/null || true
-            chmod +x "$launcher"
-        fi
-        rc=1
-    fi
-
-    rm -f "$tmp_installer" "$menu_backup"
-    return $rc
-}
-
 # ── Stable update check (main branch) ─────────────────────
 check_updates_stable() {
     local VERSION_URL="$REPO_MAIN/version.txt"
@@ -128,49 +77,77 @@ check_updates_stable() {
 
         msg_warn "$(translate 'Starting ProxMenux update...')"
 
-        run_installer_safely "$INSTALL_URL" "$INSTALL_SCRIPT"
+        if curl -fsSL "$INSTALL_URL" -o "$INSTALL_SCRIPT"; then
+            chmod +x "$INSTALL_SCRIPT"
+            bash "$INSTALL_SCRIPT" --update
+        fi
     fi
 }
 
 # ── Beta update check (develop branch) ────────────────────
-# Beta users track BOTH channels independently: a new stable on main is
-# still relevant to them (ends the beta cycle), and a new beta on develop
-# is their normal update path. We prompt for each one in turn — declining
-# stable doesn't skip the beta prompt.
 check_updates_beta() {
-    local STABLE_VERSION_URL="$REPO_MAIN/version.txt"
     local BETA_VERSION_URL="$REPO_DEVELOP/beta_version.txt"
-    local INSTALL_STABLE_URL="$REPO_MAIN/install_proxmenux.sh"
+    local STABLE_VERSION_URL="$REPO_MAIN/version.txt"
     local INSTALL_BETA_URL="$REPO_DEVELOP/install_proxmenux_beta.sh"
-    local INSTALL_STABLE_SCRIPT="$BASE_DIR/install_proxmenux.sh"
-    local INSTALL_BETA_SCRIPT="$BASE_DIR/install_proxmenux_beta.sh"
+    local INSTALL_STABLE_URL="$REPO_MAIN/install_proxmenux.sh"
+    local INSTALL_SCRIPT="$BASE_DIR/install_proxmenux_beta.sh"
 
-    local REMOTE_STABLE LOCAL_STABLE REMOTE_BETA LOCAL_BETA
-    REMOTE_STABLE="$(curl -fsSL "$STABLE_VERSION_URL" 2>/dev/null | head -n 1 | tr -d '[:space:]')"
-    LOCAL_STABLE="$(head -n 1 "$LOCAL_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')"
-    REMOTE_BETA="$(curl -fsSL "$BETA_VERSION_URL" 2>/dev/null | head -n 1 | tr -d '[:space:]')"
-    LOCAL_BETA="$(head -n 1 "$BETA_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')"
+    # ── 1. Check if a stable release has superseded the beta ──
+    # If main's version.txt exists and is newer than local beta_version.txt,
+    # the beta cycle is over and we invite the user to switch to stable.
+    local STABLE_VERSION BETA_LOCAL_VERSION
+    STABLE_VERSION="$(curl -fsSL "$STABLE_VERSION_URL" 2>/dev/null | head -n 1)"
+    BETA_LOCAL_VERSION="$(head -n 1 "$BETA_VERSION_FILE" 2>/dev/null)"
 
-    # ── 1. Stable release on main ──
-    if [[ -n "$LOCAL_STABLE" && -n "$REMOTE_STABLE" && "$LOCAL_STABLE" != "$REMOTE_STABLE" ]] && \
-       [[ "$(printf '%s\n%s\n' "$LOCAL_STABLE" "$REMOTE_STABLE" | sort -V | tail -1)" = "$REMOTE_STABLE" ]]; then
-        if whiptail --title "🎉 Stable Release Available" \
-                    --yesno "A new ProxMenux stable release is available on main.\n\nInstalled stable : $LOCAL_STABLE\nNew stable       : $REMOTE_STABLE\nYour beta        : ${LOCAL_BETA:-n/a}\n\nInstall the stable release now?\n\n(Choosing 'No' keeps your beta — any beta update is offered next.)" \
-                    15 70 --defaultno; then
-            msg_warn "Installing stable release $REMOTE_STABLE ..."
-            run_installer_safely "$INSTALL_STABLE_URL" "$INSTALL_STABLE_SCRIPT"
+    if [[ -n "$STABLE_VERSION" && -n "$BETA_LOCAL_VERSION" ]]; then
+        # Simple string comparison is enough if versions follow semver x.y.z
+        if [[ "$STABLE_VERSION" != "$BETA_LOCAL_VERSION" ]] && \
+           printf '%s\n' "$BETA_LOCAL_VERSION" "$STABLE_VERSION" | sort -V | tail -1 | grep -qx "$STABLE_VERSION"; then
+
+            # Stable is newer — offer migration out of beta
+            if whiptail --title "🎉 Stable Release Available" \
+                        --yesno "A stable release of ProxMenux is now available!\n\nStable version : $STABLE_VERSION\nYour beta      : $BETA_LOCAL_VERSION\n\nThe beta program for this cycle is complete.\nWould you like to switch to the stable release now?\n\n(Choosing 'No' keeps you on the beta for now.)" \
+                        16 68; then
+
+                msg_warn "Switching to stable release $STABLE_VERSION ..."
+
+                local tmp_installer="/tmp/install_proxmenux_stable_$$.sh"
+                if curl -fsSL "$INSTALL_STABLE_URL" -o "$tmp_installer"; then
+                    chmod +x "$tmp_installer"
+                    bash "$tmp_installer"
+                    rm -f "$tmp_installer"
+                else
+                    msg_error "Could not download the stable installer. Try manually:"
+                    echo
+                    echo "  bash -c \"\$(wget -qLO - $INSTALL_STABLE_URL)\""
+                    echo
+                fi
+                return 0
+            fi
+            # User chose to stay on beta — continue normally
             return 0
         fi
     fi
 
-    # ── 2. Beta build on develop ──
-    if [[ -n "$LOCAL_BETA" && -n "$REMOTE_BETA" && "$LOCAL_BETA" != "$REMOTE_BETA" ]] && \
-       [[ "$(printf '%s\n%s\n' "$LOCAL_BETA" "$REMOTE_BETA" | sort -V | tail -1)" = "$REMOTE_BETA" ]]; then
-        if whiptail --title "Beta Update Available" \
-                    --yesno "A new beta build is available on the develop branch.\n\nInstalled beta : $LOCAL_BETA\nNew beta build : $REMOTE_BETA\n\nUpdate the beta now?" \
-                    13 68 --defaultno; then
-            msg_warn "Updating to beta build $REMOTE_BETA ..."
-            run_installer_safely "$INSTALL_BETA_URL" "$INSTALL_BETA_SCRIPT"
+    # ── 2. Check for a newer beta build on develop ─────────────
+    [[ ! -f "$BETA_VERSION_FILE" ]] && return 0
+
+    local REMOTE_BETA_VERSION
+    REMOTE_BETA_VERSION="$(curl -fsSL "$BETA_VERSION_URL" 2>/dev/null | head -n 1)"
+    [[ -z "$REMOTE_BETA_VERSION" ]] && return 0
+    [[ "$BETA_LOCAL_VERSION" = "$REMOTE_BETA_VERSION" ]] && return 0
+
+    if whiptail --title "Beta Update Available" \
+                --yesno "A new beta build is available!\n\nInstalled beta : $BETA_LOCAL_VERSION\nNew beta build : $REMOTE_BETA_VERSION\n\nThis is a pre-release build from the develop branch.\nDo you want to update now?" \
+                13 64 --defaultno; then
+
+        msg_warn "Updating to beta build $REMOTE_BETA_VERSION ..."
+
+        if curl -fsSL "$INSTALL_BETA_URL" -o "$INSTALL_SCRIPT"; then
+            chmod +x "$INSTALL_SCRIPT"
+            bash "$INSTALL_SCRIPT" --update
+        else
+            msg_error "Could not download the beta installer from the develop branch."
         fi
     fi
 }
