@@ -529,7 +529,7 @@ complete_nvidia_uninstall() {
     nvidia-uninstall --silent >>"$LOG_FILE" 2>&1 || true
     msg_ok "$(translate 'NVIDIA uninstaller completed.')"
   fi
-  
+  msg_ok "$(translate 'NVIDIA uninstallation steps completed.')" | tee -a "$screen_capture"
   cleanup_nvidia_dkms
   
   msg_info "$(translate 'Removing NVIDIA packages...')"
