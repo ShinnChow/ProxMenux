@@ -80,6 +80,7 @@ check_updates_stable() {
         if curl -fsSL "$INSTALL_URL" -o "$INSTALL_SCRIPT"; then
             chmod +x "$INSTALL_SCRIPT"
             bash "$INSTALL_SCRIPT" --update
+            return 0
         fi
     fi
 }
@@ -111,6 +112,7 @@ check_updates_beta() {
         if curl -fsSL "$REPO_DEVELOP/install_proxmenux_beta.sh" -o "$INSTALL_BETA_SCRIPT"; then
             chmod +x "$INSTALL_BETA_SCRIPT"
             bash "$INSTALL_BETA_SCRIPT" --update
+            return 0
         else
             msg_error "Could not download the beta installer from the develop branch."
         fi
