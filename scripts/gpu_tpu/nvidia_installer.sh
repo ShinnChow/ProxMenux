@@ -496,7 +496,6 @@ stop_and_disable_nvidia_services() {
 }
 
 unload_nvidia_modules() {
-  msg_info "$(translate 'Unloading NVIDIA kernel modules...')"
 
   for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
     modprobe -r "$mod" >/dev/null 2>&1 || true
