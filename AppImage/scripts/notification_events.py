@@ -882,7 +882,15 @@ class JournalWatcher:
             smart_health = self._quick_smart_health(resolved)
             if smart_health != 'FAILED':
                 return
-            
+
+            # ── Persist observation (before the cooldown gate) ──
+            # The 24h cooldown below only suppresses RE-notification; the
+            # per-disk observations history must reflect every genuine
+            # detection. The DB UPSERT dedups same-signature events via
+            # occurrence_count, so calling this on every match is safe.
+            # Aligns with the parallel path in HealthMonitor._check_disks_optimized.
+            self._record_disk_io_observation(resolved, msg)
+
             # ── Gate 2: 24-hour dedup per device ──
             # Check both in-memory cache AND the DB (user dismiss clears DB cooldowns).
             # If user dismissed the error, _clear_disk_io_cooldown() removed the DB
@@ -986,6 +994,55 @@ class JournalWatcher:
         except Exception:
             return 'UNKNOWN'
     
+    def _record_disk_io_observation(self, resolved: str, msg: str):
+        """Persist a kernel-journal I/O error as a disk observation.
+
+        Signature classification mirrors HealthMonitor._make_io_obs_signature
+        so observations from the real-time journal watcher and the periodic
+        dmesg scan dedup into the same row (via the UPSERT on
+        disk_registry_id + error_type + error_signature).
+        """
+        try:
+            from health_persistence import health_persistence
+
+            m = msg.lower()
+            if re.search(r'exception\s+emask|emask\s+0x|revalidation failed|'
+                         r'hard resetting link|serror.*badcrc|comreset|'
+                         r'link is slow|status.*drdy', m):
+                family = 'ata_connection_error'
+            elif re.search(r'i/o error|blk_update_request|medium error|sense key', m):
+                family = 'block_io_error'
+            elif re.search(r'failed command|fpdma queued', m):
+                family = 'ata_failed_command'
+            else:
+                family = 'generic'
+
+            # Best-effort serial lookup so the observation survives device
+            # renames (ata8 -> sdh, USB reconnects, etc.).
+            serial = None
+            try:
+                sm = subprocess.run(
+                    ['smartctl', '-i', f'/dev/{resolved}'],
+                    capture_output=True, text=True, timeout=3)
+                if sm.returncode in (0, 4):
+                    for line in sm.stdout.split('\n'):
+                        if 'Serial Number' in line or 'Serial number' in line:
+                            serial = line.split(':')[-1].strip()
+                            break
+            except Exception:
+                pass
+
+            health_persistence.record_disk_observation(
+                device_name=resolved,
+                serial=serial,
+                error_type='io_error',
+                error_signature=f'io_{resolved}_{family}',
+                raw_message=f'/dev/{resolved}: {msg.strip()[:200]}',
+                severity='critical',
+            )
+        except Exception as e:
+            print(f"[JournalWatcher] Error recording disk io observation: {e}")
+
     def _record_smartd_observation(self, title: str, message: str):
         """Extract device info from a smartd system-mail and record as disk observation."""
         try:

@@ -95,7 +95,7 @@ detect_driver_status() {
   CURRENT_DRIVER_VERSION=""
   
   # First check if nvidia kernel module is actually loaded
-  if lsmod | grep -q "^nvidia "; then
+  if grep -q "^nvidia " /proc/modules 2>/dev/null; then
 
     modprobe nvidia-uvm 2>/dev/null || true
     sleep 1
@@ -273,7 +273,7 @@ update_lxc_nvidia() {
         free_mb=$(pct exec "$ctid" -- df -m / 2>/dev/null | awk 'NR==2{print $4}' || echo 0)
         if [[ "$free_mb" -lt 1500 ]]; then
           _restore_container_memory "$ctid"
-          dialog --backtitle "ProxMenux" \
+          whiptail --backtitle "ProxMenux" \
             --title "$(translate 'Insufficient Disk Space')" \
             --msgbox "\n$(translate 'Container') ${ctid} $(translate 'has only') ${free_mb}MB $(translate 'of free disk space.')\n\n$(translate 'NVIDIA libs require approximately 1.5GB of free space.')" \
             11 72
@@ -381,7 +381,7 @@ offer_lxc_updates_if_any() {
   done
   info+="\n$(translate 'Do you want to update the NVIDIA userspace libraries inside these containers to match the host?')"
 
-  if ! hybrid_yesno "$(translate 'Update NVIDIA in LXC Containers')" "$info" 20 80; then
+  if ! hybrid_whiptail_yesno "$(translate 'Update NVIDIA in LXC Containers')" "$info" 20 80; then
     msg_info2 "$(translate 'LXC update skipped by user.')"
     return 0
   fi
@@ -427,13 +427,14 @@ options nouveau modeset=0
 EOF
 
   # Attempt to unload nouveau if currently loaded
-  if lsmod | grep -q "^nouveau "; then
-    stop_spinner
+  if grep -q "^nouveau " /proc/modules 2>/dev/null; then
+
     msg_info "$(translate 'Nouveau module is loaded, attempting to unload...')"
     modprobe -r nouveau 2>/dev/null || true
+    sleep 1
 
     # Check if unload succeeded
-    if lsmod | grep -q "^nouveau "; then
+    if grep -q "^nouveau " /proc/modules 2>/dev/null; then
       NOUVEAU_STILL_LOADED=true
       msg_warn "$(translate 'Could not unload nouveau module (may be in use). The blacklist will take effect after reboot. Installation will continue but a reboot will be required.')"
       echo "WARNING: nouveau module still loaded after unload attempt" >> "$LOG_FILE"
@@ -445,6 +446,7 @@ EOF
     NOUVEAU_STILL_LOADED=false
     msg_ok "$(translate 'nouveau driver has been blacklisted.')" | tee -a "$screen_capture"
   fi
+
 }
 
 ensure_modules_config() {
@@ -488,7 +490,7 @@ stop_and_disable_nvidia_services() {
         systemctl disable "$service" >/dev/null 2>&1 || true
       fi
     done
-    
+
     sleep 2
     
     msg_ok "$(translate 'NVIDIA services stopped and disabled.')" | tee -a "$screen_capture"
@@ -496,36 +498,41 @@ stop_and_disable_nvidia_services() {
 }
 
 unload_nvidia_modules() {
-
   for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
     modprobe -r "$mod" >/dev/null 2>&1 || true
   done
 
+  # Give the kernel a moment to finalize sysfs teardown before re-checking.
+  # Reading /proc/modules directly (instead of lsmod) avoids the
+  # "could not open /sys/module/<mod>/holders" race when a module has just
+  # been removed from /proc/modules but its sysfs dir hasn't been reaped yet.
+  sleep 1
 
-  if lsmod | grep -qi '\bnvidia'; then
+  if grep -q "^nvidia" /proc/modules 2>/dev/null; then
     for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
       modprobe -r --force "$mod" >/dev/null 2>&1 || true
     done
+    sleep 1
   fi
 
-  if lsmod | grep -qi '\bnvidia'; then
-    msg_warn "$(translate 'Some NVIDIA modules could not be unloaded. Installation may fail. Ensure no processes are using the GPU.')"
+  if grep -q "^nvidia" /proc/modules 2>/dev/null; then
+
     if command -v lsof >/dev/null 2>&1; then
       echo "$(translate 'Processes using NVIDIA:'):" >> "$LOG_FILE"
       lsof /dev/nvidia* 2>/dev/null >> "$LOG_FILE" || true
     fi
   else
+
     msg_ok "$(translate 'NVIDIA kernel modules unloaded successfully.')" | tee -a "$screen_capture"
   fi
 }
 
 complete_nvidia_uninstall() {
-  msg_info "$(translate 'Completing NVIDIA uninstallation...')"
   stop_and_disable_nvidia_services
   unload_nvidia_modules
   
   if command -v nvidia-uninstall >/dev/null 2>&1; then
-    #msg_info "$(translate 'Running NVIDIA uninstaller...')"
+    msg_info "$(translate 'Running NVIDIA uninstaller...')"
     nvidia-uninstall --silent >>"$LOG_FILE" 2>&1 || true
     msg_ok "$(translate 'NVIDIA uninstaller completed.')"
   fi
@@ -546,11 +553,11 @@ complete_nvidia_uninstall() {
     find "$NVIDIA_WORKDIR" -type d -name "nvidia-persistenced" -exec rm -rf {} + 2>/dev/null || true
     find "$NVIDIA_WORKDIR" -type d -name "nvidia-patch" -exec rm -rf {} + 2>/dev/null || true
   fi
-  
+
   update_component_status "nvidia_driver" "removed" "" "gpu" '{}'
   
   msg_ok "$(translate 'Complete NVIDIA uninstallation finished.')" | tee -a "$screen_capture"
-  stop_spinner
+  
 }
 
 cleanup_nvidia_dkms() {
@@ -786,7 +793,7 @@ download_nvidia_installer() {
         return 0
       else
         echo "Existing file FAILED integrity check, removing..." >> "$LOG_FILE"
-        msg_warn "$(translate 'Existing file failed verification, re-downloading...')" >&2
+        msg_warn "$(translate 'Existing file, re-downloading...')" >&2
         rm -f "$run_file"
       fi
     else
@@ -917,7 +924,8 @@ run_nvidia_installer() {
     update-initramfs -u -k all >>"$LOG_FILE" 2>&1 || true
     # Try one more time to unload nouveau after initramfs rebuild
     modprobe -r nouveau 2>/dev/null || true
-    if lsmod | grep -q "^nouveau "; then
+    sleep 1
+    if grep -q "^nouveau " /proc/modules 2>/dev/null; then
       echo "WARNING: nouveau still loaded after initramfs rebuild, proceeding with --no-nouveau-check" >> "$LOG_FILE"
       msg_warn "$(translate 'nouveau still active. Proceeding with installation. A reboot will be required for the driver to work.')"
     else
@@ -1227,7 +1235,7 @@ main() {
         
         show_proxmenux_logo
         msg_title "$(translate "$SCRIPT_TITLE")"
-        msg_info2 "$(translate 'Uninstalling current NVIDIA driver before installing new version...')"
+        msg_info2 "$(translate 'Uninstalling current NVIDIA driver before installing new version')"
         complete_nvidia_uninstall
         
         sleep 2
