@@ -220,10 +220,20 @@ def get_provider_models():
         
         # Get all models from provider API
         api_models = ai_provider.list_models()
-        
+
+        # OpenAI with a custom base URL means an OpenAI-compatible endpoint
+        # (LiteLLM, MLX, LM Studio, vLLM, LocalAI, Ollama-proxy...). The
+        # verified_ai_models.json list only contains official OpenAI IDs
+        # (gpt-4o-mini etc.), so intersecting against it would strip every
+        # model the user actually serves. Treat the custom-endpoint case
+        # like Ollama: return whatever the endpoint advertises, no filter.
+        is_openai_compat = (provider == 'openai' and bool(openai_base_url))
+
         if not api_models:
-            # API failed, fall back to verified list only
-            if verified_models:
+            # API failed, fall back to verified list only (but not for
+            # custom endpoints — we don't know what the endpoint serves,
+            # so "gpt-4o-mini" as a fallback would be misleading).
+            if verified_models and not is_openai_compat:
                 models = sorted(verified_models)
                 return jsonify({
                     'success': True,
@@ -232,27 +242,38 @@ def get_provider_models():
                     'message': f'{len(models)} verified models (API unavailable)'
                 })
             return jsonify({
-                'success': False, 
-                'models': [], 
-                'message': 'Could not retrieve models. Check your API key.'
+                'success': False,
+                'models': [],
+                'message': 'Could not retrieve models. Check your API key and endpoint URL.'
             })
-        
+
+        if is_openai_compat:
+            # Custom OpenAI-compatible endpoint: surface every model the
+            # endpoint reports. No verified-list intersection.
+            models = sorted(api_models)
+            return jsonify({
+                'success': True,
+                'models': models,
+                'recommended': models[0] if models else '',
+                'message': f'Found {len(models)} models on custom endpoint'
+            })
+
         # Filter: only models that are BOTH in API and verified list
         if verified_models:
             api_models_set = set(api_models)
             filtered_models = [m for m in verified_models if m in api_models_set]
-            
+
             if not filtered_models:
                 # No intersection - maybe verified list is outdated
                 # Return verified list anyway (will fail on use if truly unavailable)
                 filtered_models = list(verified_models)
-            
+
             # Sort with recommended first
             def sort_key(m):
                 if m == recommended:
                     return (0, m)
                 return (1, m)
-            
+
             models = sorted(filtered_models, key=sort_key)
         else:
             # No verified list for this provider, return all from API

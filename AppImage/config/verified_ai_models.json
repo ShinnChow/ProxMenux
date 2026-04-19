@@ -1,7 +1,8 @@
 {
   "_description": "Verified AI models for ProxMenux notifications. Only models listed here will be shown to users. Models are tested to work with the chat/completions API format.",
-  "_updated": "2026-03-20",
-  
+  "_updated": "2026-04-19",
+  "_verifier": "Refreshed with tools/ai-models-verifier (private). Re-run before each ProxMenux release to keep the list current. The verifier and ProxMenux share the same reasoning/thinking-model handlers so their verdicts stay aligned with runtime behaviour.",
+
   "groq": {
     "models": [
       "llama-3.3-70b-versatile",
@@ -12,37 +13,46 @@
       "mixtral-8x7b-32768",
       "gemma2-9b-it"
     ],
-    "recommended": "llama-3.3-70b-versatile"
+    "recommended": "llama-3.3-70b-versatile",
+    "_note": "Not yet re-verified in 2026-04 refresh — kept from previous curation. Run the verifier with a Groq key to prune deprecated entries."
   },
-  
+
   "gemini": {
     "models": [
-      "gemini-2.5-flash",
       "gemini-2.5-flash-lite",
-      "gemini-2.5-pro"
+      "gemini-2.5-flash",
+      "gemini-3-flash-preview"
     ],
-    "recommended": "gemini-2.5-flash",
-    "_note": "gemini-2.5-flash-lite is cheaper but may struggle with complex prompts. Use with simple/custom prompts.",
+    "recommended": "gemini-2.5-flash-lite",
+    "_note": "flash-lite / flash pass the verifier consistently; pro variants reject thinkingBudget=0 and are overkill for notification translation anyway. 'latest' aliases (gemini-flash-latest, gemini-flash-lite-latest) are intentionally omitted because they resolved to different models across runs and produced timeouts in some regions.",
     "_deprecated": ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.0-pro", "gemini-pro"]
   },
-  
+
   "openai": {
     "models": [
+      "gpt-4.1-nano",
       "gpt-4.1-mini",
-      "gpt-4o-mini"
+      "gpt-4o-mini",
+      "gpt-4.1",
+      "gpt-4o",
+      "gpt-5-chat-latest",
+      "gpt-5.4-nano",
+      "gpt-5.4-mini"
     ],
-    "recommended": "gpt-4o-mini"
+    "recommended": "gpt-4.1-nano",
+    "_note": "Reasoning models (o-series, gpt-5/5.1/5.2 non-chat variants) are supported by openai_provider.py via max_completion_tokens + reasoning_effort=minimal, but not listed here by default: their latency is higher than the chat models and they do not improve translation quality for notifications. Add specific reasoning IDs to this list only if a user explicitly wants them."
   },
-  
+
   "anthropic": {
     "models": [
       "claude-3-5-haiku-latest",
       "claude-3-5-sonnet-latest",
       "claude-3-opus-latest"
     ],
-    "recommended": "claude-3-5-haiku-latest"
+    "recommended": "claude-3-5-haiku-latest",
+    "_note": "Not re-verified in 2026-04 refresh — kept from previous curation. Add claude-4.x / claude-4.5 / claude-4.6 / claude-4.7 variants after running the verifier with an Anthropic key."
   },
-  
+
   "openrouter": {
     "models": [
       "meta-llama/llama-3.3-70b-instruct",
@@ -50,14 +60,15 @@
       "meta-llama/llama-3.1-8b-instruct",
       "anthropic/claude-3.5-haiku",
       "anthropic/claude-3.5-sonnet",
-      "google/gemini-flash-2.5-flash-lite",
+      "google/gemini-flash-1.5",
       "openai/gpt-4o-mini",
       "mistralai/mistral-7b-instruct",
       "mistralai/mixtral-8x7b-instruct"
     ],
-    "recommended": "meta-llama/llama-3.3-70b-instruct"
+    "recommended": "meta-llama/llama-3.3-70b-instruct",
+    "_note": "Not re-verified in 2026-04 refresh. google/gemini-flash-2.5-flash-lite was malformed in the previous entry and has been replaced with google/gemini-flash-1.5."
   },
-  
+
   "ollama": {
     "_note": "Ollama models are local, we don't filter them. User manages their own models.",
     "models": [],

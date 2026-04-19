@@ -30,6 +30,23 @@ class GeminiProvider(AIProvider):
         'gemini-1.0-pro',
         'gemini-pro',
     ]
+
+    @staticmethod
+    def _has_thinking_mode(model: str) -> bool:
+        """True for Gemini variants that enable "thinking" by default.
+
+        Gemini 2.5+ and 3.x Pro/Flash models spend output tokens on
+        internal reasoning before emitting the final answer. With a small
+        max_tokens budget (≤250) that consumes the whole allowance and
+        leaves an empty reply. For the short translate/explain use case
+        in ProxMenux we want direct output, so we disable thinking for
+        these. Lite variants (flash-lite) do NOT have thinking enabled
+        and are safe to leave alone.
+        """
+        m = model.lower()
+        if 'lite' in m:
+            return False
+        return m.startswith('gemini-2.5') or m.startswith('gemini-3')
     
     def list_models(self) -> List[str]:
         """List available Gemini models that support generateContent.
@@ -118,6 +135,18 @@ class GeminiProvider(AIProvider):
         url = f"{self.API_BASE}/{self.model}:generateContent?key={self.api_key}"
         
         # Gemini uses a specific format with contents array
+        gen_config = {
+            'maxOutputTokens': max_tokens,
+            'temperature': 0.3,
+        }
+
+        # Disable thinking on 2.5+ / 3.x pro & flash models so the limited
+        # output budget actually produces visible text. thinkingBudget=0
+        # is the official switch for this; lite variants and legacy
+        # models don't need (and ignore) the field.
+        if self._has_thinking_mode(self.model):
+            gen_config['thinkingConfig'] = {'thinkingBudget': 0}
+
         payload = {
             'systemInstruction': {
                 'parts': [{'text': system_prompt}]
@@ -128,10 +157,7 @@ class GeminiProvider(AIProvider):
                     'parts': [{'text': user_message}]
                 }
             ],
-            'generationConfig': {
-                'maxOutputTokens': max_tokens,
-                'temperature': 0.3,
-            }
+            'generationConfig': gen_config,
         }
         
         headers = {

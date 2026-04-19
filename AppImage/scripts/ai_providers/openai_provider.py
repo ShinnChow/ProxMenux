@@ -37,23 +37,49 @@ class OpenAIProvider(AIProvider):
     
     # Recommended models for chat (in priority order)
     RECOMMENDED_PREFIXES = ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']
+
+    @staticmethod
+    def _is_reasoning_model(model: str) -> bool:
+        """True for OpenAI reasoning models (o-series + non-chat gpt-5+).
+
+        These use a stricter API contract than chat models:
+          - Must use ``max_completion_tokens`` instead of ``max_tokens``
+          - ``temperature`` is not accepted (only the default is supported)
+
+        Chat-optimized variants (``gpt-5-chat-latest``,
+        ``gpt-5.1-chat-latest``, etc.) keep the classic contract and are
+        NOT flagged here.
+        """
+        m = model.lower()
+        # o1, o3, o4, o5 ...  (o<digit>...)
+        if len(m) >= 2 and m[0] == 'o' and m[1].isdigit():
+            return True
+        # gpt-5, gpt-5-mini, gpt-5.1, gpt-5.2-pro ...  EXCEPT *-chat-latest
+        if m.startswith('gpt-5') and '-chat' not in m:
+            return True
+        return False
     
     def list_models(self) -> List[str]:
-        """List available OpenAI models for chat completions.
-        
-        Filters to only chat-capable models, excluding:
-        - Embedding models
-        - Audio/speech models (whisper, tts)
-        - Image models (dall-e)
-        - Instruct models (different API)
-        - Legacy models (babbage, davinci, etc.)
-        
+        """List available models for chat completions.
+
+        Two modes:
+        - Official OpenAI (no custom base_url): restrict to GPT chat models,
+          excluding embedding/whisper/tts/dall-e/instruct/legacy variants.
+        - OpenAI-compatible endpoint (LiteLLM, MLX, LM Studio, vLLM,
+          LocalAI, Ollama-proxy, etc.): the "gpt" substring check is
+          dropped so user-served models (e.g. ``mlx-community/Llama-3.1-8B``,
+          ``Qwen3-32B``, ``mistralai/...``) show up. EXCLUDED_PATTERNS
+          still applies — embeddings/whisper/tts aren't chat-capable on
+          any backend.
+
         Returns:
             List of model IDs suitable for chat completions.
         """
         if not self.api_key:
             return []
-        
+
+        is_custom_endpoint = bool(self.base_url)
+
         try:
             # Determine models URL from base_url if set
             if self.base_url:
@@ -63,42 +89,46 @@ class OpenAIProvider(AIProvider):
                 models_url = f"{base}/models"
             else:
                 models_url = self.DEFAULT_MODELS_URL
-            
+
             req = urllib.request.Request(
                 models_url,
                 headers={'Authorization': f'Bearer {self.api_key}'},
                 method='GET'
             )
-            
+
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
-            
+
             models = []
             for model in data.get('data', []):
                 model_id = model.get('id', '')
                 if not model_id:
                     continue
-                
+
                 model_lower = model_id.lower()
-                
-                # Must be a GPT model
-                if 'gpt' not in model_lower:
+
+                # Official OpenAI: restrict to GPT chat models. Custom
+                # endpoints serve arbitrarily named models, so this
+                # substring check would drop every valid result there.
+                if not is_custom_endpoint and 'gpt' not in model_lower:
                     continue
-                
-                # Exclude non-chat models
+
+                # Exclude non-chat models on every backend.
                 if any(pattern in model_lower for pattern in self.EXCLUDED_PATTERNS):
                     continue
-                
+
                 models.append(model_id)
-            
-            # Sort with recommended models first
+
+            # Sort with recommended models first (only meaningful for OpenAI
+            # official; on custom endpoints the prefixes rarely match, so
+            # entries fall through to alphabetical order, which is fine).
             def sort_key(m):
                 m_lower = m.lower()
                 for i, prefix in enumerate(self.RECOMMENDED_PREFIXES):
                     if m_lower.startswith(prefix):
                         return (i, m)
                 return (len(self.RECOMMENDED_PREFIXES), m)
-            
+
             return sorted(models, key=sort_key)
         except Exception as e:
             print(f"[OpenAIProvider] Failed to list models: {e}")
@@ -133,17 +163,35 @@ class OpenAIProvider(AIProvider):
         """
         if not self.api_key:
             raise AIProviderError("API key required for OpenAI")
-        
+
         payload = {
             'model': self.model,
             'messages': [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_message},
             ],
-            'max_tokens': max_tokens,
-            'temperature': 0.3,
         }
-        
+
+        # Reasoning models (o1/o3/o4/gpt-5*, excluding *-chat-latest) use a
+        # different parameter contract: max_completion_tokens instead of
+        # max_tokens, and no temperature field. Sending the classic chat
+        # parameters to them produces HTTP 400 Bad Request.
+        #
+        # They also spend output budget on internal reasoning by default,
+        # which empties the user-visible reply when max_tokens is small
+        # (like the ~200 we use for notifications). reasoning_effort
+        # 'minimal' keeps that internal reasoning to a minimum so the
+        # entire budget is available for the translation, which is
+        # exactly what this pipeline wants. OpenAI documents 'minimal',
+        # 'low', 'medium', 'high' — 'minimal' is the right setting for a
+        # straightforward translate+explain task.
+        if self._is_reasoning_model(self.model):
+            payload['max_completion_tokens'] = max_tokens
+            payload['reasoning_effort'] = 'minimal'
+        else:
+            payload['max_tokens'] = max_tokens
+            payload['temperature'] = 0.3
+
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {self.api_key}',
