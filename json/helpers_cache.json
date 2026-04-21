@@ -241,36 +241,6 @@
     "os": ""
   },
   {
-    "name": "AFFiNE",
-    "slug": "affine",
-    "desc": "Open-source, privacy-first workspace for notes, docs, and knowledge management with offline-first design and end-to-end encryption.",
-    "script": "ct/affine.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/affine.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/affine.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00012"
-    ],
-    "category_names": [
-      "Documents & Notes"
-    ],
-    "notes": [],
-    "port": 3010,
-    "website": "https://affine.pro/",
-    "documentation": "https://affine.pro/docs",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/affine.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "/opt/affine/.env",
-    "os": ""
-  },
-  {
     "name": "AgentDVR",
     "slug": "agentdvr",
     "desc": "AgentDVR a new video surveillance solution for the Internet Of Things.",
@@ -715,7 +685,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -1153,40 +1123,6 @@
       "pve"
     ],
     "config_path": "/root/aria2.daemon",
-    "os": ""
-  },
-  {
-    "name": "ARM",
-    "slug": "arm",
-    "desc": "Automatic Ripping Machine (ARM) automatically detects and rips Blu-rays, DVDs, and CDs. It identifies disc type, retrieves metadata, and handles transcoding with MakeMKV and HandBrake.",
-    "script": "ct/arm.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/arm.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/arm.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00013"
-    ],
-    "category_names": [
-      "Media & Streaming"
-    ],
-    "notes": [],
-    "port": 8080,
-    "website": "https://github.com/automatic-ripping-machine/automatic-ripping-machine",
-    "documentation": "https://github.com/automatic-ripping-machine/automatic-ripping-machine/wiki",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/arm.webp",
-    "updateable": true,
-    "privileged": true,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "",
-    "default_credentials": {
-      "username": "admin",
-      "password": "password"
-    },
     "os": ""
   },
   {
@@ -2021,40 +1957,6 @@
       "pve"
     ],
     "config_path": "/etc/caddy/Caddyfile",
-    "os": ""
-  },
-  {
-    "name": "CaddyManager",
-    "slug": "caddymanager",
-    "desc": "Caddy Manager is a free, open source tool to easily manage your Caddy web servers with a modern web interace. Simplify your workflow and focus on what matters.",
-    "script": "ct/caddymanager.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/caddymanager.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/caddymanager.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00021"
-    ],
-    "category_names": [
-      "Webservers & Proxies"
-    ],
-    "notes": [],
-    "port": 80,
-    "website": "https://caddymanager.online",
-    "documentation": "https://caddymanager.online/#/docs",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/caddymanager.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "/opt/caddymanager/caddymanager.env",
-    "default_credentials": {
-      "username": "admin",
-      "password": "caddyrocks"
-    },
     "os": ""
   },
   {
@@ -4483,8 +4385,8 @@
       "Media & Streaming"
     ],
     "notes": [],
-    "port": 9000,
-    "website": "https://github.com/ShaneIsrael/fireshare",
+    "port": 80,
+    "website": "https://fireshare.net/",
     "documentation": "https://github.com/ShaneIsrael/fireshare/blob/develop/README.md",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/fireshare.webp",
     "updateable": true,
@@ -4588,36 +4490,6 @@
     "os": ""
   },
   {
-    "name": "Fleet",
-    "slug": "fleet",
-    "desc": "Fleet is an open-source device management platform for IT and security teams to manage and monitor servers, laptops, and other devices with osquery.",
-    "script": "ct/fleet.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/fleet.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/fleet.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00009"
-    ],
-    "category_names": [
-      "Monitoring & Analytics"
-    ],
-    "notes": [],
-    "port": 8080,
-    "website": "https://fleetdm.com/",
-    "documentation": "https://fleetdm.com/docs",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/fleet.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "",
-    "os": ""
-  },
-  {
     "name": "FlowiseAI",
     "slug": "flowiseai",
     "desc": "FlowiseAI is an open source low-code tool for developers to build customized LLM orchestration flow & AI agents",
@@ -4702,7 +4574,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -4947,37 +4819,6 @@
       "pve"
     ],
     "config_path": "/etc/garage.toml",
-    "os": ""
-  },
-  {
-    "name": "garmin-grafana",
-    "slug": "garmin-grafana",
-    "desc": "A self-hosted solution to fetch data from Garmin servers and store it in a local InfluxDB database for visualization with Grafana.",
-    "script": "tools/addon/garmin-grafana.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/addon/garmin-grafana.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/tools/addon/garmin-grafana.sh",
-    "type": "addon",
-    "type_id": "88xtxy57q80v38v",
-    "categories": [
-      "scriptcat00009"
-    ],
-    "category_names": [
-      "Monitoring & Analytics"
-    ],
-    "notes": [],
-    "port": 3000,
-    "website": "https://github.com/arpanghosh8453/garmin-grafana",
-    "documentation": "https://github.com/arpanghosh8453/garmin-grafana",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/garmin-grafana.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc",
-      "vm"
-    ],
-    "config_path": "/opt/garmin-grafana/.env",
     "os": ""
   },
   {
@@ -5374,36 +5215,6 @@
     "os": ""
   },
   {
-    "name": "GoDoxy",
-    "slug": "godoxy",
-    "desc": "GoDoxy Agent is a lightweight system agent that connects Proxmox nodes and LXC containers to a GoDoxy main server, enabling automatic route binding, LXC lifecycle control, and real-time log streaming.",
-    "script": "ct/godoxy.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/godoxy.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/godoxy.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00021"
-    ],
-    "category_names": [
-      "Webservers & Proxies"
-    ],
-    "notes": [],
-    "port": 0,
-    "website": "https://github.com/yusing/godoxy",
-    "documentation": "https://docs.godoxy.dev",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/godoxy.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "",
-    "os": ""
-  },
-  {
     "name": "Gogs",
     "slug": "gogs",
     "desc": "Gogs is a painless self-hosted Git service written in Go, designed to be the easiest, fastest, and most lightweight way to set up a self-hosted Git service.",
@@ -5426,7 +5237,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -6149,36 +5960,6 @@
     "os": ""
   },
   {
-    "name": "Hoodik",
-    "slug": "hoodik",
-    "desc": "Hoodik is a lightweight, self-hosted cloud storage solution with end-to-end encryption. Files are encrypted on your device before upload using hybrid RSA/AES encryption, ensuring only you can access your data.",
-    "script": "ct/hoodik.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hoodik.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hoodik.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00011"
-    ],
-    "category_names": [
-      "Files & Downloads"
-    ],
-    "notes": [],
-    "port": 5443,
-    "website": "https://github.com/hudikhq/hoodik",
-    "documentation": "https://github.com/hudikhq/hoodik#readme",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hoodik.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "/opt/hoodik/.env",
-    "os": ""
-  },
-  {
     "name": "HortusFox",
     "slug": "hortusfox",
     "desc": "HortusFox is a collaborative plant management system for plant enthusiasts. Manage, document and track your entire plant collection – self-hosted and privacy-friendly.",
@@ -6571,36 +6352,6 @@
       "pve"
     ],
     "config_path": "/opt/investbrain/.env",
-    "os": ""
-  },
-  {
-    "name": "Invidious",
-    "slug": "invidious",
-    "desc": "A self-hosted alternative frontend for YouTube",
-    "script": "ct/invidious.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/invidious.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/invidious.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00013"
-    ],
-    "category_names": [
-      "Media & Streaming"
-    ],
-    "notes": [],
-    "port": 3000,
-    "website": "https://invidious.io",
-    "documentation": "https:/docs.invidious.io",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/invidious.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "",
     "os": ""
   },
   {
@@ -9152,7 +8903,7 @@
     "updateable": false,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -11286,36 +11037,6 @@
     "os": ""
   },
   {
-    "name": "Papermark",
-    "slug": "papermark",
-    "desc": "Papermark is an open-source document sharing alternative to DocSend with built-in analytics, custom domains, and secure shareable links.",
-    "script": "ct/papermark.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/papermark.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/papermark.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00012"
-    ],
-    "category_names": [
-      "Documents & Notes"
-    ],
-    "notes": [],
-    "port": 3000,
-    "website": "https://www.papermark.com/",
-    "documentation": "https://www.papermark.com/docs",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/papermark.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "",
-    "os": ""
-  },
-  {
     "name": "Papra",
     "slug": "papra",
     "desc": "Papra is a modern, self-hosted document management system with full-text search, OCR support, and automatic document processing. Built with Node.js and featuring a clean web interface for organizing and managing your documents.",
@@ -12809,36 +12530,6 @@
     "os": ""
   },
   {
-    "name": "Puter",
-    "slug": "puter",
-    "desc": "Puter is an open-source personal cloud and web desktop environment that runs in your browser, providing a full desktop experience with file management, app ecosystem, and cloud storage.",
-    "script": "ct/puter.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/puter.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/puter.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00000"
-    ],
-    "category_names": [
-      "Miscellaneous"
-    ],
-    "notes": [],
-    "port": 4100,
-    "website": "https://puter.com/",
-    "documentation": "https://docs.puter.com/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/puter.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "",
-    "os": ""
-  },
-  {
     "name": "PVE Privilege Converter",
     "slug": "pve-privilege-converter",
     "desc": "This script allows converting Proxmox LXC containers between privileged and unprivileged modes using vzdump backup and restore. It guides you through container selection, backup storage, ID assignment, and privilege flipping via automated restore. Useful for applying changes that require different LXC modes.",
@@ -14028,100 +13719,6 @@
       "pve"
     ],
     "config_path": "",
-    "os": ""
-  },
-  {
-    "name": "SimpleLogin",
-    "slug": "simplelogin",
-    "desc": "SimpleLogin is an open-source email alias solution that lets you create anonymous email aliases to protect your real email address from spam, trackers and data breaches.",
-    "script": "ct/simplelogin.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/simplelogin.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/simplelogin.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00006"
-    ],
-    "category_names": [
-      "Authentication & Security"
-    ],
-    "notes": [],
-    "port": 80,
-    "website": "https://simplelogin.io/",
-    "documentation": "https://github.com/simple-login/app/blob/master/docs/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/simplelogin.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "/opt/simplelogin/.env",
-    "os": ""
-  },
-  {
-    "name": "Skylite-UX",
-    "slug": "skylite-ux",
-    "desc": "Skylite-UX is an open-source, self-hosted family management app with calendar, todos, shopping lists, and user management.",
-    "script": "ct/skylite-ux.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/skylite-ux.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/skylite-ux.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00019"
-    ],
-    "category_names": [
-      "Automation & Scheduling"
-    ],
-    "notes": [],
-    "port": 3000,
-    "website": "https://github.com/Wetzel402/Skylite-UX",
-    "documentation": "https://github.com/Wetzel402/Skylite-UX",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/skylite-ux.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "/opt/skylite-ux/.env",
-    "os": ""
-  },
-  {
-    "name": "Slink",
-    "slug": "slink",
-    "desc": "Slink is a self-hosted image sharing platform built with Symfony and SvelteKit. It supports multi-file uploads, image compression, URL shortening, collections, tags, comments, SSO/OIDC, dark mode, and S3 storage.",
-    "script": "ct/slink.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/slink.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/slink.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00011"
-    ],
-    "category_names": [
-      "Files & Downloads"
-    ],
-    "notes": [],
-    "port": 3000,
-    "website": "https://github.com/andrii-kryvoviaz/slink",
-    "documentation": "https://slink.pages.dev",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/slink.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "/opt/slink/services/api/.env",
-    "default_credentials": {
-      "username": "admin@localhost",
-      "password": "auto-generated"
-    },
     "os": ""
   },
   {
@@ -17910,7 +17507,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
