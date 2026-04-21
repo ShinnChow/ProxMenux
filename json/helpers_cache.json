@@ -13941,6 +13941,36 @@
     "os": ""
   },
   {
+    "name": "Shlink",
+    "slug": "shlink",
+    "desc": "Shlink is a self-hosted URL shortener built in PHP that provides detailed analytics, a REST API, tags, expiration dates, and integrations via webhooks.",
+    "script": "ct/shlink.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/shlink.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/shlink.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000"
+    ],
+    "category_names": [
+      "Miscellaneous"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://shlink.io/",
+    "documentation": "https://shlink.io/documentation/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/shlink.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "SigNoz",
     "slug": "signoz",
     "desc": "SigNoz is an open-source Datadog or New Relic alternative. Get APM, logs, traces, metrics, exceptions, & alerts in a single tool.",
