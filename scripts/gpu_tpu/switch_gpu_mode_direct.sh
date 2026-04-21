@@ -748,8 +748,14 @@ apply_lxc_action_for_vm_mode() {
 
     if [[ "${LXC_AFFECTED_RUNNING[$i]}" == "1" ]]; then
       msg_info "$(translate 'Stopping LXC') ${ctid}..."
-      pct stop "$ctid" >>"$LOG_FILE" 2>&1 || true
-      msg_ok "$(translate 'LXC stopped') ${ctid}" | tee -a "$screen_capture"
+      # _pmx_stop_lxc: unlock + graceful shutdown with forceStop+timeout,
+      # fallback to pct stop. Prevents the indefinite hang that raw
+      # `pct stop` triggers on locked / stuck containers.
+      if _pmx_stop_lxc "$ctid" "$LOG_FILE"; then
+        msg_ok "$(translate 'LXC stopped') ${ctid}" | tee -a "$screen_capture"
+      else
+        msg_warn "$(translate 'Could not stop LXC') ${ctid}" | tee -a "$screen_capture"
+      fi
     fi
 
     if [[ "$LXC_ACTION" == "keep_gpu_disable_onboot" && "${LXC_AFFECTED_ONBOOT[$i]}" == "1" ]]; then
@@ -865,11 +871,67 @@ apply_vm_action_for_lxc_mode() {
     fi
 
     if [[ "$VM_ACTION" == "remove_gpu_keep_onboot" && -f "$conf" ]]; then
+      # Primary cleanup: strip hostpci lines whose BDF matches any of
+      # the GPU's selected slots. Matches both the PF function (.0) and
+      # sibling audio/HDMI codecs (.1, typical for discrete cards).
+      #
+      # Precise regex: the slot must be followed by ".<function>" and a
+      # delimiter. Kept in sync with switch_gpu_mode.sh — a looser
+      # substring match would wipe unrelated hostpci entries (e.g. slot
+      # "00:02" matching as a substring inside a dGPU BDF 0000:02:00.0).
       local slot
       for slot in "${SELECTED_PCI_SLOTS[@]}"; do
-        sed -i "/^hostpci[0-9]\+:.*${slot}/d" "$conf"
+        sed -E -i "/^hostpci[0-9]+:[[:space:]]*(0000:)?${slot}\.[0-7]([,[:space:]]|$)/d" "$conf"
       done
       msg_ok "$(translate 'GPU removed from VM config') ${vmid}" | tee -a "$screen_capture"
+
+      # Cascade cleanup for the web flow: auto-remove any PCI audio
+      # hostpci entries at a slot DIFFERENT from the GPU (typical Intel
+      # iGPU case where 00:1f.3 chipset audio was paired with the iGPU
+      # at 00:02.0). The helper skips audio devices whose slot already
+      # has a display sibling in the same VM (HDMI codec of another
+      # still-present dGPU), so those are not touched. The web runner
+      # has no good way to render a multi-select checklist, so the
+      # eligible ones are auto-removed and reported verbatim in the log.
+      if declare -F _vm_list_orphan_audio_hostpci >/dev/null 2>&1; then
+        local _orphan_audio _line _o_idx _o_bdf _o_name _removed=""
+        local _vd_hex _dd_hex _vd_id
+        _orphan_audio=$(_vm_list_orphan_audio_hostpci "$vmid" "${SELECTED_PCI_SLOTS[0]}")
+        if [[ -n "$_orphan_audio" ]]; then
+          while IFS= read -r _line; do
+            [[ -z "$_line" ]] && continue
+            _o_idx="${_line%%|*}"
+            _line="${_line#*|}"
+            _o_bdf="${_line%%|*}"
+            _o_name="${_line#*|}"
+            if _vm_remove_hostpci_index "$vmid" "$_o_idx" "$LOG_FILE"; then
+              _removed+="  • hostpci${_o_idx}: ${_o_bdf}  ${_o_name}\n"
+
+              # Fix B: also surface the audio's vendor:device to the
+              # upcoming vfio.conf cleanup if no other VM still uses
+              # this BDF. Ensures e.g. 8086:51c8 (Intel chipset audio)
+              # is stripped from /etc/modprobe.d/vfio.conf when the
+              # iGPU it was paired with leaves VM mode.
+              if declare -F _pci_bdf_in_any_vm >/dev/null 2>&1 \
+                 && ! _pci_bdf_in_any_vm "$_o_bdf" "${VM_AFFECTED_IDS[@]}"; then
+                _vd_hex=$(cat "/sys/bus/pci/devices/${_o_bdf}/vendor" 2>/dev/null | sed 's/^0x//')
+                _dd_hex=$(cat "/sys/bus/pci/devices/${_o_bdf}/device" 2>/dev/null | sed 's/^0x//')
+                if [[ -n "$_vd_hex" && -n "$_dd_hex" ]]; then
+                  _vd_id="${_vd_hex}:${_dd_hex}"
+                  if ! _contains_in_array "$_vd_id" "${SELECTED_IOMMU_IDS[@]}"; then
+                    SELECTED_IOMMU_IDS+=("$_vd_id")
+                  fi
+                fi
+              fi
+            fi
+          done <<< "$_orphan_audio"
+          if [[ -n "$_removed" ]]; then
+            msg_ok "$(translate 'Associated audio removed from VM'): ${vmid}" \
+              | tee -a "$screen_capture"
+            echo -e "$_removed" | tee -a "$screen_capture"
+          fi
+        fi
+      fi
     fi
   done
 }

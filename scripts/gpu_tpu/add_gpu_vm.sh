@@ -71,6 +71,7 @@ SELECTED_GPU_NAME=""
 declare -a IOMMU_DEVICES=()      # all PCI addrs in IOMMU group (endpoint devices)
 declare -a IOMMU_VFIO_IDS=()    # vendor:device for vfio-pci ids=
 declare -a EXTRA_AUDIO_DEVICES=() # sibling audio function(s), typically *.1
+declare -a EXTRA_AUDIO_INFO=()    # parallel to EXTRA_AUDIO_DEVICES — "BDF|current_driver" pairs for the summary dialog
 IOMMU_GROUP=""
 IOMMU_PENDING_REBOOT=false
 
@@ -212,28 +213,32 @@ _strip_colors() {
     printf '%s' "$1" | sed 's/\\Z[0-9a-zA-Z]//g'
 }
 
-# Msgbox: dialog in standalone mode, whiptail in wizard mode
+# Msgbox: dialog in standalone mode, whiptail in wizard mode.
+# I/O pinned to /dev/tty so the dialog renders reliably regardless of
+# how the caller redirected stdin/stdout, and immune to the SIGTTOU
+# trap that fires when this script is resumed as a background job.
 _pmx_msgbox() {
     local title="$1" msg="$2" h="${3:-10}" w="${4:-72}"
     if [[ "$WIZARD_CALL" == "true" ]]; then
         whiptail --backtitle "ProxMenux" --title "$title" \
-            --msgbox "$(_strip_colors "$msg")" "$h" "$w"
+            --msgbox "$(_strip_colors "$msg")" "$h" "$w" < /dev/tty > /dev/tty
     else
         dialog --backtitle "ProxMenux" --colors \
-            --title "$title" --msgbox "$msg" "$h" "$w"
+            --title "$title" --msgbox "$msg" "$h" "$w" < /dev/tty > /dev/tty
     fi
 }
 
-# Yesno: dialog in standalone mode, whiptail in wizard mode
-# Returns 0 for yes, 1 for no (same as dialog/whiptail)
+# Yesno: dialog in standalone mode, whiptail in wizard mode.
+# Returns 0 for yes, 1 for no (same as dialog/whiptail).
+# I/O pinned to /dev/tty — see the note on _pmx_msgbox.
 _pmx_yesno() {
     local title="$1" msg="$2" h="${3:-10}" w="${4:-72}"
     if [[ "$WIZARD_CALL" == "true" ]]; then
         whiptail --backtitle "ProxMenux" --title "$title" \
-            --yesno "$(_strip_colors "$msg")" "$h" "$w"
+            --yesno "$(_strip_colors "$msg")" "$h" "$w" < /dev/tty > /dev/tty
     else
         dialog --backtitle "ProxMenux" --colors \
-            --title "$title" --yesno "$msg" "$h" "$w"
+            --title "$title" --yesno "$msg" "$h" "$w" < /dev/tty > /dev/tty
     fi
     return $?
 }
@@ -260,6 +265,27 @@ _pmx_menu() {
         dialog --backtitle "ProxMenux" --colors "${extra_opts[@]}" \
             --title "$title" \
             --menu "$msg" "$h" "$w" "$lh" \
+            "$@" 2>&1 >/dev/tty
+    fi
+    return $?
+}
+
+# Checklist: dialog in standalone mode, whiptail in wizard mode.
+# Usage: _pmx_checklist title msg h w list_h tag1 desc1 state1 tag2 desc2 state2 ...
+# state is "on" or "off". Returns the space-separated list of selected
+# tags on stdout (one line). Returns non-zero if the user cancels.
+_pmx_checklist() {
+    local title="$1" msg="$2" h="$3" w="$4" lh="$5"
+    shift 5
+    if [[ "$WIZARD_CALL" == "true" ]]; then
+        whiptail --backtitle "ProxMenux" \
+            --title "$title" \
+            --checklist "$(_strip_colors "$msg")" "$h" "$w" "$lh" \
+            "$@" 3>&1 1>&2 2>&3
+    else
+        dialog --backtitle "ProxMenux" --colors \
+            --title "$title" \
+            --checklist "$msg" "$h" "$w" "$lh" \
             "$@" 2>&1 >/dev/tty
     fi
     return $?
@@ -1109,30 +1135,39 @@ analyze_iommu_group() {
 
 }
 
-detect_optional_gpu_audio() {
-    EXTRA_AUDIO_DEVICES=()
-
-    local sibling_audio="${SELECTED_GPU_PCI%.*}.1"
-    local dev_path="/sys/bus/pci/devices/${sibling_audio}"
-    [[ -d "$dev_path" ]] || return 0
-
+# Returns 0 if the BDF at $1 is a real PCI audio device (class 04xx).
+_pci_is_audio_device() {
+    local bdf="$1"
+    [[ -n "$bdf" ]] || return 1
+    local dev_path="/sys/bus/pci/devices/${bdf}"
+    [[ -d "$dev_path" ]] || return 1
     local class_hex
     class_hex=$(cat "${dev_path}/class" 2>/dev/null | sed 's/^0x//')
-    [[ "${class_hex:0:2}" == "04" ]] || return 0
+    [[ "${class_hex:0:2}" == "04" ]]
+}
 
-    local already_in_group=false dev
+# Registers an audio BDF for passthrough alongside the GPU.
+# Idempotent: skips if the BDF was already recorded by analyze_iommu_group
+# (IOMMU_DEVICES) or by a previous call here (EXTRA_AUDIO_DEVICES).
+# Updates EXTRA_AUDIO_DEVICES, EXTRA_AUDIO_INFO, and IOMMU_VFIO_IDS.
+_register_gpu_audio_device() {
+    local bdf="$1"
+    [[ -n "$bdf" ]] || return 1
+    local dev_path="/sys/bus/pci/devices/${bdf}"
+    [[ -d "$dev_path" ]] || return 1
+
+    local dev
     for dev in "${IOMMU_DEVICES[@]}"; do
-        if [[ "$dev" == "$sibling_audio" ]]; then
-            already_in_group=true
-            break
-        fi
+        [[ "$dev" == "$bdf" ]] && return 0
+    done
+    for dev in "${EXTRA_AUDIO_DEVICES[@]}"; do
+        [[ "$dev" == "$bdf" ]] && return 0
     done
 
-    if [[ "$already_in_group" == "true" ]]; then
-        return 0
-    fi
-
-    EXTRA_AUDIO_DEVICES+=("$sibling_audio")
+    EXTRA_AUDIO_DEVICES+=("$bdf")
+    local drv
+    drv=$(_get_pci_driver "$bdf")
+    EXTRA_AUDIO_INFO+=("${bdf}|${drv}")
 
     local vid did new_id
     vid=$(cat "${dev_path}/vendor" 2>/dev/null | sed 's/0x//')
@@ -1143,6 +1178,98 @@ detect_optional_gpu_audio() {
             IOMMU_VFIO_IDS+=("$new_id")
         fi
     fi
+    return 0
+}
+
+# Scans the host for all class-04 PCI audio devices and lets the user
+# pick which ones to pass to the VM. Only invoked when the selected GPU
+# has no .1 sibling audio function — the dGPU fast path continues to
+# auto-include that sibling without prompting.
+#
+# Devices already in the GPU's IOMMU group are excluded from the list
+# (analyze_iommu_group has already queued them). The checklist defaults
+# to all-OFF so nothing gets passed through silently.
+_prompt_user_for_audio_devices() {
+    # Collect eligible audio BDFs from sysfs.
+    local -a candidates=()
+    local dev_path bdf
+    for dev_path in /sys/bus/pci/devices/*; do
+        [[ -d "$dev_path" ]] || continue
+        bdf=$(basename "$dev_path")
+        _pci_is_audio_device "$bdf" || continue
+        # Skip ones already queued by the IOMMU group sweep.
+        local skip=false dev
+        for dev in "${IOMMU_DEVICES[@]}"; do
+            [[ "$dev" == "$bdf" ]] && { skip=true; break; }
+        done
+        $skip && continue
+        candidates+=("$bdf")
+    done
+
+    [[ ${#candidates[@]} -eq 0 ]] && return 0
+
+    # Build checklist items: tag=BDF, description="<name> (driver: X)".
+    local -a items=()
+    local name drv label
+    for bdf in "${candidates[@]}"; do
+        name=$(lspci -nn -s "${bdf#0000:}" 2>/dev/null \
+            | sed 's/^[^ ]* //' \
+            | sed 's/ \[0401\]//; s/ \[0403\]//; s/ \[0400\]//' \
+            | cut -c1-52)
+        [[ -z "$name" ]] && name="PCI audio"
+        drv=$(_get_pci_driver "$bdf")
+        label="${name}  (driver: ${drv})"
+        items+=("$bdf" "$label" "off")
+    done
+
+    local prompt selection dialog_h list_h
+    prompt="$(translate 'The selected GPU has no dedicated .1 audio sibling function.')\n"
+    prompt+="$(translate 'If you want HDMI/analog audio inside the VM, select the audio controller(s) to pass through along with the GPU.')\n\n"
+    prompt+="$(translate 'Default is none (video-only passthrough). Use SPACE to toggle selections.')"
+
+    # Give the list area a floor of 4 rows so a single candidate doesn't
+    # render cramped under the description. Overall dialog height scales
+    # with that floor + room for the 4-line prompt, blank line, borders
+    # and button row.
+    list_h=${#candidates[@]}
+    (( list_h < 4 )) && list_h=4
+    dialog_h=$(( list_h + 14 ))
+
+    selection=$(_pmx_checklist \
+        "$(translate 'Add Audio Passthrough')" \
+        "$prompt" \
+        "$dialog_h" 82 "$list_h" \
+        "${items[@]}") || return 0
+
+    # dialog wraps selected tags in quotes, whiptail does not — _strip them.
+    selection=$(echo "$selection" | tr -d '"')
+    [[ -z "$selection" ]] && return 0
+
+    local picked
+    for picked in $selection; do
+        _register_gpu_audio_device "$picked"
+    done
+}
+
+detect_optional_gpu_audio() {
+    EXTRA_AUDIO_DEVICES=()
+    EXTRA_AUDIO_INFO=()
+
+    # Fast path: dGPUs (NVIDIA / AMD discrete) and some APUs expose audio
+    # as function .1 of the same slot. When present, auto-include it —
+    # this is the unambiguous, always-safe case because such audio only
+    # outputs through the GPU's own ports and was never used by the host.
+    local sibling_audio="${SELECTED_GPU_PCI%.*}.1"
+    if _pci_is_audio_device "$sibling_audio"; then
+        _register_gpu_audio_device "$sibling_audio"
+        return 0
+    fi
+
+    # Slow path: no sibling audio (typical for Intel iGPUs whose HDMI
+    # audio lives on the PCH, or setups with an external sound card).
+    # Ask the user explicitly via checklist — the decision of whether to
+    # pass chipset audio alongside an iGPU is intentional, not automatic.
+    _prompt_user_for_audio_devices
 }
 
 
@@ -1417,8 +1544,19 @@ confirm_summary() {
     else
         msg+="  •  $(translate 'hostpci entries for all IOMMU group devices')\n"
     fi
-    [[ ${#EXTRA_AUDIO_DEVICES[@]} -gt 0 ]] && \
-        msg+="  •  $(translate 'Additional GPU audio function will be added'): ${EXTRA_AUDIO_DEVICES[*]}\n"
+    if [[ ${#EXTRA_AUDIO_DEVICES[@]} -gt 0 ]]; then
+        msg+="  •  $(translate 'Additional audio function(s) to be added'):\n"
+        local _audio_info _audio_bdf _audio_drv
+        for _audio_info in "${EXTRA_AUDIO_INFO[@]}"; do
+            _audio_bdf="${_audio_info%%|*}"
+            _audio_drv="${_audio_info#*|}"
+            if [[ -n "$_audio_drv" && "$_audio_drv" != "none" && "$_audio_drv" != "vfio-pci" ]]; then
+                msg+="       • ${_audio_bdf}  \Zb(${_audio_drv})\Zn\n"
+            else
+                msg+="       • ${_audio_bdf}\n"
+            fi
+        done
+    fi
     [[ "$SELECTED_GPU" == "nvidia" ]] && \
         msg+="  •  $(translate 'NVIDIA KVM hiding (cpu hidden=1)')\n"
     if [[ "$SWITCH_FROM_LXC" == "true" ]]; then
@@ -1740,7 +1878,7 @@ cleanup_lxc_configs() {
     [[ "$SWITCH_FROM_LXC" != "true" ]] && return 0
     [[ ${#LXC_AFFECTED_CTIDS[@]} -eq 0 ]] && return 0
 
-    msg_info "$(translate 'Applying selected LXC switch action...')"
+    msg_info2 "$(translate 'Applying selected LXC switch action')"
 
     local i
     for i in "${!LXC_AFFECTED_CTIDS[@]}"; do
@@ -1750,7 +1888,11 @@ cleanup_lxc_configs() {
 
         if [[ "${LXC_AFFECTED_RUNNING[$i]}" == "1" ]]; then
             msg_info "$(translate 'Stopping LXC') ${ctid}..."
-            if pct stop "$ctid" >>"$LOG_FILE" 2>&1; then
+            # _pmx_stop_lxc: graceful shutdown with forceStop+timeout, then
+            # fallback to pct stop. Avoids the indefinite hang that raw
+            # `pct stop` produces when the container is locked or has
+            # unresponsive processes (Plex, databases, etc.).
+            if _pmx_stop_lxc "$ctid" "$LOG_FILE"; then
                 msg_ok "$(translate 'LXC stopped') ${ctid}" | tee -a "$screen_capture"
             else
                 msg_warn "$(translate 'Could not stop LXC') ${ctid}" | tee -a "$screen_capture"
@@ -1807,8 +1949,73 @@ cleanup_vm_config() {
     local src_conf="/etc/pve/qemu-server/${SWITCH_VM_SRC}.conf"
     if [[ -f "$src_conf" ]]; then
         msg_info "$(translate 'Removing GPU from VM') ${SWITCH_VM_SRC}..."
-        sed -i "/^hostpci[0-9]\+:.*${pci_slot}/d" "$src_conf"
+        # Precise regex: slot must be followed by ".<function>" and a
+        # delimiter. Kept in sync with switch_gpu_mode.sh. A looser
+        # ".*${pci_slot}" would match the slot as a substring and wipe
+        # unrelated hostpci entries (e.g. slot "00:02" matching inside
+        # a dGPU BDF 0000:02:00.0).
+        sed -E -i "/^hostpci[0-9]+:[[:space:]]*(0000:)?${pci_slot}\.[0-7]([,[:space:]]|$)/d" "$src_conf"
         msg_ok "$(translate 'GPU removed from VM') ${SWITCH_VM_SRC}" | tee -a "$screen_capture"
+
+        # Cascade cleanup: detect audio companions orphaned in the
+        # source VM after the GPU slot is removed. Typical case: the
+        # source VM had an Intel iGPU at 00:02.0 paired with chipset
+        # audio at 00:1f.3 via the Part 1 checklist — the sed above
+        # only strips 00:02.* entries, leaving the chipset audio
+        # hostpci pointing at a device the source VM no longer uses.
+        #
+        # Unlike switch_gpu_mode (detach flow), we deliberately do NOT
+        # touch /etc/modprobe.d/vfio.conf here. The GPU is being moved
+        # to the current target VM, which may select the same audio
+        # companion in its own Part 1 checklist. Any vendor:device
+        # orphaned in vfio.conf after this move is inert — the user
+        # can clean it up later via switch_gpu_mode if they want.
+        if declare -F _vm_list_orphan_audio_hostpci >/dev/null 2>&1; then
+            local _orphan_audio
+            _orphan_audio=$(_vm_list_orphan_audio_hostpci "$SWITCH_VM_SRC" "$pci_slot")
+            if [[ -n "$_orphan_audio" ]]; then
+                local -a _orph_items=()
+                local _oline _o_idx _o_bdf _o_name
+                while IFS= read -r _oline; do
+                    [[ -z "$_oline" ]] && continue
+                    _o_idx="${_oline%%|*}"
+                    _oline="${_oline#*|}"
+                    _o_bdf="${_oline%%|*}"
+                    _o_name="${_oline#*|}"
+                    _orph_items+=("$_o_idx" "${_o_bdf}  ${_o_name}" "on")
+                done <<< "$_orphan_audio"
+
+                local _prompt
+                _prompt="\n$(translate 'The GPU has been moved out of VM')  \Zb${SWITCH_VM_SRC}\Zn.\n\n"
+                _prompt+="$(translate 'The source VM also has these audio devices, likely added together with the GPU. Remove them too?')\n\n"
+                _prompt+="$(translate '(Checked entries will be removed. Uncheck to keep in VM.)')"
+
+                local _selected
+                _selected=$(_pmx_checklist \
+                    "$(translate 'Associated Audio Devices')" \
+                    "$_prompt" \
+                    20 84 "$(( ${#_orph_items[@]} / 3 ))" \
+                    "${_orph_items[@]}") || _selected=""
+                _selected=$(echo "$_selected" | tr -d '"')
+
+                local _sel _removed=""
+                for _sel in $_selected; do
+                    if declare -F _vm_remove_hostpci_index >/dev/null 2>&1; then
+                        _vm_remove_hostpci_index "$SWITCH_VM_SRC" "$_sel" "$LOG_FILE" \
+                            && _removed+=" hostpci${_sel}"
+                    else
+                        qm set "$SWITCH_VM_SRC" --delete "hostpci${_sel}" >>"$LOG_FILE" 2>&1 \
+                            && _removed+=" hostpci${_sel}"
+                    fi
+                done
+                if [[ -n "$_removed" ]]; then
+                    show_proxmenux_logo
+                    msg_title "${run_title}"
+                    msg_ok "$(translate 'Associated audio removed from VM'): ${SWITCH_VM_SRC} —${_removed}" \
+                        | tee -a "$screen_capture"
+                fi
+            fi
+        fi
     fi
 }
 
@@ -2068,10 +2275,23 @@ main() {
 
     rm -f "$screen_capture"
 
+    # Final reboot prompt. Whiptail is invoked directly (not through
+    # the _pmx_yesno helper) because the ProxMenux menu chain
+    # (menu → main_menu → hw_grafics_menu → add_gpu_vm) has been
+    # verified to work reliably with a bare whiptail here, while the
+    # dialog-based helper path hits process-group / TTY edge cases in
+    # that exact chain.
+    #
+    # The extra `Press Enter to continue ... read -r` between whiptail
+    # and `reboot` is deliberate — it gives the user a visible pause
+    # after the dialog closes so an accidental Enter on the yes button
+    # cannot trigger an immediate reboot.
     if [[ "$HOST_CONFIG_CHANGED" == "true" ]]; then
         whiptail --title "$(translate 'Reboot Required')" \
             --yesno "$(translate 'A reboot is required for VFIO binding to take effect. Do you want to restart now?')" 10 68
         if [[ $? -eq 0 ]]; then
+            msg_success "$(translate 'Press Enter to continue...')"
+            read -r
             msg_warn "$(translate 'Rebooting the system...')"
             reboot
         else

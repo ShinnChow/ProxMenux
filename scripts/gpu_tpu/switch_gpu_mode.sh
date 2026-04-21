@@ -835,8 +835,14 @@ apply_lxc_action_for_vm_mode() {
 
     if [[ "${LXC_AFFECTED_RUNNING[$i]}" == "1" ]]; then
       msg_info "$(translate 'Stopping LXC') ${ctid}..."
-      pct stop "$ctid" >>"$LOG_FILE" 2>&1 || true
-      msg_ok "$(translate 'LXC stopped') ${ctid}" | tee -a "$screen_capture"
+      # _pmx_stop_lxc: unlock + graceful shutdown with forceStop+timeout,
+      # fallback to pct stop. Prevents the indefinite hang that raw
+      # `pct stop` triggers on locked / stuck containers.
+      if _pmx_stop_lxc "$ctid" "$LOG_FILE"; then
+        msg_ok "$(translate 'LXC stopped') ${ctid}" | tee -a "$screen_capture"
+      else
+        msg_warn "$(translate 'Could not stop LXC') ${ctid}" | tee -a "$screen_capture"
+      fi
     fi
 
     if [[ "$LXC_ACTION" == "keep_gpu_disable_onboot" && "${LXC_AFFECTED_ONBOOT[$i]}" == "1" ]]; then
@@ -948,11 +954,102 @@ apply_vm_action_for_lxc_mode() {
     fi
 
     if [[ "$VM_ACTION" == "remove_gpu_keep_onboot" && -f "$conf" ]]; then
+      # Primary cleanup: strip hostpci lines whose BDF matches any of
+      # the GPU's selected slots. Matches both the PF function (.0) and
+      # any sibling audio or HDMI codec that shares the slot (typical
+      # for discrete NVIDIA/AMD cards where .1 is the HDMI audio).
+      #
+      # Precise regex: the slot must be followed by ".<function>" and
+      # either a delimiter or end-of-line. A looser ".*${slot}" would
+      # match by pure substring and delete unrelated hostpci entries —
+      # e.g. slot "00:02" would match inside "0000:02:00.0" (a dGPU at
+      # 02:00) and wipe both the iGPU and the unrelated dGPU.
       local slot
       for slot in "${SELECTED_PCI_SLOTS[@]}"; do
-        sed -i "/^hostpci[0-9]\+:.*${slot}/d" "$conf"
+        sed -E -i "/^hostpci[0-9]+:[[:space:]]*(0000:)?${slot}\.[0-7]([,[:space:]]|$)/d" "$conf"
       done
       msg_ok "$(translate 'GPU removed from VM config') ${vmid}" | tee -a "$screen_capture"
+
+      # Cascade cleanup: Intel iGPU passthrough typically pairs the GPU
+      # at 00:02.0 with chipset audio at 00:1f.3, which lives at a
+      # different slot and therefore survives the sed above. If it
+      # stays in the VM config after the GPU is gone, the VM either
+      # fails to start (vfio-pci no longer claims 8086:51c8 after the
+      # switch-back) or it steals host audio unnecessarily. Enumerate
+      # orphan audio hostpci entries and ask the user what to do.
+      if declare -F _vm_list_orphan_audio_hostpci >/dev/null 2>&1; then
+        local _orphan_audio
+        _orphan_audio=$(_vm_list_orphan_audio_hostpci "$vmid" "${SELECTED_PCI_SLOTS[0]}")
+        if [[ -n "$_orphan_audio" ]]; then
+          local -a _orph_items=()
+          local _line _o_idx _o_bdf _o_name
+          while IFS= read -r _line; do
+            [[ -z "$_line" ]] && continue
+            _o_idx="${_line%%|*}"
+            _line="${_line#*|}"
+            _o_bdf="${_line%%|*}"
+            _o_name="${_line#*|}"
+            _orph_items+=("$_o_idx" "${_o_bdf}  ${_o_name}" "on")
+          done <<< "$_orphan_audio"
+
+          local _prompt _selected
+          _prompt="\n$(translate 'The GPU is being detached from VM')  \Zb${vmid}\Zn.\n\n"
+          _prompt+="$(translate 'The VM also has these audio devices assigned via PCI passthrough — typically added together with the GPU. Remove them too?')\n\n"
+          _prompt+="$(translate '(Checked entries will be removed. Uncheck to keep in VM.)')"
+
+          _selected=$(dialog --backtitle "ProxMenux" --colors \
+            --title "$(translate 'Associated Audio Devices')" \
+            --checklist "$_prompt" 20 84 "$(( ${#_orph_items[@]} / 3 ))" \
+            "${_orph_items[@]}" \
+            2>&1 >/dev/tty) || _selected=""
+          _selected=$(echo "$_selected" | tr -d '"')
+
+          # Cross-reference table so we can recover each selected idx's
+          # original BDF (we need it for vendor:device lookup below).
+          declare -A _orphan_bdf_by_idx=()
+          local _o_line _o_i _o_b
+          while IFS= read -r _o_line; do
+            [[ -z "$_o_line" ]] && continue
+            _o_i="${_o_line%%|*}"
+            _o_line="${_o_line#*|}"
+            _o_b="${_o_line%%|*}"
+            _orphan_bdf_by_idx["$_o_i"]="$_o_b"
+          done <<< "$_orphan_audio"
+
+          local _sel _removed_audio="" _rem_bdf _vd_hex _dd_hex _vd_id
+          for _sel in $_selected; do
+            _rem_bdf="${_orphan_bdf_by_idx[$_sel]:-}"
+            if _vm_remove_hostpci_index "$vmid" "$_sel" "$LOG_FILE"; then
+              _removed_audio+=" hostpci${_sel}"
+
+              # Fix B: if the removed audio BDF is not referenced by any
+              # OTHER VM, its vendor:device can safely come out of
+              # /etc/modprobe.d/vfio.conf too. Without this step,
+              # SELECTED_IOMMU_IDS only held the GPU's own IOMMU group
+              # (e.g. 8086:46a3 for Intel iGPU) and the companion audio
+              # id (e.g. 8086:51c8 for chipset audio) survived in
+              # vfio.conf, so vfio-pci kept claiming it at next boot
+              # even though nothing used it.
+              [[ -z "$_rem_bdf" ]] && continue
+              if ! _pci_bdf_in_any_vm "$_rem_bdf" "${VM_AFFECTED_IDS[@]}"; then
+                _vd_hex=$(cat "/sys/bus/pci/devices/${_rem_bdf}/vendor" 2>/dev/null | sed 's/^0x//')
+                _dd_hex=$(cat "/sys/bus/pci/devices/${_rem_bdf}/device" 2>/dev/null | sed 's/^0x//')
+                if [[ -n "$_vd_hex" && -n "$_dd_hex" ]]; then
+                  _vd_id="${_vd_hex}:${_dd_hex}"
+                  if ! _contains_in_array "$_vd_id" "${SELECTED_IOMMU_IDS[@]}"; then
+                    SELECTED_IOMMU_IDS+=("$_vd_id")
+                  fi
+                fi
+              fi
+            fi
+          done
+          unset _orphan_bdf_by_idx
+          if [[ -n "$_removed_audio" ]]; then
+            msg_ok "$(translate 'Associated audio removed from VM'): ${_removed_audio# }" \
+              | tee -a "$screen_capture"
+          fi
+        fi
+      fi
     fi
   done
 }
