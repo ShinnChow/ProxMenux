@@ -6151,6 +6151,211 @@ def get_network_hardware_info(pci_slot):
     
     return net_info
 
+def _get_sriov_info(slot):
+    """Return SR-IOV role for a PCI slot via sysfs.
+
+    Reads /sys/bus/pci/devices/<BDF>/ for:
+      - physfn symlink    → slot is a Virtual Function; link target is its PF
+      - sriov_numvfs      → active VF count if slot is a Physical Function
+      - sriov_totalvfs    → maximum VFs this PF can spawn
+
+    Returns a dict ready to merge into the GPU object, or {} on any error.
+    The 'role' key uses the same vocabulary as _pci_sriov_role in the
+    bash helpers (pci_passthrough_helpers.sh): vf | pf-active | pf-idle | none.
+    """
+    try:
+        bdf = slot if slot.startswith('0000:') else f'0000:{slot}'
+        base = f'/sys/bus/pci/devices/{bdf}'
+        if not os.path.isdir(base):
+            return {}
+
+        physfn = os.path.join(base, 'physfn')
+        if os.path.islink(physfn):
+            parent = os.path.basename(os.path.realpath(physfn))
+            return {
+                'sriov_role': 'vf',
+                'sriov_physfn': parent,
+            }
+
+        totalvfs_path = os.path.join(base, 'sriov_totalvfs')
+        if not os.path.isfile(totalvfs_path):
+            return {'sriov_role': 'none'}
+
+        try:
+            totalvfs = int((open(totalvfs_path).read() or '0').strip() or 0)
+        except (ValueError, OSError):
+            totalvfs = 0
+        if totalvfs <= 0:
+            return {'sriov_role': 'none'}
+
+        try:
+            numvfs = int((open(os.path.join(base, 'sriov_numvfs')).read() or '0').strip() or 0)
+        except (ValueError, OSError):
+            numvfs = 0
+
+        return {
+            'sriov_role': 'pf-active' if numvfs > 0 else 'pf-idle',
+            'sriov_vf_count': numvfs,
+            'sriov_totalvfs': totalvfs,
+        }
+    except Exception:
+        return {}
+
+
+def _sriov_list_vfs_of_pf(pf_bdf):
+    """Return sorted list of VF BDFs that belong to a Physical Function.
+    Reads /sys/bus/pci/devices/<PF>/virtfn<N> symlinks (one per VF).
+    """
+    try:
+        pf_full = pf_bdf if pf_bdf.startswith('0000:') else f'0000:{pf_bdf}'
+        base = f'/sys/bus/pci/devices/{pf_full}'
+        if not os.path.isdir(base):
+            return []
+        # virtfn links are numbered (virtfn0, virtfn1, ...) and point to the VF.
+        entries = sorted(glob.glob(f'{base}/virtfn*'),
+                         key=lambda p: int(re.search(r'virtfn(\d+)', p).group(1))
+                         if re.search(r'virtfn(\d+)', p) else 0)
+        return [os.path.basename(os.path.realpath(p)) for p in entries]
+    except Exception:
+        return []
+
+
+def _sriov_pci_driver(bdf):
+    """Return the current driver bound to a PCI BDF, '' if unbound."""
+    try:
+        link = f'/sys/bus/pci/devices/{bdf}/driver'
+        if os.path.islink(link):
+            return os.path.basename(os.path.realpath(link))
+    except Exception:
+        pass
+    return ''
+
+
+def _sriov_pci_render_node(bdf):
+    """If the device exposes a DRM render node, return '/dev/dri/renderDX'.
+    LXC containers consume GPUs through these nodes, so this lets us
+    cross-reference an LXC's `dev<N>: /dev/dri/renderD<N>` config line
+    back to a specific VF.
+    """
+    try:
+        drm_dir = f'/sys/bus/pci/devices/{bdf}/drm'
+        if not os.path.isdir(drm_dir):
+            return ''
+        for name in sorted(os.listdir(drm_dir)):
+            if name.startswith('renderD'):
+                return f'/dev/dri/{name}'
+    except Exception:
+        pass
+    return ''
+
+
+def _sriov_guest_running(guest_type, gid):
+    """Best-effort status check. Returns True if running, False otherwise."""
+    try:
+        cmd = ['qm' if guest_type == 'vm' else 'pct', 'status', str(gid)]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+        return 'running' in (r.stdout or '').lower()
+    except Exception:
+        return False
+
+
+def _sriov_find_guest_consumer(bdf):
+    """Find the VM or LXC that consumes a given VF (or PF) on the host.
+
+    VMs: scan /etc/pve/qemu-server/*.conf for a `hostpci<N>: ` line that
+         references the BDF (short or full form, possibly alongside other
+         ids separated by ';' and trailing options after ',').
+    LXCs: resolve the BDF to its DRM render node (if any) and scan
+         /etc/pve/lxc/*.conf for `dev<N>:` or `lxc.mount.entry:` lines that
+         reference that node.
+
+    Returns {type, id, name, running} or None.
+    """
+    short_bdf = bdf[5:] if bdf.startswith('0000:') else bdf
+    full_bdf = bdf if bdf.startswith('0000:') else f'0000:{bdf}'
+
+    # ── VM scan ──
+    try:
+        for conf in sorted(glob.glob('/etc/pve/qemu-server/*.conf')):
+            try:
+                with open(conf, 'r') as f:
+                    text = f.read()
+            except OSError:
+                continue
+            if re.search(
+                rf'^hostpci\d+:\s*[^\n]*(?:0000:)?{re.escape(short_bdf)}(?:[,;\s]|$)',
+                text, re.MULTILINE,
+            ):
+                vmid = os.path.basename(conf)[:-5]  # strip '.conf'
+                nm = re.search(r'^name:\s*(\S+)', text, re.MULTILINE)
+                name = nm.group(1) if nm else ''
+                return {
+                    'type': 'vm',
+                    'id': vmid,
+                    'name': name,
+                    'running': _sriov_guest_running('vm', vmid),
+                }
+    except Exception:
+        pass
+
+    # ── LXC scan (via render node) ──
+    render_node = _sriov_pci_render_node(full_bdf)
+    if render_node:
+        try:
+            for conf in sorted(glob.glob('/etc/pve/lxc/*.conf')):
+                try:
+                    with open(conf, 'r') as f:
+                        text = f.read()
+                except OSError:
+                    continue
+                if re.search(
+                    rf'^(?:dev\d+|lxc\.mount\.entry):\s*[^\n]*{re.escape(render_node)}(?:[,;\s]|$)',
+                    text, re.MULTILINE,
+                ):
+                    ctid = os.path.basename(conf)[:-5]
+                    nm = re.search(r'^hostname:\s*(\S+)', text, re.MULTILINE)
+                    name = nm.group(1) if nm else ''
+                    return {
+                        'type': 'lxc',
+                        'id': ctid,
+                        'name': name,
+                        'running': _sriov_guest_running('lxc', ctid),
+                    }
+        except Exception:
+            pass
+
+    return None
+
+
+def _sriov_enrich_detail(gpu):
+    """On-demand enrichment for the GPU detail modal.
+
+    For a PF with active VFs, populates gpu['sriov_vfs'] with per-VF driver
+    and consumer info. For a VF, populates gpu['sriov_consumer'] with the
+    guest (if any) currently referencing it. Heavier than _get_sriov_info()
+    because it scans guest configs, so it is NOT called from the hardware
+    snapshot path — only from the realtime endpoint.
+    """
+    role = gpu.get('sriov_role')
+    slot = gpu.get('slot', '')
+    if not slot:
+        return
+    full_bdf = slot if slot.startswith('0000:') else f'0000:{slot}'
+
+    if role == 'pf-active':
+        vf_list = []
+        for vf_bdf in _sriov_list_vfs_of_pf(full_bdf):
+            vf_list.append({
+                'bdf': vf_bdf,
+                'driver': _sriov_pci_driver(vf_bdf) or '',
+                'render_node': _sriov_pci_render_node(vf_bdf) or '',
+                'consumer': _sriov_find_guest_consumer(vf_bdf),
+            })
+        gpu['sriov_vfs'] = vf_list
+    elif role == 'vf':
+        gpu['sriov_consumer'] = _sriov_find_guest_consumer(full_bdf)
+
+
 def get_gpu_info():
     """Detect and return information about GPUs in the system"""
     gpus = []
@@ -6196,7 +6401,11 @@ def get_gpu_info():
                             gpu['pci_class'] = pci_info.get('class', '')
                             gpu['pci_driver'] = pci_info.get('driver', '')
                             gpu['pci_kernel_module'] = pci_info.get('kernel_module', '')
-                        
+
+                        sriov_fields = _get_sriov_info(slot)
+                        if sriov_fields:
+                            gpu.update(sriov_fields)
+
                         # detailed_info = get_detailed_gpu_info(gpu) # Removed this call here
                         # gpu.update(detailed_info)             # It will be called later in api_gpu_realtime
                         
@@ -10010,7 +10219,12 @@ def api_gpu_realtime(slot):
         pass
         detailed_info = get_detailed_gpu_info(gpu)
         gpu.update(detailed_info)
-        
+
+        # SR-IOV detail is only relevant when the modal is actually open,
+        # so we build it on demand here (not in get_gpu_info) to avoid
+        # scanning every guest config on the hardware snapshot path.
+        _sriov_enrich_detail(gpu)
+
         # Extract only the monitoring-related fields
         realtime_data = {
             'has_monitoring_tool': gpu.get('has_monitoring_tool', False),
@@ -10035,9 +10249,17 @@ def api_gpu_realtime(slot):
             # Added for NVIDIA/AMD specific engine info if available
             'engine_encoder': gpu.get('engine_encoder'),
             'engine_decoder': gpu.get('engine_decoder'),
-            'driver_version': gpu.get('driver_version') # Added driver_version
+            'driver_version': gpu.get('driver_version'), # Added driver_version
+            # SR-IOV modal detail (populated only when the GPU is an SR-IOV
+            # Physical Function with active VFs, or a Virtual Function).
+            'sriov_role': gpu.get('sriov_role'),
+            'sriov_physfn': gpu.get('sriov_physfn'),
+            'sriov_vf_count': gpu.get('sriov_vf_count'),
+            'sriov_totalvfs': gpu.get('sriov_totalvfs'),
+            'sriov_vfs': gpu.get('sriov_vfs'),
+            'sriov_consumer': gpu.get('sriov_consumer'),
         }
-        
+
         return jsonify(realtime_data)
     except Exception as e:
         # print(f"[v0] Error getting real-time GPU data: {e}")

@@ -190,6 +190,34 @@ export interface GPU {
   }>
   has_monitoring_tool?: boolean
   note?: string
+  // SR-IOV state — populated from sysfs (physfn symlink + sriov_{num,total}vfs).
+  // "vf"         — this slot is a Virtual Function; sriov_physfn is its PF.
+  // "pf-active"  — this slot is a Physical Function with sriov_vf_count > 0.
+  // "pf-idle"    — SR-IOV capable PF but no VFs currently active.
+  // "none"       — not involved in SR-IOV.
+  sriov_role?: "vf" | "pf-active" | "pf-idle" | "none"
+  sriov_physfn?: string
+  sriov_vf_count?: number
+  sriov_totalvfs?: number
+  // SR-IOV detail — only populated by the /api/gpu/<slot>/realtime endpoint
+  // when the modal is open (scanning guest configs is too expensive for the
+  // hardware snapshot path).
+  sriov_vfs?: SriovVfDetail[]        // filled when role === "pf-active"
+  sriov_consumer?: SriovConsumer | null  // filled when role === "vf"
+}
+
+export interface SriovVfDetail {
+  bdf: string                        // e.g. "0000:00:02.1"
+  driver: string                     // current kernel driver (i915, vfio-pci, ...)
+  render_node: string                // "" when the VF does not expose a DRM node
+  consumer: SriovConsumer | null     // which guest is using this VF, if any
+}
+
+export interface SriovConsumer {
+  type: "vm" | "lxc"
+  id: string                         // VMID or CTID
+  name: string                       // VM name / LXC hostname
+  running: boolean
 }
 
 export interface DiskHardwareInfo {

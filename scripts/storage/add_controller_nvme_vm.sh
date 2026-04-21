@@ -364,6 +364,41 @@ select_controller_nvme() {
     return 1
   fi
 
+  # SR-IOV guard: drop VFs / active PFs and inform the user. Same policy
+  # as add_gpu_vm.sh and the VM creators — refuse to rewrite host VFIO
+  # config for an SR-IOV device since it would collapse the VF tree.
+  if declare -F _pci_sriov_filter_array >/dev/null 2>&1; then
+    local sriov_removed=""
+    sriov_removed=$(_pci_sriov_filter_array SELECTED_CONTROLLER_PCIS)
+    if [[ -n "$sriov_removed" ]]; then
+      local sriov_msg=""
+      sriov_msg="\n$(translate "The following devices were excluded because they are part of an SR-IOV configuration:")\n"
+      local entry bdf role first
+      while IFS= read -r entry; do
+        [[ -z "$entry" ]] && continue
+        bdf="${entry%%|*}"
+        role="${entry#*|}"
+        first="${role%% *}"
+        if [[ "$first" == "vf" ]]; then
+          sriov_msg+="\n  •  ${bdf}  — $(translate "Virtual Function")"
+        else
+          sriov_msg+="\n  •  ${bdf}  — $(translate "Physical Function with") ${role#pf-active } $(translate "active VFs")"
+        fi
+      done <<< "$sriov_removed"
+      sriov_msg+="\n\n$(translate "To pass SR-IOV Virtual Functions to a VM, edit the VM configuration manually via the Proxmox web interface.")"
+      dialog --backtitle "ProxMenux" --colors \
+        --title "$(translate "SR-IOV Configuration Detected")" \
+        --msgbox "$sriov_msg" 18 82
+    fi
+
+    if [[ ${#SELECTED_CONTROLLER_PCIS[@]} -eq 0 ]]; then
+      dialog --backtitle "ProxMenux" \
+        --title "$(translate "Controller + NVMe")" \
+        --msgbox "\n$(translate "No eligible controllers remain after SR-IOV filtering.")" 8 70
+      return 1
+    fi
+  fi
+
   return 0
 }
 

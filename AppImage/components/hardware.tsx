@@ -293,11 +293,16 @@ export default function Hardware() {
   const [showSwitchModeModal, setShowSwitchModeModal] = useState(false)
   const [switchModeParams, setSwitchModeParams] = useState<{ gpuSlot: string; targetMode: "lxc" | "vm" } | null>(null)
 
-  // Determine GPU mode based on driver (vfio-pci = VM, native driver = LXC)
-  const getGpuSwitchMode = (gpu: GPU): "lxc" | "vm" | "unknown" => {
+  // Determine GPU mode based on driver (vfio-pci = VM, native driver = LXC).
+  // SR-IOV short-circuits the driver check: if the GPU is either a VF or a
+  // PF with active VFs, the slot is in a hardware-partitioned state that
+  // ProxMenux does not manage from the UI, so it's surfaced as its own mode.
+  const getGpuSwitchMode = (gpu: GPU): "lxc" | "vm" | "sriov" | "unknown" => {
+    if (gpu.sriov_role === "vf" || gpu.sriov_role === "pf-active") return "sriov"
+
     const driver = gpu.pci_driver?.toLowerCase() || ""
     const kernelModule = gpu.pci_kernel_module?.toLowerCase() || ""
-    
+
     // Check driver first
     if (driver === "vfio-pci") return "vm"
     if (driver === "nvidia" || driver === "amdgpu" || driver === "radeon" || driver === "i915" || driver === "xe" || driver === "nouveau" || driver === "mgag200") return "lxc"
@@ -940,7 +945,11 @@ return (
                           Switch Mode
                         </span>
                         <div className="flex items-center gap-2">
-                          {editingSwitchModeGpu === fullSlot ? (
+                          {getGpuSwitchMode(gpu) === "sriov" ? (
+                            // SR-IOV: edit controls hidden — the state is
+                            // hardware-managed and not togglable from here.
+                            null
+                          ) : editingSwitchModeGpu === fullSlot ? (
                             <>
                               <button
                                 className="h-7 px-3 text-xs rounded-md border border-border bg-background hover:bg-muted transition-colors text-muted-foreground"
@@ -981,6 +990,16 @@ return (
                         isEditing={editingSwitchModeGpu === fullSlot}
                         pendingMode={pendingSwitchModes[gpu.slot] || null}
                         onToggle={(e) => handleSwitchModeToggle(gpu, e)}
+                        sriovInfo={
+                          gpu.sriov_role === "vf" || gpu.sriov_role === "pf-active"
+                            ? {
+                                role: gpu.sriov_role,
+                                physfn: gpu.sriov_physfn,
+                                vfCount: gpu.sriov_vf_count,
+                                totalvfs: gpu.sriov_totalvfs,
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                   )}
@@ -1053,8 +1072,104 @@ return (
                     <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
                     <p className="text-sm">Loading real-time data...</p>
                   </div>
+                ) : selectedGPU.sriov_role === "vf" ? (
+                  // SR-IOV Virtual Function: per-VF telemetry is not exposed
+                  // by the kernel, so we skip the metrics panel and show
+                  // identity + consumer + a link back to the parent PF.
+                  <div className="space-y-4">
+                    <div className="rounded-lg bg-teal-500/10 p-4 border border-teal-500/20">
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-teal-500 mb-1">SR-IOV Virtual Function</h4>
+                          <p className="text-sm text-muted-foreground">
+                            This device is a Virtual Function spawned by a Physical Function. Per-VF
+                            telemetry (temperature, utilization, memory) is not exposed by the kernel —
+                            open the parent PF to see aggregate GPU metrics.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/50 p-4 space-y-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                        Virtual Function Detail
+                      </h3>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Parent Physical Function</span>
+                        {selectedGPU.sriov_physfn ? (
+                          <button
+                            className="font-mono text-sm text-teal-500 hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const pf = hardwareData?.gpus?.find(
+                                (g) => g.slot === selectedGPU.sriov_physfn
+                              )
+                              if (pf) setSelectedGPU(pf)
+                            }}
+                          >
+                            {selectedGPU.sriov_physfn}
+                          </button>
+                        ) : (
+                          <span className="font-mono text-sm text-muted-foreground">unknown</span>
+                        )}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Current Driver</span>
+                        <span className="font-mono text-sm">
+                          {selectedGPU.pci_driver || "none"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm text-muted-foreground">Consumer</span>
+                        <div className="text-sm text-right">
+                          {realtimeGPUData?.sriov_consumer ? (
+                            <span className={cn(
+                              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium",
+                              realtimeGPUData.sriov_consumer.running
+                                ? "bg-teal-500/10 text-teal-500"
+                                : "bg-muted text-muted-foreground"
+                            )}>
+                              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                              {realtimeGPUData.sriov_consumer.type.toUpperCase()} {realtimeGPUData.sriov_consumer.id}
+                              {realtimeGPUData.sriov_consumer.name && ` · ${realtimeGPUData.sriov_consumer.name}`}
+                              {` · ${realtimeGPUData.sriov_consumer.running ? "running" : "stopped"}`}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground italic">unused</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ) : realtimeGPUData?.has_monitoring_tool === true ? (
                   <>
+                    {selectedGPU.sriov_role === "pf-active" && (
+                      // SR-IOV Physical Function: metrics below are the
+                      // aggregate of the whole GPU (PF + all active VFs).
+                      // Flag it explicitly so the reader interprets numbers
+                      // correctly.
+                      <div className="rounded-lg bg-teal-500/10 p-3 border border-teal-500/20">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-500 text-xs font-semibold">
+                            <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
+                            SR-IOV active
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            Metrics below reflect the Physical Function (aggregate across
+                            {" "}
+                            <span className="font-semibold text-foreground">
+                              {realtimeGPUData?.sriov_vf_count ?? selectedGPU.sriov_vf_count ?? "N"}
+                            </span>
+                            {" "}VFs).
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                       <span>Updating every 3 seconds</span>
@@ -1285,6 +1400,67 @@ return (
                         </div>
                       </div>
                     )}
+                    {selectedGPU.sriov_role === "pf-active" &&
+                      Array.isArray(realtimeGPUData?.sriov_vfs) &&
+                      realtimeGPUData.sriov_vfs.length > 0 && (
+                        // Per-VF table: one row per virtfn* under the PF.
+                        // Driver is color-coded (teal native / purple vfio-pci
+                        // / muted fallback) and consumer pills go green when
+                        // the guest is currently running, muted otherwise.
+                        <div>
+                          <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                            Virtual Functions
+                          </h3>
+                          <div className="rounded-lg border border-border/50 divide-y divide-border/30 overflow-hidden">
+                            {realtimeGPUData.sriov_vfs.map((vf: any) => (
+                              <div
+                                key={vf.bdf}
+                                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors"
+                              >
+                                <span className="font-mono text-xs text-foreground">{vf.bdf}</span>
+                                <div className="flex items-center gap-3 flex-wrap justify-end">
+                                  <span
+                                    className={cn(
+                                      "font-mono text-[11px] px-2 py-0.5 rounded",
+                                      vf.driver === "vfio-pci"
+                                        ? "bg-purple-500/10 text-purple-500"
+                                        : vf.driver === "i915" ||
+                                            vf.driver === "xe" ||
+                                            vf.driver === "amdgpu" ||
+                                            vf.driver === "radeon" ||
+                                            vf.driver === "nvidia"
+                                          ? "bg-teal-500/10 text-teal-500"
+                                          : "bg-muted text-muted-foreground"
+                                    )}
+                                  >
+                                    {vf.driver || "unbound"}
+                                  </span>
+                                  {vf.consumer ? (
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium",
+                                        vf.consumer.running
+                                          ? "bg-green-500/10 text-green-500"
+                                          : "bg-muted text-muted-foreground"
+                                      )}
+                                    >
+                                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                      {vf.consumer.type.toUpperCase()} {vf.consumer.id}
+                                      {vf.consumer.name && (
+                                        <span className="opacity-70">· {vf.consumer.name}</span>
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground italic">
+                                      unused
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                   </>
                 ) : (findPCIDeviceForGPU(selectedGPU)?.driver === 'vfio-pci' || selectedGPU.pci_driver === 'vfio-pci') ? (
                   <div className="rounded-lg bg-purple-500/10 p-4 border border-purple-500/20">

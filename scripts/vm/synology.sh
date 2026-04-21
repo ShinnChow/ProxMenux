@@ -1256,6 +1256,48 @@ if [[ ${#EFFECTIVE_IMPORT_DISKS[@]} -gt 0 ]]; then
 fi
 
 if [[ ${#CONTROLLER_NVME_PCIS[@]} -gt 0 ]]; then
+    # SR-IOV guard: exclude VFs / active PFs before staging. Mid-flow
+    # phase-2 output; a whiptail msgbox stops the scrolling so the user
+    # actually sees which devices were dropped. After the ack, each
+    # skipped BDF is logged via msg_warn so the action is visible in the
+    # captured log as well.
+    if declare -F _pci_sriov_filter_array >/dev/null 2>&1; then
+        SRIOV_REMOVED=$(_pci_sriov_filter_array CONTROLLER_NVME_PCIS)
+        if [[ -n "$SRIOV_REMOVED" ]]; then
+            SRIOV_MSG=""
+            SRIOV_BDFS=()
+            SRIOV_NL=$'\n'
+            SRIOV_MSG="$(translate "The following devices were excluded from Controller/NVMe passthrough because they are part of an SR-IOV configuration:")"
+            while IFS= read -r SRIOV_ENTRY; do
+                [[ -z "$SRIOV_ENTRY" ]] && continue
+                SRIOV_BDF="${SRIOV_ENTRY%%|*}"
+                SRIOV_ROLE="${SRIOV_ENTRY#*|}"
+                SRIOV_FIRST="${SRIOV_ROLE%% *}"
+                SRIOV_BDFS+=("$SRIOV_BDF")
+                if [[ "$SRIOV_FIRST" == "vf" ]]; then
+                    SRIOV_MSG+="${SRIOV_NL}  •  ${SRIOV_BDF}  — $(translate "Virtual Function")"
+                else
+                    SRIOV_MSG+="${SRIOV_NL}  •  ${SRIOV_BDF}  — $(translate "Physical Function with") ${SRIOV_ROLE#pf-active } $(translate "active VFs")"
+                fi
+            done <<< "$SRIOV_REMOVED"
+            SRIOV_MSG+="${SRIOV_NL}${SRIOV_NL}$(translate "To pass SR-IOV Virtual Functions to a VM, edit the VM configuration manually via the Proxmox web interface.")"
+
+            whiptail --backtitle "ProxMenux" \
+                --title "$(translate "SR-IOV Configuration Detected")" \
+                --msgbox "$SRIOV_MSG" 18 82
+
+            for SRIOV_SKIPPED in "${SRIOV_BDFS[@]}"; do
+                msg_warn "$(translate "Skipping SR-IOV device"): ${SRIOV_SKIPPED}"
+            done
+        fi
+    fi
+
+    if [[ ${#CONTROLLER_NVME_PCIS[@]} -eq 0 ]]; then
+        msg_warn "$(translate "No eligible Controller/NVMe devices remain after SR-IOV filtering. Skipping.")"
+    fi
+fi
+
+if [[ ${#CONTROLLER_NVME_PCIS[@]} -gt 0 ]]; then
     local CONTROLLER_CAN_STAGE=true
     if declare -F _pci_is_iommu_active >/dev/null 2>&1 && ! _pci_is_iommu_active; then
         if [[ "${VM_STORAGE_IOMMU_PENDING_REBOOT:-0}" == "1" ]]; then

@@ -138,6 +138,12 @@ if [[ -f "$vm_conf" ]]; then
         slot_has_gpu=false
         for dev in /sys/bus/pci/devices/0000:${slot}.*; do
           [[ -e "$dev" ]] || continue
+          # SR-IOV: skip Virtual Functions when iterating a whole slot.
+          # VFs share the slot with their PF but carry their own driver
+          # state; their vfio-pci rebind is handled by Proxmox at VM
+          # start. Pre-flighting them would falsely block SR-IOV setups
+          # where the PF legitimately stays on the native driver.
+          [[ -L "${dev}/physfn" ]] && continue
           class_hex="$(cat "$dev/class" 2>/dev/null | sed 's/^0x//')"
           [[ "${class_hex:0:2}" != "03" ]] && continue
           slot_has_gpu=true
@@ -157,6 +163,14 @@ if [[ -f "$vm_conf" ]]; then
       if [[ ! -d "$dev_path" ]]; then
         failed=1
         details+=$'\n'"- ${id}: PCI device not found"
+        continue
+      fi
+      # SR-IOV VF: do not pre-flight the driver. Proxmox rebinds the VF
+      # to vfio-pci as part of VM start; at pre-start time the VF may
+      # still be on its native driver (i915, etc.) — that is normal,
+      # not an error. Blocking here would prevent every SR-IOV VF
+      # passthrough from starting.
+      if [[ -L "${dev_path}/physfn" ]]; then
         continue
       fi
       class_hex="$(cat "$dev_path/class" 2>/dev/null | sed 's/^0x//')"

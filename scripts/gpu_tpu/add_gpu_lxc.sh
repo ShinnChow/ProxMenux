@@ -28,6 +28,11 @@ NVIDIA_VID_DID=""
 if [[ -f "$UTILS_FILE" ]]; then
   source "$UTILS_FILE"
 fi
+if [[ -f "$LOCAL_SCRIPTS/global/pci_passthrough_helpers.sh" ]]; then
+  source "$LOCAL_SCRIPTS/global/pci_passthrough_helpers.sh"
+elif [[ -f "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)/global/pci_passthrough_helpers.sh" ]]; then
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)/global/pci_passthrough_helpers.sh"
+fi
 if [[ -f "$LOCAL_SCRIPTS/global/gpu_hook_guard_helpers.sh" ]]; then
   source "$LOCAL_SCRIPTS/global/gpu_hook_guard_helpers.sh"
 elif [[ -f "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)/global/gpu_hook_guard_helpers.sh" ]]; then
@@ -259,6 +264,67 @@ select_container() {
 # ============================================================
 # GPU checklist selection
 # ============================================================
+# ============================================================
+# SR-IOV guard — refuse to pass an SR-IOV GPU to an LXC via ProxMenux.
+# Although the LXC flow does not rewrite vfio.conf/blacklist (so it is
+# not destructive like add_gpu_vm.sh), it blindly globs /dev/dri/card*
+# and /dev/dri/renderD* without mapping each node to its BDF. With 7
+# VFs the container may end up holding any/all of them, which is not
+# the behavior a user asking for "one VF to this LXC" expects. Until a
+# VF-aware LXC flow exists, stop and point to manual configuration —
+# matching the policy used in switch_gpu_mode.sh and add_gpu_vm.sh.
+# ============================================================
+check_sriov_and_block_if_needed() {
+  declare -F _pci_sriov_role >/dev/null 2>&1 || return 0
+
+  local gpu_type pci role first_word
+  local -a offenders=()
+
+  for gpu_type in "${SELECTED_GPUS[@]}"; do
+    case "$gpu_type" in
+      intel)  pci="$INTEL_PCI" ;;
+      amd)    pci="$AMD_PCI" ;;
+      nvidia) pci="$NVIDIA_PCI" ;;
+      *)      continue ;;
+    esac
+    [[ -n "$pci" ]] || continue
+
+    role=$(_pci_sriov_role "$pci")
+    first_word="${role%% *}"
+    case "$first_word" in
+      vf)
+        offenders+=("${pci}|vf|${role#vf }")
+        ;;
+      pf-active)
+        offenders+=("${pci}|pf-active|${role#pf-active }")
+        ;;
+    esac
+  done
+
+  [[ ${#offenders[@]} -eq 0 ]] && return 0
+
+  local msg entry bdf kind info
+  msg="\n\Zb\Z6$(translate 'SR-IOV Configuration Detected')\Zn\n\n"
+  for entry in "${offenders[@]}"; do
+    bdf="${entry%%|*}"
+    kind="${entry#*|}"; kind="${kind%%|*}"
+    info="${entry##*|}"
+    if [[ "$kind" == "vf" ]]; then
+      msg+="  •  \Zb${bdf}\Zn — $(translate 'Virtual Function (parent PF:') ${info})\n"
+    else
+      msg+="  •  \Zb${bdf}\Zn — $(translate 'Physical Function with') ${info} $(translate 'active VFs')\n"
+    fi
+  done
+  msg+="\n$(translate 'To pass SR-IOV Virtual Functions to a container, edit the LXC configuration manually via the Proxmox web interface. The Physical Function will remain bound to the native driver.')"
+
+  dialog --backtitle "ProxMenux" --colors \
+    --title "$(translate 'SR-IOV Configuration Detected')" \
+    --msgbox "$msg" 16 82
+
+  exit 0
+}
+
+
 select_gpus() {
   local gpu_items=()
   $HAS_INTEL  && gpu_items+=("intel"  "${INTEL_NAME:-Intel iGPU}"  "off")
@@ -927,6 +993,7 @@ main() {
   detect_host_gpus
   select_container
   select_gpus
+  check_sriov_and_block_if_needed
   check_vfio_switch_mode
   precheck_existing_lxc_gpu_config
 
