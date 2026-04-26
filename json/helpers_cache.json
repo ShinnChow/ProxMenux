@@ -9193,6 +9193,40 @@
     "os": ""
   },
   {
+    "name": "Nagios Core",
+    "slug": "nagios",
+    "desc": "Nagios Core is an open-source monitoring platform for hosts, services, and network infrastructure with a classic web interface.",
+    "script": "ct/nagios.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nagios.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nagios.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.nagios.org/projects/nagios-core/",
+    "documentation": "https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/quickstart.html",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/nagios.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "nagiosadmin",
+      "password": "nagiosadmin"
+    },
+    "os": ""
+  },
+  {
     "name": "Nametag",
     "slug": "nametag",
     "desc": "Nametag is a personal relationships manager that helps you remember the people in your life. Track birthdays, contact info, relationships, and visualize your network as an interactive graph.",
