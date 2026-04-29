@@ -425,6 +425,38 @@
     "os": ""
   },
   {
+    "name": "Alpine-Cinny",
+    "slug": "alpine-cinny",
+    "desc": "Yet another matrix client ",
+    "script": "ct/alpine-cinny.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/alpine-cinny.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/alpine-cinny.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00000",
+      "scriptcat00004"
+    ],
+    "category_names": [
+      "Miscellaneous",
+      "Network & Firewall"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://cinny.in/",
+    "documentation": "https://github.com/cinnyapp/cinny",
+    "logo": "https://cinny.in/assets/cinny.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Alpine-IT-Tools",
     "slug": "alpine-it-tools",
     "desc": "IT-Tools is a web-based suite of utilities designed to streamline and simplify various IT tasks, providing tools for developers and system administrators to manage their workflows efficiently.",
@@ -4051,6 +4083,38 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "ESPConnect",
+    "slug": "espconnect",
+    "desc": "ESPConnect is a zero-installation web application that lets you explore, back up, and manage ESP32 devices from a browser.",
+    "script": "ct/espconnect.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/espconnect.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/espconnect.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00016",
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "IoT & Smart Home",
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 443,
+    "website": "https://github.com/thelastoutpostworkshop/ESPConnect",
+    "documentation": "https://github.com/thelastoutpostworkshop/ESPConnect",
+    "logo": "https://avatars.githubusercontent.com/u/127616157?s=200&v=4",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -10948,6 +11012,36 @@
       "pve"
     ],
     "config_path": "/opt/pangolin/config/config.yml",
+    "os": ""
+  },
+  {
+    "name": "Paperclip",
+    "slug": "paperclip",
+    "desc": "Paperclip is an open-source orchestration platform for managing autonomous AI agent teams with goals, routines, governance, and a browser-based control plane.",
+    "script": "ct/paperclip.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/paperclip.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/paperclip.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 3100,
+    "website": "https://paperclip.ing/",
+    "documentation": "https://docs.paperclip.ing/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/paperclip-ai.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
