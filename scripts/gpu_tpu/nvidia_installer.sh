@@ -2,9 +2,10 @@
 # ProxMenux - NVIDIA Driver Installer (PVE 9.x)
 # ============================================
 # Author      : MacRimi
-# License     : MIT
-# Version     : 0.9 (PVE9, fixed download issues)
-# Last Updated: 29/11/2025
+# Copyright   : (c) 2024 MacRimi
+# License     : (GPL-3.0) (https://github.com/MacRimi/ProxMenux/blob/main/LICENSE)
+# Version     : 1.2 (PVE9, fixed download issues)
+# Last Updated: 26/03/2026
 # ============================================
 
 SCRIPT_TITLE="NVIDIA GPU Driver Installer for Proxmox VE"
@@ -18,6 +19,12 @@ screen_capture="/tmp/proxmenux_nvidia_screen_capture_$$.txt"
 
 NVIDIA_BASE_URL="https://download.nvidia.com/XFree86/Linux-x86_64"
 NVIDIA_WORKDIR="/opt/nvidia"
+
+# LXC post-install update constants (used only when NVIDIA LXC passthrough
+# containers are detected and the user confirms updating them after the host
+# install/reinstall finishes).
+NVIDIA_INSTALL_MIN_MB=2048
+CT_ORIG_MEM=""
 
 export BASE_DIR
 export COMPONENTS_STATUS_FILE
@@ -56,12 +63,39 @@ detect_nvidia_gpus() {
   fi
 }
 
+check_gpu_not_in_vm_passthrough() {
+  local dev vendor driver vfio_list=""
+  for dev in /sys/bus/pci/devices/*; do
+    vendor=$(cat "$dev/vendor" 2>/dev/null)
+    [[ "$vendor" != "0x10de" ]] && continue
+    if [[ -L "$dev/driver" ]]; then
+      driver=$(basename "$(readlink "$dev/driver")")
+      if [[ "$driver" == "vfio-pci" ]]; then
+        vfio_list+="  • $(basename "$dev")\n"
+      fi
+    fi
+  done
+
+  [[ -z "$vfio_list" ]] && return 0
+
+  local msg
+  msg="\n$(translate "One or more NVIDIA GPUs are currently configured for VM passthrough (vfio-pci):")\n\n"
+  msg+="${vfio_list}\n"
+  msg+="$(translate "Installing host drivers while the GPU is assigned to a VM could break passthrough and destabilize the system.")\n\n"
+  msg+="$(translate "To install host drivers, first remove the GPU from VM passthrough configuration and reboot.")"
+
+  dialog --backtitle "ProxMenux" \
+    --title "$(translate "GPU in VM Passthrough Mode")" \
+    --msgbox "$msg" 16 78
+  exit 0
+}
+
 detect_driver_status() {
   CURRENT_DRIVER_INSTALLED=false
   CURRENT_DRIVER_VERSION=""
   
   # First check if nvidia kernel module is actually loaded
-  if lsmod | grep -q "^nvidia "; then
+  if grep -q "^nvidia " /proc/modules 2>/dev/null; then
 
     modprobe nvidia-uvm 2>/dev/null || true
     sleep 1
@@ -92,6 +126,272 @@ detect_driver_status() {
 }
 
 # ==========================================================
+# LXC NVIDIA passthrough — discovery & userspace-libs update
+# Invoked after the host install/reinstall completes. Aligned with the install
+# path used in add_gpu_lxc.sh (distro-aware, memory/disk checks, --no-dkms,
+# --no-install-compat32-libs, visible progress via tee).
+# ==========================================================
+find_nvidia_containers() {
+  NVIDIA_CONTAINERS=()
+  for conf in /etc/pve/lxc/*.conf; do
+    [[ -f "$conf" ]] || continue
+    if grep -qiE "dev[0-9]+:.*nvidia" "$conf"; then
+      NVIDIA_CONTAINERS+=("$(basename "$conf" .conf)")
+    fi
+  done
+}
+
+get_lxc_nvidia_version() {
+  local ctid="$1"
+  local version=""
+
+  # Prefer nvidia-smi when the container is running (works with .run-installed drivers)
+  if pct status "$ctid" 2>/dev/null | grep -q "running"; then
+    version=$(pct exec "$ctid" -- nvidia-smi \
+      --query-gpu=driver_version --format=csv,noheader 2>/dev/null \
+      | head -1 | tr -d '[:space:]' || true)
+  fi
+
+  # Fallback: dpkg status for apt-installed libcuda1 (dir-type storage, no start needed)
+  if [[ -z "$version" ]]; then
+    local rootfs="/var/lib/lxc/${ctid}/rootfs"
+    if [[ -f "${rootfs}/var/lib/dpkg/status" ]]; then
+      version=$(grep -A5 "^Package: libcuda1$" "${rootfs}/var/lib/dpkg/status" \
+        | grep "^Version:" | head -1 | awk '{print $2}' | cut -d- -f1)
+    fi
+  fi
+
+  echo "${version:-$(translate 'not installed')}"
+}
+
+_detect_container_distro() {
+  local distro
+  distro=$(pct exec "$1" -- grep "^ID=" /etc/os-release 2>/dev/null \
+    | cut -d= -f2 | tr -d '[:space:]"')
+  echo "${distro:-unknown}"
+}
+
+_ensure_container_memory() {
+  local ctid="$1"
+  local cur_mem
+  cur_mem=$(pct config "$ctid" 2>/dev/null | awk '/^memory:/{print $2}')
+  [[ -z "$cur_mem" ]] && cur_mem=512
+
+  if [[ "$cur_mem" -lt "$NVIDIA_INSTALL_MIN_MB" ]]; then
+    if whiptail --title "$(translate 'Low Container Memory')" --yesno \
+      "$(translate 'Container') ${ctid} $(translate 'has') ${cur_mem}MB RAM.\n\n$(translate 'The NVIDIA installer needs at least') ${NVIDIA_INSTALL_MIN_MB}MB $(translate 'to run without being killed by the OOM killer.')\n\n$(translate 'Increase container RAM temporarily to') ${NVIDIA_INSTALL_MIN_MB}MB?" \
+      13 72; then
+      CT_ORIG_MEM="$cur_mem"
+      pct set "$ctid" -memory "$NVIDIA_INSTALL_MIN_MB" >>"$LOG_FILE" 2>&1 || true
+    else
+      msg_warn "$(translate 'Insufficient memory. Skipping LXC') ${ctid}."
+      return 1
+    fi
+  fi
+  return 0
+}
+
+_restore_container_memory() {
+  local ctid="$1"
+  if [[ -n "$CT_ORIG_MEM" ]]; then
+    msg_info "$(translate 'Restoring container memory to') ${CT_ORIG_MEM}MB..."
+    pct set "$ctid" -memory "$CT_ORIG_MEM" >>"$LOG_FILE" 2>&1 || true
+    msg_ok "$(translate 'Memory restored.')"
+    CT_ORIG_MEM=""
+  fi
+}
+
+_start_container_and_wait() {
+  local ctid="$1"
+  msg_info "$(translate 'Starting container') ${ctid}..."
+  pct start "$ctid" >>"$LOG_FILE" 2>&1 || true
+
+  local ready=false
+  for _ in {1..15}; do
+    sleep 2
+    if pct exec "$ctid" -- true >/dev/null 2>&1; then
+      ready=true
+      break
+    fi
+  done
+
+  if ! $ready; then
+    msg_warn "$(translate 'Container') ${ctid} $(translate 'did not become ready. Skipping.')"
+    return 1
+  fi
+  msg_ok "$(translate 'Container') ${ctid} $(translate 'started.')" | tee -a "$screen_capture"
+  return 0
+}
+
+update_lxc_nvidia() {
+  local ctid="$1"
+  local version="$2"
+  local started_here=false
+
+  local old_version
+  old_version=$(get_lxc_nvidia_version "$ctid")
+
+  msg_info2 "$(translate 'Container') ${ctid}: $(translate 'updating NVIDIA userspace libs') (${old_version} → ${version})"
+
+  if ! pct status "$ctid" 2>/dev/null | grep -q "running"; then
+    started_here=true
+    _start_container_and_wait "$ctid" || return 1
+  fi
+
+  msg_info "$(translate 'Detecting container OS...')"
+  local distro
+  distro=$(_detect_container_distro "$ctid")
+  msg_ok "$(translate 'Container OS:') ${distro}" | tee -a "$screen_capture"
+
+  local install_rc=0
+
+  case "$distro" in
+    alpine)
+      msg_info2 "$(translate 'Upgrading NVIDIA utils (Alpine)...')"
+      pct exec "$ctid" -- sh -c \
+        "apk update && apk add --no-cache --upgrade nvidia-utils" \
+        2>&1 | tee -a "$LOG_FILE"
+      install_rc=${PIPESTATUS[0]}
+      ;;
+    arch|manjaro|endeavouros)
+      msg_info2 "$(translate 'Upgrading NVIDIA utils (Arch)...')"
+      pct exec "$ctid" -- bash -c \
+        "pacman -Syu --noconfirm nvidia-utils" \
+        2>&1 | tee -a "$LOG_FILE"
+      install_rc=${PIPESTATUS[0]}
+      ;;
+    *)
+      local run_file="${NVIDIA_WORKDIR}/NVIDIA-Linux-x86_64-${version}.run"
+
+      if [[ ! -f "$run_file" ]]; then
+        msg_warn "$(translate 'Installer not found:') ${run_file}. $(translate 'Skipping LXC') ${ctid}."
+        install_rc=1
+      elif ! _ensure_container_memory "$ctid"; then
+        install_rc=1
+      else
+        local free_mb
+        free_mb=$(pct exec "$ctid" -- df -m / 2>/dev/null | awk 'NR==2{print $4}' || echo 0)
+        if [[ "$free_mb" -lt 1500 ]]; then
+          _restore_container_memory "$ctid"
+          whiptail --backtitle "ProxMenux" \
+            --title "$(translate 'Insufficient Disk Space')" \
+            --msgbox "\n$(translate 'Container') ${ctid} $(translate 'has only') ${free_mb}MB $(translate 'of free disk space.')\n\n$(translate 'NVIDIA libs require approximately 1.5GB of free space.')" \
+            11 72
+          msg_warn "$(translate 'Insufficient disk space. Skipping LXC') ${ctid}."
+          install_rc=1
+        else
+          local extract_dir="${NVIDIA_WORKDIR}/extracted_${version}"
+          local archive="/tmp/nvidia_lxc_${version}.tar.gz"
+
+          msg_info2 "$(translate 'Extracting NVIDIA installer on host...')"
+          rm -rf "$extract_dir"
+          sh "$run_file" --extract-only --target "$extract_dir" 2>&1 | tee -a "$LOG_FILE"
+          if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+            msg_warn "$(translate 'Extraction failed. Check log:') ${LOG_FILE}"
+            _restore_container_memory "$ctid"
+            install_rc=1
+          else
+            msg_ok "$(translate 'NVIDIA installer extracted.')" | tee -a "$screen_capture"
+
+            msg_info2 "$(translate 'Packing installer archive...')"
+            tar --checkpoint=5000 --checkpoint-action=dot \
+                -czf "$archive" -C "$extract_dir" . 2>&1 | tee -a "$LOG_FILE"
+            echo ""
+            local archive_size
+            archive_size=$(du -sh "$archive" 2>/dev/null | cut -f1)
+            msg_ok "$(translate 'Archive ready') (${archive_size})." | tee -a "$screen_capture"
+
+            msg_info "$(translate 'Copying installer to container') ${ctid}..."
+            if ! pct push "$ctid" "$archive" /tmp/nvidia_lxc.tar.gz >>"$LOG_FILE" 2>&1; then
+              msg_warn "$(translate 'pct push failed. Check log:') ${LOG_FILE}"
+              rm -f "$archive"
+              rm -rf "$extract_dir"
+              _restore_container_memory "$ctid"
+              install_rc=1
+            else
+              rm -f "$archive"
+              msg_ok "$(translate 'Installer copied to container.')" | tee -a "$screen_capture"
+
+              msg_info2 "$(translate 'Running NVIDIA installer in container. This may take several minutes...')"
+              echo "" >>"$LOG_FILE"
+              pct exec "$ctid" -- bash -c "
+                mkdir -p /tmp/nvidia_lxc_install
+                tar -xzf /tmp/nvidia_lxc.tar.gz -C /tmp/nvidia_lxc_install 2>&1
+                /tmp/nvidia_lxc_install/nvidia-installer \
+                  --no-kernel-modules \
+                  --no-questions \
+                  --ui=none \
+                  --no-nouveau-check \
+                  --no-dkms \
+                  --no-install-compat32-libs
+                EXIT=\$?
+                rm -rf /tmp/nvidia_lxc_install /tmp/nvidia_lxc.tar.gz
+                exit \$EXIT
+              " 2>&1 | tee -a "$LOG_FILE"
+              install_rc=${PIPESTATUS[0]}
+
+              rm -rf "$extract_dir"
+              _restore_container_memory "$ctid"
+            fi
+          fi
+        fi
+      fi
+      ;;
+  esac
+
+  if [[ $install_rc -ne 0 ]]; then
+    msg_warn "$(translate 'NVIDIA update failed for LXC') ${ctid} (rc=${install_rc}). $(translate 'Check log:') ${LOG_FILE}"
+    if $started_here; then
+      pct stop "$ctid" >>"$LOG_FILE" 2>&1 || true
+    fi
+    return 1
+  fi
+
+  if pct exec "$ctid" -- sh -c "which nvidia-smi" >/dev/null 2>&1; then
+    local new_ver
+    new_ver=$(pct exec "$ctid" -- nvidia-smi \
+      --query-gpu=driver_version --format=csv,noheader 2>/dev/null \
+      | head -1 | tr -d '[:space:]' || true)
+    msg_ok "$(translate 'Container') ${ctid}: ${old_version} → ${new_ver:-$version}" | tee -a "$screen_capture"
+  else
+    msg_warn "$(translate 'nvidia-smi not found in container') ${ctid} $(translate 'after update.')"
+  fi
+
+  if $started_here; then
+    msg_info "$(translate 'Stopping container') ${ctid}..."
+    pct stop "$ctid" >>"$LOG_FILE" 2>&1 || true
+    msg_ok "$(translate 'Container stopped.')" | tee -a "$screen_capture"
+  fi
+  return 0
+}
+
+# Post-host-install LXC update offer — scans for NVIDIA LXCs and, if any are
+# found, asks the user if they want to propagate the driver update to them.
+offer_lxc_updates_if_any() {
+  local target_version="$1"
+  find_nvidia_containers
+  [[ ${#NVIDIA_CONTAINERS[@]} -eq 0 ]] && return 0
+
+  local info ctid lxc_ver ct_name
+  info="\n$(translate 'The following LXC containers have NVIDIA passthrough configured:')\n\n"
+  for ctid in "${NVIDIA_CONTAINERS[@]}"; do
+    lxc_ver=$(get_lxc_nvidia_version "$ctid")
+    ct_name=$(pct config "$ctid" 2>/dev/null | grep "^hostname:" | awk '{print $2}')
+    info+="  CT ${ctid}  ${ct_name:+(${ct_name})}  — $(translate 'driver:') ${lxc_ver}\n"
+  done
+  info+="\n$(translate 'Do you want to update the NVIDIA userspace libraries inside these containers to match the host?')"
+
+  if ! hybrid_whiptail_yesno "$(translate 'Update NVIDIA in LXC Containers')" "$info" 20 80; then
+    msg_info2 "$(translate 'LXC update skipped by user.')"
+    return 0
+  fi
+
+  for ctid in "${NVIDIA_CONTAINERS[@]}"; do
+    update_lxc_nvidia "$ctid" "$target_version" || true
+  done
+}
+
+# ==========================================================
 # System preparation (repos, headers, etc.)
 # ==========================================================
 ensure_repos_and_headers() {
@@ -114,10 +414,39 @@ ensure_repos_and_headers() {
 
 blacklist_nouveau() {
   msg_info "$(translate 'Blacklisting nouveau driver...')"
+
+  # Write blacklist config files
   if ! grep -q '^blacklist nouveau' /etc/modprobe.d/blacklist.conf 2>/dev/null; then
     echo "blacklist nouveau" >> /etc/modprobe.d/blacklist.conf
   fi
-  msg_ok "$(translate 'nouveau driver has been blacklisted.')" | tee -a "$screen_capture"
+
+  # Also write explicit options file to ensure it's fully disabled
+  cat > /etc/modprobe.d/nouveau-blacklist.conf <<'EOF'
+blacklist nouveau
+options nouveau modeset=0
+EOF
+
+  # Attempt to unload nouveau if currently loaded
+  if grep -q "^nouveau " /proc/modules 2>/dev/null; then
+
+    msg_info "$(translate 'Nouveau module is loaded, attempting to unload...')"
+    modprobe -r nouveau 2>/dev/null || true
+    sleep 1
+
+    # Check if unload succeeded
+    if grep -q "^nouveau " /proc/modules 2>/dev/null; then
+      NOUVEAU_STILL_LOADED=true
+      msg_warn "$(translate 'Could not unload nouveau module (may be in use). The blacklist will take effect after reboot. Installation will continue but a reboot will be required.')"
+      echo "WARNING: nouveau module still loaded after unload attempt" >> "$LOG_FILE"
+    else
+      NOUVEAU_STILL_LOADED=false
+      msg_ok "$(translate 'nouveau module unloaded successfully.')" | tee -a "$screen_capture"
+    fi
+  else
+    NOUVEAU_STILL_LOADED=false
+    msg_ok "$(translate 'nouveau driver has been blacklisted.')" | tee -a "$screen_capture"
+  fi
+
 }
 
 ensure_modules_config() {
@@ -161,7 +490,7 @@ stop_and_disable_nvidia_services() {
         systemctl disable "$service" >/dev/null 2>&1 || true
       fi
     done
-    
+
     sleep 2
     
     msg_ok "$(translate 'NVIDIA services stopped and disabled.')" | tee -a "$screen_capture"
@@ -169,26 +498,31 @@ stop_and_disable_nvidia_services() {
 }
 
 unload_nvidia_modules() {
-  msg_info "$(translate 'Unloading NVIDIA kernel modules...')"
-
   for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
     modprobe -r "$mod" >/dev/null 2>&1 || true
   done
 
+  # Give the kernel a moment to finalize sysfs teardown before re-checking.
+  # Reading /proc/modules directly (instead of lsmod) avoids the
+  # "could not open /sys/module/<mod>/holders" race when a module has just
+  # been removed from /proc/modules but its sysfs dir hasn't been reaped yet.
+  sleep 1
 
-  if lsmod | grep -qi '\bnvidia'; then
+  if grep -q "^nvidia" /proc/modules 2>/dev/null; then
     for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
       modprobe -r --force "$mod" >/dev/null 2>&1 || true
     done
+    sleep 1
   fi
 
-  if lsmod | grep -qi '\bnvidia'; then
-    msg_warn "$(translate 'Some NVIDIA modules could not be unloaded. Installation may fail. Ensure no processes are using the GPU.')"
+  if grep -q "^nvidia" /proc/modules 2>/dev/null; then
+
     if command -v lsof >/dev/null 2>&1; then
       echo "$(translate 'Processes using NVIDIA:'):" >> "$LOG_FILE"
       lsof /dev/nvidia* 2>/dev/null >> "$LOG_FILE" || true
     fi
   else
+
     msg_ok "$(translate 'NVIDIA kernel modules unloaded successfully.')" | tee -a "$screen_capture"
   fi
 }
@@ -202,7 +536,7 @@ complete_nvidia_uninstall() {
     nvidia-uninstall --silent >>"$LOG_FILE" 2>&1 || true
     msg_ok "$(translate 'NVIDIA uninstaller completed.')"
   fi
-  
+  msg_ok "$(translate 'NVIDIA uninstallation steps completed.')" | tee -a "$screen_capture"
   cleanup_nvidia_dkms
   
   msg_info "$(translate 'Removing NVIDIA packages...')"
@@ -219,10 +553,11 @@ complete_nvidia_uninstall() {
     find "$NVIDIA_WORKDIR" -type d -name "nvidia-persistenced" -exec rm -rf {} + 2>/dev/null || true
     find "$NVIDIA_WORKDIR" -type d -name "nvidia-patch" -exec rm -rf {} + 2>/dev/null || true
   fi
-  
+
   update_component_status "nvidia_driver" "removed" "" "gpu" '{}'
   
   msg_ok "$(translate 'Complete NVIDIA uninstallation finished.')" | tee -a "$screen_capture"
+  
 }
 
 cleanup_nvidia_dkms() {
@@ -458,7 +793,7 @@ download_nvidia_installer() {
         return 0
       else
         echo "Existing file FAILED integrity check, removing..." >> "$LOG_FILE"
-        msg_warn "$(translate 'Existing file failed verification, re-downloading...')" >&2
+        msg_warn "$(translate 'Existing file, re-downloading...')" >&2
         rm -f "$run_file"
       fi
     else
@@ -478,44 +813,72 @@ download_nvidia_installer() {
     "${NVIDIA_BASE_URL}/${version}/NVIDIA-Linux-x86_64-${version}.run"
     "${NVIDIA_BASE_URL}/${version}/NVIDIA-Linux-x86_64-${version}-no-compat32.run"
   )
-  
+
+  # Web mode (ProxMenux Monitor) runs scripts without a controlling TTY, so
+  # /dev/tty is not writable and progress-bar animations using \r don't render
+  # in the web terminal. Fall back to a quiet wget in that case; interactive
+  # users (SSH / console) still get the ISO-like progress bar.
+  local _nv_has_tty=false
+  if ! is_web_mode 2>/dev/null && [[ -t 2 ]]; then
+    _nv_has_tty=true
+  fi
+
+  if $_nv_has_tty; then
+    printf '\n  %s NVIDIA-Linux-x86_64-%s.run\n' \
+      "$(translate 'Downloading')" "$version" >/dev/tty
+  else
+    echo "  $(translate 'Downloading') NVIDIA-Linux-x86_64-${version}.run" >&2
+  fi
+
   local success=false
   local url_index=0
-  
+
   for url in "${urls[@]}"; do
     ((url_index++))
     echo "Attempting download from: $url" >> "$LOG_FILE"
-    
 
     rm -f "$run_file"
-    
 
-    if curl -fL --connect-timeout 30 --max-time 600 "$url" -o "$run_file" >> "$LOG_FILE" 2>&1; then
+    local _dl_ok=false
+    if $_nv_has_tty; then
+      # Interactive: progress bar to /dev/tty (bypasses any caller redirection).
+      if wget --no-verbose --show-progress \
+              --connect-timeout=30 --timeout=600 --tries=1 \
+              -O "$run_file" "$url" 2>/dev/tty; then
+        _dl_ok=true
+      fi
+    else
+      # Web / no-TTY: silent wget, log errors only.
+      if wget --quiet \
+              --connect-timeout=30 --timeout=600 --tries=1 \
+              -O "$run_file" "$url" 2>>"$LOG_FILE"; then
+        _dl_ok=true
+      fi
+    fi
+
+    if $_dl_ok; then
       echo "Download completed, verifying file..." >> "$LOG_FILE"
-      
-   
+
       if [[ ! -f "$run_file" ]]; then
         echo "ERROR: File not created after download" >> "$LOG_FILE"
         continue
       fi
-      
- 
+
       local file_size
       file_size=$(stat -c%s "$run_file" 2>/dev/null || stat -f%z "$run_file" 2>/dev/null || echo "0")
       echo "Downloaded file size: $file_size bytes" >> "$LOG_FILE"
-      
+
       if [[ $file_size -lt 40000000 ]]; then
         echo "ERROR: File too small ($file_size bytes, expected >40MB)" >> "$LOG_FILE"
         head -c 200 "$run_file" >> "$LOG_FILE" 2>&1
         rm -f "$run_file"
         continue
       fi
-      
 
       local file_type
       file_type=$(file "$run_file" 2>/dev/null)
       echo "File type: $file_type" >> "$LOG_FILE"
-      
+
       if echo "$file_type" | grep -q "executable"; then
         echo "SUCCESS: Valid executable downloaded" >> "$LOG_FILE"
         success=true
@@ -526,11 +889,11 @@ download_nvidia_installer() {
         rm -f "$run_file"
       fi
     else
-      echo "ERROR: curl failed for $url (exit code: $?)" >> "$LOG_FILE"
+      echo "ERROR: wget failed for $url (exit code: $?)" >> "$LOG_FILE"
       rm -f "$run_file"
     fi
   done
-  
+
   if ! $success; then
     msg_error "$(translate 'Download failed for all attempted URLs')" >&2
     msg_error "Version $version may not be available for your architecture" >&2
@@ -553,10 +916,38 @@ run_nvidia_installer() {
   echo "" >>"$LOG_FILE"
   echo "=== Running NVIDIA installer: $installer ===" >>"$LOG_FILE"
 
+  # If nouveau is still loaded, rebuild initramfs first so the blacklist takes
+  # effect for the installer sanity checks. Without this the .run installer
+  # detects nouveau as active and aborts even when --disable-nouveau is passed.
+  if [[ "${NOUVEAU_STILL_LOADED:-false}" == "true" ]]; then
+    msg_info "$(translate 'Rebuilding initramfs to apply nouveau blacklist before installation...')"
+    update-initramfs -u -k all >>"$LOG_FILE" 2>&1 || true
+    # Try one more time to unload nouveau after initramfs rebuild
+    modprobe -r nouveau 2>/dev/null || true
+    sleep 1
+    if grep -q "^nouveau " /proc/modules 2>/dev/null; then
+      echo "WARNING: nouveau still loaded after initramfs rebuild, proceeding with --no-nouveau-check" >> "$LOG_FILE"
+      msg_warn "$(translate 'nouveau still active. Proceeding with installation. A reboot will be required for the driver to work.')"
+    else
+      NOUVEAU_STILL_LOADED=false
+      msg_ok "$(translate 'nouveau module unloaded after initramfs rebuild.')" | tee -a "$screen_capture"
+    fi
+  fi
+
   local tmp_extract_dir="$NVIDIA_WORKDIR/tmp_extract"
   mkdir -p "$tmp_extract_dir"
-  
-  sh "$installer" --tmpdir="$tmp_extract_dir" --no-questions --ui=none --disable-nouveau --dkms 2>&1 | tee -a "$LOG_FILE"
+
+  # --no-nouveau-check: prevents the installer from aborting when nouveau is
+  # still loaded. The blacklist files are already in place; nouveau will be
+  # gone after the reboot that the script offers at the end.
+  sh "$installer" \
+    --tmpdir="$tmp_extract_dir" \
+    --no-questions \
+    --ui=none \
+    --disable-nouveau \
+    --no-nouveau-check \
+    --dkms \
+    2>&1 | tee -a "$LOG_FILE"
   local rc=${PIPESTATUS[0]}
   echo "" >>"$LOG_FILE"
   
@@ -667,18 +1058,32 @@ show_install_overview() {
   overview+=" • $(translate 'Install NVIDIA proprietary drivers')\n"
   overview+=" • $(translate 'Configure GPU passthrough with VFIO')\n"
   overview+=" • $(translate 'Blacklist nouveau driver')\n"
-  overview+=" • $(translate 'Enable IOMMU support if not enabled')\n\n"
+  overview+=" • $(translate 'Enable IOMMU support if not enabled')\n"
+  overview+=" • $(translate 'Optionally update NVIDIA libs in LXC containers with passthrough')\n\n"
 
   overview+="$(translate 'Detected GPU(s):')\n"
-  overview+="\Zb\Z4$DETECTED_GPUS_TEXT\Zn\n"   
+  overview+="\Zb\Z4$DETECTED_GPUS_TEXT\Zn\n"
 
   overview+="\n\Zn$(translate 'Current status: ') "
-  overview+="\Zb${CURRENT_STATUS_TEXT}\Zn\n\n"  
+  overview+="\Zb${CURRENT_STATUS_TEXT}\Zn\n"
 
-  overview+="$(translate 'After confirming, you will be asked to choose the NVIDIA driver version to install.')\n\n"
+  # Scan for LXC containers with NVIDIA passthrough and surface them in the
+  # overview so the user knows upfront they will be offered a driver update.
+  find_nvidia_containers
+  if [[ ${#NVIDIA_CONTAINERS[@]} -gt 0 ]]; then
+    overview+="\n$(translate 'LXC containers with NVIDIA passthrough:')\n"
+    local ctid lxc_ver ct_name
+    for ctid in "${NVIDIA_CONTAINERS[@]}"; do
+      lxc_ver=$(get_lxc_nvidia_version "$ctid")
+      ct_name=$(pct config "$ctid" 2>/dev/null | grep "^hostname:" | awk '{print $2}')
+      overview+="  \Zb\Z4CT ${ctid}\Zn  ${ct_name:+(${ct_name})}  — $(translate 'driver:') ${lxc_ver}\n"
+    done
+  fi
+
+  overview+="\n$(translate 'After confirming, you will be asked to choose the NVIDIA driver version to install.')\n\n"
   overview+="$(translate 'Do you want to continue?')"
 
-  hybrid_yesno "$(translate 'NVIDIA GPU Driver Installation')" "$overview" 22 90
+  hybrid_yesno "$(translate 'NVIDIA GPU Driver Installation')" "$overview" 24 90
 }
 
 show_version_menu() {
@@ -784,8 +1189,11 @@ main() {
   : >"$LOG_FILE"
   : >"$screen_capture"
 
+  NOUVEAU_STILL_LOADED=false
+
   detect_nvidia_gpus
   detect_driver_status
+  check_gpu_not_in_vm_passthrough
 
   if ! $NVIDIA_GPU_PRESENT; then
     dialog --backtitle "ProxMenux" --title "$(translate 'NVIDIA GPU Driver Installation')" --msgbox \
@@ -827,7 +1235,7 @@ main() {
         
         show_proxmenux_logo
         msg_title "$(translate "$SCRIPT_TITLE")"
-        msg_info2 "$(translate 'Uninstalling current NVIDIA driver before installing new version...')"
+        msg_info2 "$(translate 'Uninstalling current NVIDIA driver before installing new version')"
         complete_nvidia_uninstall
         
         sleep 2
@@ -846,18 +1254,20 @@ main() {
       stop_and_disable_nvidia_services
       unload_nvidia_modules
 
-      msg_info "$(translate 'Downloading NVIDIA driver version:') $DRIVER_VERSION"
-      
+      # No msg_info spinner here — it would clash with wget --show-progress,
+      # which writes its progress bar directly to /dev/tty from inside the
+      # download function. Stderr from the function is allowed through so
+      # warnings/errors reach the user.
       local installer
-      installer=$(download_nvidia_installer "$DRIVER_VERSION" 2>>"$LOG_FILE")
+      installer=$(download_nvidia_installer "$DRIVER_VERSION")
       local download_result=$?
-      
+
       if [[ $download_result -ne 0 ]]; then
         msg_error "$(translate 'Failed to download NVIDIA installer')"
         exit 1
       fi
-      
-      msg_ok "$(translate 'NVIDIA installer downloaded successfully')"
+
+      msg_ok "$(translate 'NVIDIA installer downloaded successfully')" | tee -a "$screen_capture"
 
       if [[ -z "$installer" || ! -f "$installer" ]]; then
         msg_error "$(translate 'Internal error: NVIDIA installer path is empty or file not found.')"
@@ -899,6 +1309,13 @@ main() {
       else
         msg_error "$(translate 'Failed to detect installed NVIDIA driver version.')"
         update_component_status "nvidia_driver" "failed" "" "gpu" '{"patched":false}'
+      fi
+
+      # Propagate the new driver to LXC containers with NVIDIA passthrough, if any.
+      # Uses the same .run installer cached in $NVIDIA_WORKDIR — runs only if the
+      # host install succeeded and the user confirms.
+      if [[ -n "$CURRENT_DRIVER_VERSION" ]]; then
+        offer_lxc_updates_if_any "$CURRENT_DRIVER_VERSION"
       fi
 
       apply_nvidia_patch_if_needed

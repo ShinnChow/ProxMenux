@@ -1,0 +1,254 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-01-15T10:00:00Z",
+  "apps": {
+    "secure-gateway": {
+      "id": "secure-gateway",
+      "name": "Secure Gateway",
+      "short_name": "VPN Gateway",
+      "subtitle": "Tailscale VPN Gateway",
+      "version": "1.0.0",
+      "category": "security",
+      "subcategory": "remote_access",
+      "icon": "shield-check",
+      "icon_type": "shield",
+      "color": "#0EA5E9",
+      
+      "summary": "Secure remote access without opening ports",
+      "description": "Deploy a managed VPN gateway using Tailscale for zero-trust access to your Proxmox infrastructure. Access ProxMenux Monitor, Proxmox UI, VMs, and LXC containers from anywhere without exposing ports to the internet.",
+      "documentation_url": "https://macrimi.github.io/ProxMenux/docs/secure-gateway",
+      "code_url": "https://github.com/MacRimi/ProxMenux/tree/main/Scripts/oci",
+      
+      "features": [
+        "Zero-trust network access",
+        "No port forwarding required",
+        "End-to-end encryption",
+        "Easy mobile access",
+        "MagicDNS for easy hostname access",
+        "Access control via Tailscale admin"
+      ],
+      
+      "container": {
+        "type": "lxc",
+        "template": "alpine",
+        "install_method": "apk",
+        "packages": ["tailscale"],
+        "services": ["tailscale"],
+        "privileged": false,
+        "memory": 256,
+        "cores": 1,
+        "disk_size": 2,
+        "requires_ip_forward": true,
+        "features": ["nesting=1"],
+        "lxc_config": [
+          "lxc.cgroup2.devices.allow: c 10:200 rwm",
+          "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
+        ]
+      },
+      
+      "volumes": {
+        "state": {
+          "container_path": "/var/lib/tailscale",
+          "persistent": true,
+          "description": "Tailscale state and keys"
+        }
+      },
+      
+      "environment": [
+        {
+          "name": "TS_STATE_DIR",
+          "value": "/var/lib/tailscale"
+        },
+        {
+          "name": "TS_USERSPACE",
+          "value": "false"
+        },
+        {
+          "name": "TS_AUTHKEY",
+          "value": "$auth_key"
+        },
+        {
+          "name": "TS_HOSTNAME",
+          "value": "$hostname"
+        },
+        {
+          "name": "TS_ROUTES",
+          "value": "$advertise_routes"
+        },
+        {
+          "name": "TS_EXTRA_ARGS",
+          "value": "$extra_args"
+        }
+      ],
+      
+      "config_schema": {
+        "auth_key": {
+          "type": "password",
+          "label": "Tailscale Auth Key",
+          "description": "Pre-authentication key from Tailscale admin console. Generate one at the link below.",
+          "placeholder": "tskey-auth-xxxxx",
+          "required": true,
+          "sensitive": true,
+          "env_var": "TS_AUTHKEY",
+          "help_url": "https://login.tailscale.com/admin/settings/keys",
+          "help_text": "Generate Auth Key"
+        },
+        "hostname": {
+          "type": "text",
+          "label": "Device Hostname",
+          "description": "Name shown in Tailscale admin console",
+          "placeholder": "proxmox-gateway",
+          "default": "proxmox-gateway",
+          "required": false,
+          "env_var": "TS_HOSTNAME",
+          "validation": {
+            "pattern": "^[a-zA-Z0-9-]+$",
+            "max_length": 63,
+            "message": "Only letters, numbers, and hyphens allowed"
+          }
+        },
+        "access_mode": {
+          "type": "select",
+          "label": "Access Scope",
+          "description": "What should be accessible through this gateway",
+          "default": "host_only",
+          "required": true,
+          "options": [
+            {
+              "value": "host_only",
+              "label": "Proxmox Only",
+              "description": "Access only this Proxmox server (UI and ProxMenux Monitor)"
+            },
+            {
+              "value": "proxmox_network",
+              "label": "Full Local Network",
+              "description": "Access all devices on your local network (NAS, printers, VMs, etc.)"
+            },
+            {
+              "value": "custom",
+              "label": "Custom Subnets",
+              "description": "Select specific subnets to expose"
+            }
+          ]
+        },
+        "advertise_routes": {
+          "type": "networks",
+          "label": "Advertised Networks",
+          "description": "Select networks to make accessible through the VPN",
+          "required": false,
+          "depends_on": {
+            "field": "access_mode",
+            "values": ["custom"]
+          },
+          "env_var": "TS_ROUTES",
+          "env_format": "csv"
+        },
+        "exit_node": {
+          "type": "boolean",
+          "label": "Exit Node",
+          "description": "Use this gateway as your internet exit point when away from home. All your internet traffic will appear to come from your Proxmox server's IP address.",
+          "default": false,
+          "required": false,
+          "flag": "--advertise-exit-node",
+          "warning": "Requires approval in Tailscale Admin. When enabled on your device, ALL internet traffic routes through your Proxmox server."
+        },
+        "accept_routes": {
+          "type": "boolean",
+          "label": "Accept Routes",
+          "description": "Allow this gateway to access networks advertised by OTHER Tailscale nodes in your tailnet. Useful if you have multiple Tailscale subnet routers.",
+          "default": false,
+          "required": false,
+          "flag": "--accept-routes"
+        }
+      },
+      
+      "healthcheck": {
+        "command": ["tailscale", "status", "--json"],
+        "interval_seconds": 30,
+        "timeout_seconds": 10,
+        "retries": 3,
+        "healthy_condition": "BackendState == Running"
+      },
+      
+      "requirements": {
+        "min_memory_mb": 64,
+        "min_disk_mb": 100,
+        "proxmox_min_version": "9.1",
+        "checks": [
+          {
+            "type": "proxmox_version",
+            "min": "9.1",
+            "message": "OCI containers require Proxmox VE 9.1+"
+          }
+        ]
+      },
+      
+      "security_notes": [
+        "Requires NET_ADMIN capability for VPN tunneling",
+        "Uses /dev/net/tun for network virtualization",
+        "Auth key is stored encrypted at rest",
+        "No ports are opened on the host firewall",
+        "All traffic is end-to-end encrypted"
+      ],
+      
+      "ui": {
+        "wizard_steps": [
+          {
+            "id": "intro",
+            "title": "Secure Remote Access",
+            "description": "Set up secure VPN access to your Proxmox server"
+          },
+          {
+            "id": "auth",
+            "title": "Tailscale Authentication",
+            "description": "Connect to your Tailscale account",
+            "fields": ["auth_key", "hostname"]
+          },
+          {
+            "id": "access",
+            "title": "Access Scope",
+            "description": "Choose what to make accessible",
+            "fields": ["access_mode", "advertise_routes"]
+          },
+          {
+            "id": "options",
+            "title": "Advanced Options",
+            "description": "Additional configuration",
+            "fields": ["exit_node", "accept_routes"]
+          },
+          {
+            "id": "deploy",
+            "title": "Deploy Gateway",
+            "description": "Review and deploy"
+          }
+        ],
+        "show_in_sections": ["security"],
+        "dashboard_widget": false,
+        "status_indicators": {
+          "running": {
+            "color": "green",
+            "icon": "check-circle",
+            "label": "Connected"
+          },
+          "stopped": {
+            "color": "yellow",
+            "icon": "pause-circle",
+            "label": "Stopped"
+          },
+          "error": {
+            "color": "red",
+            "icon": "x-circle",
+            "label": "Error"
+          }
+        }
+      },
+      
+      "metadata": {
+        "author": "ProxMenux",
+        "license": "MIT",
+        "upstream": "https://tailscale.com",
+        "tags": ["vpn", "remote-access", "tailscale", "zero-trust", "security"]
+      }
+    }
+  }
+}

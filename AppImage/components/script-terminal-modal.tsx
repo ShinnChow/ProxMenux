@@ -15,7 +15,16 @@ import {
   ArrowRight,
   CornerDownLeft,
   GripHorizontal,
+  ChevronDown,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
 import "xterm/css/xterm.css"
 import { API_PORT } from "@/lib/api-config"
 
@@ -34,6 +43,8 @@ interface ScriptTerminalModalProps {
   scriptPath: string
   title: string
   description: string
+  scriptName?: string
+  params?: Record<string, string>
 }
 
 export function ScriptTerminalModal({
@@ -42,6 +53,7 @@ export function ScriptTerminalModal({
   scriptPath,
   title,
   description,
+  params = { EXECUTION_MODE: "web" },
 }: ScriptTerminalModalProps) {
   const termRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -68,6 +80,12 @@ export function ScriptTerminalModal({
   const modalHeightRef = useRef(600)
 
   const terminalContainerRef = useRef<HTMLDivElement>(null)
+  const paramsRef = useRef(params)
+  
+  // Keep paramsRef updated with latest params
+  useEffect(() => {
+    paramsRef.current = params
+  }, [params])
 
   const attemptReconnect = useCallback(() => {
     if (!isOpen || isComplete || reconnectAttemptsRef.current >= 3) {
@@ -104,13 +122,11 @@ export function ScriptTerminalModal({
             }
           }, 30000)
 
-          const initMessage = {
-            script_path: scriptPath,
-            params: {
-              EXECUTION_MODE: "web",
-            },
-          }
-          ws.send(JSON.stringify(initMessage))
+const initMessage = {
+          script_path: scriptPath,
+          params: paramsRef.current,
+        }
+        ws.send(JSON.stringify(initMessage))
 
           setTimeout(() => {
             if (fitAddonRef.current && termRef.current && ws.readyState === WebSocket.OPEN) {
@@ -122,6 +138,11 @@ export function ScriptTerminalModal({
         }
 
         ws.onmessage = (event) => {
+          // Filter out pong responses from heartbeat
+          if (event.data === '{"type": "pong"}' || event.data === '{"type":"pong"}') {
+            return
+          }
+          
           try {
             const msg = JSON.parse(event.data)
             if (msg.type === "web_interaction" && msg.interaction) {
@@ -268,11 +289,8 @@ export function ScriptTerminalModal({
 
       const initMessage = {
         script_path: scriptPath,
-        params: {
-          EXECUTION_MODE: "web",
-        },
+        params: paramsRef.current,
       }
-
       ws.send(JSON.stringify(initMessage))
 
       setTimeout(() => {
@@ -291,6 +309,11 @@ export function ScriptTerminalModal({
     }
 
     ws.onmessage = (event) => {
+      // Filter out pong responses from heartbeat - don't display in terminal
+      if (event.data === '{"type": "pong"}' || event.data === '{"type":"pong"}') {
+        return
+      }
+      
       try {
         const msg = JSON.parse(event.data)
 
@@ -641,13 +664,13 @@ export function ScriptTerminalModal({
               ref={resizeBarRef}
               onMouseDown={handleResizeStart}
               onTouchStart={handleResizeStart}
-              className={`h-2 w-full cursor-row-resize transition-colors flex items-center justify-center group relative ${
+              className={`h-4 w-full cursor-row-resize transition-colors flex items-center justify-center group relative ${
                 isResizing ? "bg-blue-500" : "bg-zinc-800 hover:bg-blue-600"
               }`}
               style={{ touchAction: "none" }}
             >
               <GripHorizontal
-                className={`h-4 w-4 transition-colors pointer-events-none ${
+                className={`h-5 w-5 transition-colors pointer-events-none ${
                   isResizing ? "text-white" : "text-zinc-600 group-hover:text-white"
                 }`}
               />
@@ -736,22 +759,39 @@ export function ScriptTerminalModal({
                 }}
                 variant="outline"
                 size="sm"
-                className="h-8 px-2.5 text-xs bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-white"
+                className="h-8 px-2.5 text-xs bg-blue-600/20 hover:bg-blue-600/30 border-blue-600/50 text-blue-400"
               >
-                <CornerDownLeft className="h-4 w-4" />
+                <CornerDownLeft className="h-4 w-4 mr-1" />
+                Enter
               </Button>
-              <Button
-                onPointerDown={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  sendCommand("\x03")
-                }}
-                variant="outline"
-                size="sm"
-                className="h-8 px-2 text-xs bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-white min-w-[65px]"
-              >
-                CTRL+C
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 text-xs bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-white min-w-[65px] gap-1"
+                  >
+                    Ctrl
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Control Sequences</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => sendCommand("\x03")}>
+                    <span className="font-mono text-xs mr-2">Ctrl+C</span>
+                    <span className="text-muted-foreground text-xs">Cancel/Interrupt</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => sendCommand("\x18")}>
+                    <span className="font-mono text-xs mr-2">Ctrl+X</span>
+                    <span className="text-muted-foreground text-xs">Exit (nano)</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => sendCommand("\x12")}>
+                    <span className="font-mono text-xs mr-2">Ctrl+R</span>
+                    <span className="text-muted-foreground text-xs">Search history</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
 
@@ -786,7 +826,7 @@ export function ScriptTerminalModal({
             <Button
               onClick={handleCloseModal}
               variant="outline"
-              className="bg-red-600 hover:bg-red-700 border-red-500 text-white"
+              className="bg-red-600/20 hover:bg-red-600/30 border-red-600/50 text-red-400"
             >
               Close
             </Button>

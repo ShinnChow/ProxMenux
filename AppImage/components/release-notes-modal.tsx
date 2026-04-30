@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog"
-import { X, Sparkles, Link2, Shield, Zap, HardDrive, Gauge, Wrench, Settings } from "lucide-react"
+import { X, Sparkles, Thermometer, Terminal, Activity, HardDrive, Bell, Shield, Globe, Cpu, Zap } from "lucide-react"
 import { Checkbox } from "./ui/checkbox"
 
-const APP_VERSION = "1.0.2" // Sync with AppImage/package.json
+const APP_VERSION = "1.2.0" // Sync with AppImage/package.json
 
 interface ReleaseNote {
   date: string
@@ -18,6 +18,32 @@ interface ReleaseNote {
 }
 
 export const CHANGELOG: Record<string, ReleaseNote> = {
+  "1.1.2-beta": {
+    date: "March 18, 2026",
+    changes: {
+      added: [
+        "Temperature & Latency Charts - Real-time visual monitoring with interactive graphs",
+        "WebSocket Terminal - Direct access to Proxmox host and LXC containers terminal",
+        "AI-Enhanced Notifications - Intelligent message formatting with multi-provider support (OpenAI, Groq, Anthropic, Ollama)",
+        "Security Section - Comprehensive security settings for ProxMenux and Proxmox",
+        "VPN Integration - Easy Tailscale VPN installation and configuration",
+        "GPU Scripts - Installation utilities for Intel, AMD and NVIDIA drivers",
+        "Disk Observations System - Track and document disk health observations over time",
+        "Enhanced Health Monitor - Configurable monitoring with advanced settings panel",
+      ],
+      changed: [
+        "Improved overall performance with optimized data fetching",
+        "Notifications now support rich formatting with contextual emojis",
+        "Health monitor now configurable from Settings section",
+        "Better Proxmox service name translation for non-expert users",
+      ],
+      fixed: [
+        "Fixed notification message truncation for large backup reports",
+        "Improved disk error deduplication to prevent repeated alerts",
+        "Corrected AI provider base URL handling for OpenAI-compatible APIs",
+      ],
+    },
+  },
   "1.0.1": {
     date: "November 11, 2025",
     changes: {
@@ -25,23 +51,16 @@ export const CHANGELOG: Record<string, ReleaseNote> = {
         "Proxy Support - Access ProxMenux through reverse proxies with full functionality",
         "Authentication System - Secure your dashboard with password protection",
         "PCIe Link Speed Detection - View NVMe drive connection speeds and detect performance issues",
-        "Enhanced Storage Display - Better formatting for disk sizes (auto-converts GB to TB when needed)",
-        "SATA/SAS Information - View detailed interface information for all storage devices",
         "Two-Factor Authentication (2FA) - Enhanced security with TOTP support",
         "Health Monitoring System - Comprehensive system health checks with dismissible warnings",
-        "Release Notes Modal - Automatic notification of new features and improvements",
       ],
       changed: [
         "Optimized VM & LXC page - Reduced CPU usage by 85% through intelligent caching",
         "Storage metrics now separate local and remote storage for clarity",
-        "Update warnings now appear only after 365 days instead of 30 days",
-        "API intervals staggered to distribute server load (23s and 37s)",
       ],
       fixed: [
         "Fixed dark mode text contrast issues in various components",
         "Corrected storage calculation discrepancies between Overview and Storage pages",
-        "Resolved JSON stringify error in VM control actions",
-        "Improved IP address fetching for LXC containers",
       ],
     },
   },
@@ -63,32 +82,36 @@ export const CHANGELOG: Record<string, ReleaseNote> = {
 
 const CURRENT_VERSION_FEATURES = [
   {
-    icon: <Link2 className="h-5 w-5" />,
-    text: "Proxy Support - Access ProxMenux through reverse proxies with full functionality",
+    icon: <Thermometer className="h-5 w-5" />,
+    text: "Temperature & Latency Charts - Real-time visual monitoring with interactive historical graphs",
+  },
+  {
+    icon: <Terminal className="h-5 w-5" />,
+    text: "WebSocket Terminal - Direct terminal access to Proxmox host and LXC containers from the browser",
+  },
+  {
+    icon: <Activity className="h-5 w-5" />,
+    text: "Enhanced Health Monitor - Configurable health monitoring with advanced settings and disk observations",
+  },
+  {
+    icon: <Bell className="h-5 w-5" />,
+    text: "AI-Enhanced Notifications - Intelligent message formatting with support for OpenAI, Groq, Anthropic and Ollama",
   },
   {
     icon: <Shield className="h-5 w-5" />,
-    text: "Two-Factor Authentication (2FA) - Enhanced security with TOTP support for login protection",
+    text: "Security Section - Comprehensive security configuration for both ProxMenux and Proxmox systems",
+  },
+  {
+    icon: <Globe className="h-5 w-5" />,
+    text: "VPN Integration - Easy Tailscale VPN installation and configuration for secure remote access",
+  },
+  {
+    icon: <Cpu className="h-5 w-5" />,
+    text: "GPU Drivers - Installation scripts for Intel, AMD and NVIDIA graphics drivers and utilities",
   },
   {
     icon: <Zap className="h-5 w-5" />,
-    text: "Performance Improvements - Optimized loading times and reduced CPU usage across the application",
-  },
-  {
-    icon: <HardDrive className="h-5 w-5" />,
-    text: "Storage Enhancements - Improved disk space consumption display with local and remote storage separation",
-  },
-  {
-    icon: <Gauge className="h-5 w-5" />,
-    text: "PCIe Link Speed Detection - View NVMe drive connection speeds and identify performance bottlenecks",
-  },
-  {
-    icon: <Wrench className="h-5 w-5" />,
-    text: "Hardware Page Improvements - Enhanced hardware information display with detailed PCIe and interface data",
-  },
-  {
-    icon: <Settings className="h-5 w-5" />,
-    text: "New Settings Page - Centralized configuration for authentication, optimizations, and system preferences",
+    text: "Performance Improvements - Optimized data fetching and reduced resource consumption",
   },
 ]
 

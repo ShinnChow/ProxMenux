@@ -7,8 +7,8 @@
 # Revision    : @Blaspt (USB passthrough via udev rule with persistent /dev/coral)
 # Copyright   : (c) 2024 MacRimi
 # License     : (GPL-3.0) (https://github.com/MacRimi/ProxMenux/blob/main/LICENSE)
-# Version     : 1.2
-# Last Updated: 20/01/2025
+# Version     : 1.4 (unprivileged container support, PVE dev API for apex/iGPU)
+# Last Updated: 01/04/2026
 # ==========================================================
 # Description:
 # This script automates the configuration and installation of
@@ -20,6 +20,12 @@
 #
 # Supports Coral USB and Coral M.2 (PCIe) devices.
 # Includes USB passthrough enhancement using persistent udev alias (/dev/coral).
+#
+# Changelog v1.3:
+# - Fixed Coral USB passthrough: mount /dev/bus/usb instead of /dev/coral symlink
+#   The udev symlink /dev/coral is not passthrough-safe in LXC; mounting the full
+#   USB bus tree ensures the real device node is accessible inside the container
+#   regardless of which port the Coral USB is connected to.
 #
 # Changelog v1.2:
 # - Fixed symlink detection for /dev/coral (create=dir for symlinks)
@@ -152,11 +158,23 @@ add_mount_if_needed() {
 cleanup_duplicate_entries() {
     local CONFIG_FILE="$1"
     local TEMP_FILE=$(mktemp)
-    
+
     awk '!seen[$0]++' "$CONFIG_FILE" > "$TEMP_FILE"
-    
+
     cat "$TEMP_FILE" > "$CONFIG_FILE"
     rm -f "$TEMP_FILE"
+}
+
+# Returns the next available dev index (dev0, dev1, ...) in a container config.
+# The PVE dev API (devN: /dev/foo,gid=N) works in both privileged and unprivileged
+# containers, handling cgroup2 permissions automatically.
+get_next_dev_index() {
+    local config="$1"
+    local idx=0
+    while grep -q "^dev${idx}:" "$config" 2>/dev/null; do
+        idx=$((idx + 1))
+    done
+    echo "$idx"
 }
 
 # ==========================================================
@@ -173,25 +191,6 @@ configure_lxc_hardware() {
     fi
 
     cleanup_duplicate_entries "$CONFIG_FILE"
-
-    # ============================================================
-    # Convert to privileged container if needed
-    # ============================================================
-    if grep -q "^unprivileged: 1" "$CONFIG_FILE"; then
-        msg_info "$(translate 'The container is unprivileged. Changing to privileged...')"
-        sed -i "s/^unprivileged: 1/unprivileged: 0/" "$CONFIG_FILE"
-        
-        STORAGE_TYPE=$(pct config "$CONTAINER_ID" | grep "^rootfs:" | awk -F, '{print $2}' | cut -d'=' -f2)
-        if [[ "$STORAGE_TYPE" == "dir" ]]; then
-            STORAGE_PATH=$(pct config "$CONTAINER_ID" | grep "^rootfs:" | awk '{print $2}' | cut -d',' -f1)
-            chown -R root:root "$STORAGE_PATH"
-        fi
-        msg_ok "$(translate 'Container changed to privileged.')"
-    else
-        msg_ok "$(translate 'The container is already privileged.')"
-    fi
-    
-    sed -i '/^dev[0-9]\+:/d' "$CONFIG_FILE"
 
     # ============================================================
     # Enable nesting feature
@@ -211,19 +210,24 @@ configure_lxc_hardware() {
     # iGPU support
     # ============================================================
     msg_info "$(translate 'Configuring iGPU support...')"
-    
-    if ! grep -Pq "^lxc.cgroup2.devices.allow: c 226:0 rwm" "$CONFIG_FILE"; then
-        echo "lxc.cgroup2.devices.allow: c 226:0 rwm # iGPU" >> "$CONFIG_FILE"
-    fi
-    
-    if ! grep -Pq "^lxc.cgroup2.devices.allow: c 226:128 rwm" "$CONFIG_FILE"; then
-        echo "lxc.cgroup2.devices.allow: c 226:128 rwm # iGPU" >> "$CONFIG_FILE"
-    fi
 
+    # Bind-mount the /dev/dri directory so apps can enumerate available devices
     add_mount_if_needed "/dev/dri" "dev/dri" "$CONFIG_FILE"
-    add_mount_if_needed "/dev/dri/renderD128" "dev/dri/renderD128" "$CONFIG_FILE"
-    add_mount_if_needed "/dev/dri/card0" "dev/dri/card0" "$CONFIG_FILE"
-    
+
+    # Add each DRI device via the PVE dev API (gid=44 = render group).
+    # This approach works in unprivileged containers: PVE manages cgroup2
+    # permissions automatically and maps the GID into the container namespace.
+    local igpu_dev_idx
+    igpu_dev_idx=$(get_next_dev_index "$CONFIG_FILE")
+    for dri_dev in /dev/dri/renderD128 /dev/dri/renderD129 /dev/dri/card0 /dev/dri/card1; do
+        if [[ -c "$dri_dev" ]]; then
+            if ! grep -q ":.*${dri_dev}" "$CONFIG_FILE"; then
+                echo "dev${igpu_dev_idx}: ${dri_dev},gid=44" >> "$CONFIG_FILE"
+                igpu_dev_idx=$((igpu_dev_idx + 1))
+            fi
+        fi
+    done
+
     msg_ok "$(translate 'iGPU configuration added')"
 
     # ============================================================
@@ -250,8 +254,13 @@ configure_lxc_hardware() {
     if ! grep -Pq "^lxc.cgroup2.devices.allow: c 189:\\\* rwm" "$CONFIG_FILE"; then
         echo "lxc.cgroup2.devices.allow: c 189:* rwm # Coral USB" >> "$CONFIG_FILE"
     fi
-    
-    add_mount_if_needed "/dev/coral" "dev/coral" "$CONFIG_FILE"
+
+    # FIX v1.3: Mount /dev/bus/usb instead of the /dev/coral symlink.
+    # The udev symlink /dev/coral cannot be safely passed through to LXC because
+    # it points to a dynamic path (e.g. /dev/bus/usb/001/005) that changes on
+    # reconnect. Mounting the full USB bus tree makes the real device node
+    # available inside the container regardless of port or reconnection.
+    add_mount_if_needed "/dev/bus/usb" "dev/bus/usb" "$CONFIG_FILE"
     
     if [ -L "/dev/coral" ]; then
         msg_ok "$(translate 'Coral USB configuration added - device detected')"
@@ -266,18 +275,29 @@ configure_lxc_hardware() {
 
     if lspci | grep -iq "Global Unichip"; then
         msg_info "$(translate 'Coral M.2 Apex detected, configuring...')"
-        
 
-        if ! grep -Pq "^lxc.cgroup2.devices.allow: c 245:0 rwm" "$CONFIG_FILE"; then
-            echo "lxc.cgroup2.devices.allow: c 245:0 rwm # Coral M2 Apex" >> "$CONFIG_FILE"
-        fi
-        
+        local APEX_GID apex_dev_idx
+        APEX_GID=$(getent group apex 2>/dev/null | cut -d: -f3 || echo "0")
+        apex_dev_idx=$(get_next_dev_index "$CONFIG_FILE")
 
-        add_mount_if_needed "/dev/apex_0" "dev/apex_0" "$CONFIG_FILE"
-        
         if [ -e "/dev/apex_0" ]; then
+            # Device is visible — use PVE dev API (works in unprivileged containers).
+            # PVE handles cgroup2 permissions automatically.
+            if ! grep -q "dev.*apex_0" "$CONFIG_FILE"; then
+                echo "dev${apex_dev_idx}: /dev/apex_0,gid=${APEX_GID}" >> "$CONFIG_FILE"
+            fi
             msg_ok "$(translate 'Coral M.2 Apex configuration added - device ready')"
         else
+            # Device not yet visible (host module not loaded or reboot pending).
+            # Use cgroup2 + optional bind-mount as fallback; detect major number
+            # dynamically from /proc/devices to avoid hardcoding it.
+            local APEX_MAJOR
+            APEX_MAJOR=$(awk '/\bapex\b/{print $1}' /proc/devices 2>/dev/null | head -1)
+            [[ -z "$APEX_MAJOR" ]] && APEX_MAJOR="245"
+            if ! grep -q "lxc.cgroup2.devices.allow: c ${APEX_MAJOR}:0 rwm" "$CONFIG_FILE"; then
+                echo "lxc.cgroup2.devices.allow: c ${APEX_MAJOR}:0 rwm # Coral M2 Apex" >> "$CONFIG_FILE"
+            fi
+            add_mount_if_needed "/dev/apex_0" "dev/apex_0" "$CONFIG_FILE"
             msg_ok "$(translate 'Coral M.2 Apex configuration added - device will be available after reboot')"
         fi
     fi
@@ -300,7 +320,13 @@ install_coral_in_container() {
 
     if ! pct status "$CONTAINER_ID" | grep -q "running"; then
         pct start "$CONTAINER_ID"
-        sleep 5
+        for _ in {1..15}; do
+            pct status "$CONTAINER_ID" | grep -q "running" && break
+            sleep 1
+        done
+        if ! pct status "$CONTAINER_ID" | grep -q "running"; then
+            msg_error "$(translate 'Container did not start in time.')"; exit 1
+        fi
     fi
 
 
@@ -326,7 +352,8 @@ install_coral_in_container() {
     # Install drivers inside container
     script -q -c "pct exec \"$CONTAINER_ID\" -- bash -c '
     set -e
-    
+    export DEBIAN_FRONTEND=noninteractive
+
     echo \"[1/6] Updating package lists...\"
     apt-get update -qq
     

@@ -58,7 +58,7 @@ function select_linux_iso() {
                   --backtitle "ProxMenux" \
                   --title "Opciones de instalación de Linux" \
                   --menu "\nSeleccione el tipo de instalación de Linux:\n\n$header" \
-                  18 72 10 \
+                  20 70 10 \
                   1 "$(printf '%-35s│ %s' 'Instalar con metodo tradicional' 'Desde ISO oficial')" \
                   2 "$(printf '%-35s│ %s' 'Instalar con script Cloud-Init' 'Helper Scripts')" \
                   3 "$(printf '%-35s│ %s' 'Instalar con ISO personal' 'Almacenamiento local')" \
@@ -101,27 +101,27 @@ function select_linux_iso() {
 
 function select_linux_iso_official() {
   DISTROS=(
-    "Ubuntu 25.04|Desktop|ProxMenux|https://releases.ubuntu.com/25.04/ubuntu-25.04-desktop-amd64.iso"
-    "Ubuntu 24.04|Desktop|ProxMenux|https://releases.ubuntu.com/24.04/ubuntu-24.04.2-desktop-amd64.iso"
+    "Ubuntu 25.10|Desktop|ProxMenux|https://releases.ubuntu.com/25.10/ubuntu-25.10-desktop-amd64.iso"
+    "Ubuntu 24.04|Desktop|ProxMenux|https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso"
     "Ubuntu 22.04|Desktop|ProxMenux|https://releases.ubuntu.com/22.04/ubuntu-22.04.5-desktop-amd64.iso"
     "Ubuntu 20.04|Desktop|ProxMenux|https://releases.ubuntu.com/20.04/ubuntu-20.04.6-desktop-amd64.iso"
-    "Ubuntu 25.04 Server|CLI|ProxMenux|https://releases.ubuntu.com/25.04/ubuntu-25.04-live-server-amd64.iso"
-    "Ubuntu 24.04 Server|CLI|ProxMenux|https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso"
+    "Ubuntu 25.10 Server|CLI|ProxMenux|https://releases.ubuntu.com/25.10/ubuntu-25.10-live-server-amd64.iso"
+    "Ubuntu 24.04 Server|CLI|ProxMenux|https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso"
     "Ubuntu 22.04 Server|CLI|ProxMenux|https://releases.ubuntu.com/22.04/ubuntu-22.04.5-live-server-amd64.iso"
     "Ubuntu 20.04 Server|CLI|ProxMenux|https://releases.ubuntu.com/20.04/ubuntu-20.04.6-live-server-amd64.iso"
-    "Debian 13|Desktop|ProxMenux|https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/debian-13.0.0-amd64-DVD-1.iso"
-    "Debian 12|Desktop|ProxMenux|https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/debian-12.10.0-amd64-DVD-1.iso"
+    "Debian 13|Desktop|ProxMenux|https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/debian-13.4.0-amd64-DVD-1.iso"
+    "Debian 12|Desktop|ProxMenux|https://cdimage.debian.org/cdimage/archive/12.13.0/amd64/iso-dvd/debian-12.13.0-amd64-DVD-1.iso"
     "Debian 11|Desktop|ProxMenux|https://cdimage.debian.org/cdimage/archive/11.11.0/amd64/iso-dvd/debian-11.11.0-amd64-DVD-1.iso"
-    "Debian 13 Netinst|CLI|ProxMenux|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.0.0-amd64-netinst.iso"
-    "Debian 12 Netinst|CLI|ProxMenux|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.10.0-amd64-netinst.iso"
+    "Debian 13 Netinst|CLI|ProxMenux|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.4.0-amd64-netinst.iso"
+    "Debian 12 Netinst|CLI|ProxMenux|https://cdimage.debian.org/cdimage/archive/12.13.0/amd64/iso-cd/debian-12.13.0-amd64-netinst.iso"
     "Debian 11 Netinst|CLI|ProxMenux|https://cdimage.debian.org/cdimage/archive/11.11.0/amd64/iso-cd/debian-11.11.0-amd64-netinst.iso"
     "Fedora Workstation 42|Desktop|ProxMenux|https://download.fedoraproject.org/pub/fedora/linux/releases/42/Workstation/x86_64/iso/Fedora-Workstation-Live-42-1.1.x86_64.iso"
-    "Arch Linux|CLI|ProxMenux|https://geo.mirror.pkgbuild.com/iso/2025.07.01/archlinux-2025.07.01-x86_64.iso"
-    "Rocky Linux 9.5|Desktop|ProxMenux|https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.5-x86_64-dvd.iso"
+    "Arch Linux|CLI|ProxMenux|https://geo.mirror.pkgbuild.com/iso/latest/archlinux-x86_64.iso"
+    "Rocky Linux 9|Desktop|ProxMenux|https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9-latest-x86_64-dvd.iso"
     "Linux Mint 22.1|Desktop|ProxMenux|https://mirrors.edge.kernel.org/linuxmint/stable/22.1/linuxmint-22.1-cinnamon-64bit.iso"
     "openSUSE Leap 15.6|Desktop|ProxMenux|https://download.opensuse.org/distribution/leap/15.6/iso/openSUSE-Leap-15.6-DVD-x86_64-Media.iso"
     "Alpine Linux 3.21|Desktop|ProxMenux|https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-virt-3.21.3-x86_64.iso"
-    "Kali Linux 2025.1|Desktop|ProxMenux|https://cdimage.kali.org/kali-2025.1c/kali-linux-2025.1c-installer-amd64.iso"
+    "Kali Linux 2026.1|Desktop|ProxMenux|https://cdimage.kali.org/kali-2026.1/kali-linux-2026.1-installer-amd64.iso"
     "Manjaro 25.0|Desktop|ProxMenux|https://download.manjaro.org/gnome/25.0.0/manjaro-gnome-25.0.0-250414-linux612.iso"
   )
 
@@ -140,7 +140,7 @@ function select_linux_iso_official() {
 
   CHOICE=$(dialog --backtitle "ProxMenux" \
     --title "$(translate "Official Linux Distributions")" \
-    --menu "$(translate "Select the Linux distribution to install:")\n\n$HEADER_TEXT" 20 80 12 \
+    --menu "$(translate "Select the Linux distribution to install:")\n\n$HEADER_TEXT" 20 70 12 \
     "${MENU_OPTIONS[@]}" \
     3>&1 1>&2 2>&3)
 
@@ -219,7 +219,7 @@ function select_linux_cloudinit() {
   whiptail --title "Proxmox VE Helper-Scripts" \
            --msgbox "$(translate "Visit the website to discover more scripts, stay updated with the latest updates, and support the project:\n\nhttps://community-scripts.github.io/ProxmoxVE")" 15 70
 
-  exec bash "$LOCAL_SCRIPTS/vm/create_vm.sh"
+  exec bash "$LOCAL_SCRIPTS/menus/create_vm_menu.sh"
 }
 
 
@@ -269,7 +269,7 @@ local OTHER_OPTIONS=(
 local choice
 choice=$(dialog --backtitle "ProxMenux" \
   --title "$(translate "Other Prebuilt Linux VMs")" \
-  --menu "\n$(translate "Select one of the ready-to-run Linux VMs:")" 18 70 10 \
+  --menu "\n$(translate "Select one of the ready-to-run Linux VMs:")" 20 70 10 \
   "${OTHER_OPTIONS[@]}" 3>&1 1>&2 2>&3)
 
 if [[ $? -ne 0 || "$choice" == "4" ]]; then
@@ -307,8 +307,6 @@ whiptail --title "Proxmox VE Helper-Scripts" \
 return 1
 
 }
-
-
 
 
 

@@ -238,8 +238,12 @@ Seal=no
 Compress=yes
 SystemMaxUse=64M
 RuntimeMaxUse=60M
-MaxLevelStore=warning
-MaxLevelSyslog=warning
+# MaxLevelStore=info allows ProxMenux Monitor to display system logs correctly.
+# Using "warning" causes the log viewer to show nearly identical entries across
+# all date ranges (1d/3d/7d) because most activity is info-level.
+# It also prevents Fail2Ban from detecting SSH/Proxmox auth failures via journal.
+MaxLevelStore=info
+MaxLevelSyslog=info
 MaxLevelKMsg=warning
 MaxLevelConsole=notice
 MaxLevelWall=crit
@@ -266,7 +270,7 @@ optimize_logrotate() {
 daily
 su root adm
 rotate 7
-size=10M
+size 10M
 compress
 delaycompress
 missingok
@@ -318,7 +322,7 @@ EOF
    
     for file in /etc/systemd/system.conf /etc/systemd/user.conf; do
         if ! grep -q "^DefaultLimitNOFILE=" "$file"; then
-            echo "DefaultLimitNOFILE=256000" >> "$file"
+            echo "DefaultLimitNOFILE=1048576" >> "$file"
         fi
     done
     
@@ -330,8 +334,9 @@ EOF
     done
     
 
-    if ! grep -q "ulimit -n 256000" /root/.profile; then
-        echo "ulimit -n 256000" >> /root/.profile
+    if ! grep -q "ulimit -n 1048576" /root/.profile; then
+        sed -i '/ulimit -n 256000/d' /root/.profile 2>/dev/null
+        echo "ulimit -n 1048576" >> /root/.profile
     fi
     
 
@@ -344,31 +349,13 @@ EOF
  
     cat > /etc/sysctl.d/99-fs.conf << EOF
 # ProxMenux configuration
-fs.nr_open = 12000000
-fs.file-max = 9223372036854775807
+fs.nr_open = 2097152
+fs.file-max = 2097152
 fs.aio-max-nr = 1048576
 EOF
     
     msg_ok "$(translate "System limits increase completed.")"
     register_tool "system_limits" true
-}
-
-# ==========================================================
-configure_entropy() {
-    msg_info "$(translate "Configuring entropy generation to prevent slowdowns...")"
-    
-    /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::='--force-confdef' install haveged > /dev/null 2>&1
-    
-    cat <<EOF > /etc/default/haveged
-#   -w sets low entropy watermark (in bits)
-DAEMON_ARGS="-w 1024"
-EOF
-    
-    systemctl daemon-reload > /dev/null 2>&1
-    systemctl enable haveged > /dev/null 2>&1
-    
-    msg_ok "$(translate "Entropy generation configuration completed")"
-    register_tool "entropy" true
 }
 
 # ==========================================================
@@ -382,7 +369,7 @@ vm.swappiness = 10
 vm.dirty_ratio = 15
 vm.dirty_background_ratio = 5
 vm.overcommit_memory = 1
-vm.max_map_count = 65530
+vm.max_map_count = 262144
 EOF
     
     if [ -f /proc/sys/vm/compaction_proactiveness ]; then
@@ -507,42 +494,7 @@ EOF
 
 
 # ==========================================================
-customize_bashrc_() {
-    msg_info "$(translate "Customizing bashrc for root user...")"
-    local bashrc="/root/.bashrc"
-    local bash_profile="/root/.bash_profile"
-    
-    if [ ! -f "${bashrc}.bak" ]; then
-        cp "$bashrc" "${bashrc}.bak"
-    fi
-    
- 
-    cat >> "$bashrc" << 'EOF'
-
-# ProxMenux customizations
-export HISTTIMEFORMAT="%d/%m/%y %T "
-export PS1="\[\e[31m\][\[\e[m\]\[\e[38;5;172m\]\u\[\e[m\]@\[\e[38;5;153m\]\h\[\e[m\] \[\e[38;5;214m\]\W\[\e[m\]\[\e[31m\]]\[\e[m\]\\$ "
-alias l='ls -CF'
-alias la='ls -A'
-alias ll='ls -alF'
-alias ls='ls --color=auto'
-alias grep='grep --color=auto'
-alias fgrep='fgrep --color=auto'
-alias egrep='egrep --color=auto'
-source /etc/profile.d/bash_completion.sh
-EOF
-    
-    if ! grep -q "source /root/.bashrc" "$bash_profile"; then
-        echo "source /root/.bashrc" >> "$bash_profile"
-    fi
-    
-    msg_ok "$(translate "Bashrc customization completed")"
-    register_tool "bashrc_custom" true
-}
-
-
-
-customize_bashrc() {    
+customize_bashrc() {
     msg_info "$(translate "Customizing bashrc for root user...")"
     local bashrc="/root/.bashrc"
     local bash_profile="/root/.bash_profile"
@@ -558,7 +510,7 @@ customize_bashrc() {
     fi
     
  
-    cat >> "$bashrc" << 'EOF'
+    cat >> "$bashrc" << EOF
 ${marker_begin}
 # ProxMenux core customizations
 export HISTTIMEFORMAT="%d/%m/%y %T "
@@ -595,6 +547,14 @@ EOF
 
 
 install_log2ram_auto() {
+
+    # ── Reinstall detection ─────────────────────────────────────────────────
+    # If log2ram was previously installed by ProxMenux (register_tool "log2ram" true),
+    # skip hardware detection and reinstall directly — no prompts, transparent to user.
+    if [[ -f "$TOOLS_JSON" ]] && jq -e '.log2ram == true' "$TOOLS_JSON" >/dev/null 2>&1; then
+        msg_ok "$(translate "Log2RAM already registered — updating to latest configuration")"
+    else
+    # ── First-time install: detect SSD/M.2 ─────────────────────────────────
     msg_info "$(translate "Checking if system disk is SSD or M.2...")"
 
     local is_ssd=false
@@ -631,6 +591,8 @@ install_log2ram_auto() {
             return 0
         fi
     fi
+
+    fi  # end first-time install block
 
     msg_info "$(translate "Cleaning previous Log2RAM installation...")"
 
@@ -723,7 +685,7 @@ L2R_BIN="$(command -v log2ram || true)"
 SIZE_MiB="$(grep -E '^SIZE=' "$CONF_FILE" 2>/dev/null | cut -d'=' -f2 | tr -dc '0-9')"
 [[ -z "$SIZE_MiB" ]] && SIZE_MiB=128
 LIMIT_BYTES=$(( SIZE_MiB * 1024 * 1024 ))
-THRESHOLD_BYTES=$(( LIMIT_BYTES * 90 / 100 ))
+THRESHOLD_BYTES=$(( LIMIT_BYTES * 95 / 100 ))
 
 USED_BYTES="$(df -B1 --output=used /var/log 2>/dev/null | tail -1 | tr -dc '0-9')"
 [[ -z "$USED_BYTES" ]] && exit 0
@@ -743,13 +705,15 @@ EOF
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=""
-*/5 * * * * root /usr/local/bin/log2ram-check.sh >/dev/null 2>&1
+# Runs every 10 min starting at :03 to avoid overlap with debian-sa1 (:00/:10/:20...)
+# nice -n 19 + ionice -c 3 ensures minimum CPU/IO priority (no visible spikes)
+3-59/10 * * * * root nice -n 19 ionice -c 3 /usr/local/bin/log2ram-check.sh >/dev/null 2>&1
 EOF
     chmod 0644 /etc/cron.d/log2ram-auto-sync
     chown root:root /etc/cron.d/log2ram-auto-sync
 
     systemctl restart cron >/dev/null 2>&1 || true
-    msg_ok "$(translate "Auto-sync enabled when /var/log exceeds 90% of") $LOG2RAM_SIZE"
+    msg_ok "$(translate "Auto-sync enabled when /var/log exceeds 95% of") $LOG2RAM_SIZE"
 
 
     msg_info "$(translate "Adjusting systemd-journald limits to match Log2RAM size...")"
@@ -780,15 +744,12 @@ Storage=persistent
 SplitMode=none
 RateLimitIntervalSec=30s
 RateLimitBurst=1000
-ForwardToSyslog=no
-ForwardToWall=no
-Seal=no
-Compress=yes
-SystemMaxUse=${USE_MB}M
 SystemKeepFree=${KEEP_MB}M
 RuntimeMaxUse=${RUNTIME_MB}M
-MaxLevelStore=warning
-MaxLevelSyslog=warning
+# MaxLevelStore=info: required for ProxMenux Monitor log display and Fail2Ban detection.
+# Using "warning" silently discards most system logs making date filters useless.
+MaxLevelStore=info
+MaxLevelSyslog=info
 MaxLevelKMsg=warning
 MaxLevelConsole=notice
 MaxLevelWall=crit
@@ -824,27 +785,27 @@ EOF
 setup_persistent_network() {
     local LINK_DIR="/etc/systemd/network"
     local BACKUP_DIR="/etc/systemd/network/backup-$(date +%Y%m%d-%H%M%S)"
-    
+    local pve_version
+    pve_version=$(pveversion 2>/dev/null | grep -oP 'pve-manager/\K[0-9]+' | head -1)
 
- 
     msg_info "$(translate "Setting up persistent network interfaces")"
     sleep 2
 
     mkdir -p "$LINK_DIR"
-    
+
     if ls "$LINK_DIR"/*.link >/dev/null 2>&1; then
         mkdir -p "$BACKUP_DIR"
         cp "$LINK_DIR"/*.link "$BACKUP_DIR"/ 2>/dev/null || true
     fi
-    
+
     local count=0
     for iface in $(ls /sys/class/net/ | grep -vE "lo|docker|veth|br-|vmbr|tap|fwpr|fwln|virbr|bond|cilium|zt|wg"); do
         if [[ -e "/sys/class/net/$iface/device" ]] || [[ -e "/sys/class/net/$iface/phy80211" ]]; then
             local MAC=$(cat /sys/class/net/$iface/address 2>/dev/null)
-            
+
             if [[ "$MAC" =~ ^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$ ]]; then
                 local LINK_FILE="$LINK_DIR/10-$iface.link"
-                
+
                 cat > "$LINK_FILE" <<EOF
 [Match]
 MACAddress=$MAC
@@ -857,15 +818,22 @@ EOF
             fi
         fi
     done
-    
+
     if [[ $count -gt 0 ]]; then
         msg_ok "$(translate "Created persistent names for") $count $(translate "interfaces")"
+        # In PVE9, systemd-networkd is the native network backend and udev processes
+        # .link files directly. Reloading udev rules makes the new .link files effective
+        # immediately for any interface added later (hotplug, new NICs) without waiting
+        # for a full reboot. On PVE8 (ifupdown2), names are resolved at boot anyway.
+        if [[ "$pve_version" -ge 9 ]]; then
+            udevadm control --reload-rules 2>/dev/null || true
+            msg_ok "$(translate "PVE9: udev rules reloaded — new interfaces will get correct names without reboot")"
+        fi
         msg_ok "$(translate "Changes will apply after reboot.")"
     else
         msg_warn "$(translate "No physical interfaces found")"
     fi
     register_tool "persistent_network" true
-
 }
 
 
@@ -884,7 +852,6 @@ run_complete_optimization() {
     #configure_time_sync
     skip_apt_languages
     increase_system_limits
-    configure_entropy
     optimize_memory_settings
     configure_kernel_panic
     apply_network_optimizations

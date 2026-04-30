@@ -69,22 +69,6 @@ uninstall_fastfetch() {
 
 ################################################################
 
-uninstall_figurine_() {
-    if ! command -v figurine &>/dev/null; then
-        msg_warn "$(translate "Figurine is not installed.")"
-        return 0
-    fi
-
-    msg_info2 "$(translate "Uninstalling Figurine...")"
-    rm -f /usr/local/bin/figurine
-    rm -f /etc/profile.d/figurine.sh
-    sed -i '/figurine/d' "$HOME/.bashrc" "$HOME/.profile" 2>/dev/null
-
-    msg_ok "$(translate "Figurine removed from system")"
-    register_tool "figurine" false
-}
-
-
 uninstall_figurine() {
     if ! command -v figurine &>/dev/null; then
         msg_warn "$(translate "Figurine is not installed.")"
@@ -149,124 +133,6 @@ uninstall_apt_upgrade() {
 }
 
 ################################################################
-
-uninstall_subscription_banner_() {
-    msg_info "$(translate "Restoring subscription banner...")"
-    
-    # Remove APT hook
-    rm -f /etc/apt/apt.conf.d/no-nag-script
-    
-    # Reinstall proxmox-widget-toolkit to restore original
-    apt --reinstall install proxmox-widget-toolkit -y >/dev/null 2>&1
-    
-    msg_ok "$(translate "Subscription banner restored")"
-    register_tool "subscription_banner" false
-}
-
-
-
-
-uninstall_subscription_banner__() {
-    msg_info "$(translate "Restoring subscription banner...")"
-    
-    local JS_FILE="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
-    local MOBILE_TPL="/usr/share/pve-manager/templates/index.html.tpl"
-    local PATCH_BIN="/usr/local/bin/pve-remove-nag.sh"
-    local BASE_DIR="/opt/pve-nag-buster"
-    local MIN_JS_FILE="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.min.js"
-    local GZ_FILE="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js.gz"
-    local MARK_MOBILE=" PVE9 Mobile Subscription Banner Removal "
-    
-    local restored=false
-    
-    # Remove APT hook (both old and new versions)
-    for hook in /etc/apt/apt.conf.d/*nag* /etc/apt/apt.conf.d/no-nag-script; do
-        if [[ -e "$hook" ]]; then
-            rm -f "$hook"
-            msg_ok "$(translate "Removed APT hook: $hook")"
-        fi
-    done
-    
-    # Remove patch script
-    if [[ -f "$PATCH_BIN" ]]; then
-        rm -f "$PATCH_BIN"
-        msg_ok "$(translate "Removed patch script: $PATCH_BIN")"
-    fi
-    
-    # Restore JavaScript file from backups (new script method)
-    if [[ -d "$BASE_DIR/backups" ]]; then
-        local latest_backup
-        latest_backup=$(ls -t "$BASE_DIR/backups"/proxmoxlib.js.backup.* 2>/dev/null | head -1)
-        if [[ -n "$latest_backup" && -f "$latest_backup" ]]; then
-            if [[ -s "$latest_backup" ]] && grep -q "Ext\|function" "$latest_backup" && ! grep -q $'\0' "$latest_backup"; then
-                cp -a "$latest_backup" "$JS_FILE"
-                msg_ok "$(translate "Restored from backup: $latest_backup")"
-                restored=true
-            fi
-        fi
-    fi
-    
-    # Restore from old script backups (if new method didn't work)
-    if [[ "$restored" == false ]]; then
-        local old_backup
-        old_backup=$(ls -t "${JS_FILE}".backup.pve9.* "${JS_FILE}".backup.* 2>/dev/null | head -1)
-        if [[ -n "$old_backup" && -f "$old_backup" ]]; then
-            if [[ -s "$old_backup" ]] && grep -q "Ext\|function" "$old_backup" && ! grep -q $'\0' "$old_backup"; then
-                cp -a "$old_backup" "$JS_FILE"
-                msg_ok "$(translate "Restored from old backup: $old_backup")"
-                restored=true
-            fi
-        fi
-    fi
-    
-    # Restore mobile template if patched
-    if [[ -f "$MOBILE_TPL" ]] && grep -q "$MARK_MOBILE" "$MOBILE_TPL"; then
-        local mobile_backup
-        mobile_backup=$(ls -t "$BASE_DIR/backups"/index.html.tpl.backup.* 2>/dev/null | head -1)
-        if [[ -n "$mobile_backup" && -f "$mobile_backup" ]]; then
-            cp -a "$mobile_backup" "$MOBILE_TPL"
-            msg_ok "$(translate "Restored mobile template from backup")"
-        else
-            # Remove the patch manually if no backup available
-            sed -i "/^$MARK_MOBILE$/,\$d" "$MOBILE_TPL"
-            msg_ok "$(translate "Removed mobile template patches")"
-        fi
-    fi
-    
-    # If no valid backups found, reinstall packages
-    if [[ "$restored" == false ]]; then
-        msg_info "$(translate "No valid backups found, reinstalling packages...")"
-        
-        if apt --reinstall install proxmox-widget-toolkit -y >/dev/null 2>&1; then
-            msg_ok "$(translate "Reinstalled proxmox-widget-toolkit")"
-            restored=true
-        else
-            msg_error "$(translate "Failed to reinstall proxmox-widget-toolkit")"
-        fi
-        
-        # Also try to reinstall pve-manager if mobile template was patched
-        if [[ -f "$MOBILE_TPL" ]] && grep -q "$MARK_MOBILE" "$MOBILE_TPL"; then
-            apt --reinstall install pve-manager -y >/dev/null 2>&1 || true
-        fi
-    fi
-    
-    rm -f "$MIN_JS_FILE" "$GZ_FILE" 2>/dev/null || true
-    find /var/cache/pve-manager/ -name "*.js*" -delete 2>/dev/null || true
-    find /var/lib/pve-manager/ -name "*.js*" -delete 2>/dev/null || true
-    find /var/cache/nginx/ -type f -delete 2>/dev/null || true
-        
-    register_tool "subscription_banner" false
-    
-    if [[ "$restored" == true ]]; then
-        msg_ok "$(translate "Subscription banner restored successfully")"
-        msg_ok "$(translate "Refresh your browser to see changes (server restart may be required)")"
-    else
-        msg_error "$(translate "Failed to restore subscription banner completely")"
-        return 1
-    fi
-}
-
-
 
 
 
@@ -577,9 +443,7 @@ uninstall_network_optimization() {
 
     local interfaces_file="/etc/network/interfaces"
     if [ -f "$interfaces_file" ]; then
-        if tail -1 "$interfaces_file" | grep -q "^source /etc/network/interfaces.d/\*$"; then
-            sed -i '$d' "$interfaces_file"
-        fi
+        sed -i '/^source \/etc\/network\/interfaces\.d\/\*/d' "$interfaces_file"
     fi
     
     rm -f /etc/sysctl.d/97-proxmenux-fwbr.conf \
@@ -610,8 +474,8 @@ uninstall_bashrc_custom() {
     else
         # Remove ProxMenux customizations manually
         if [ -f /root/.bashrc ]; then
-            # Remove our customization block
-            sed -i '/# ProxMenux customizations/,/source \/etc\/profile\.d\/bash_completion\.sh/d' /root/.bashrc
+            # Remove the customization block using the markers written by customize_bashrc
+            sed -i '/# BEGIN PMX_CORE_BASHRC/,/# END PMX_CORE_BASHRC/d' /root/.bashrc
         fi
         msg_ok "$(translate "ProxMenux customizations removed from bashrc")"
     fi
@@ -726,6 +590,57 @@ uninstall_persistent_network() {
 
 
 
+
+uninstall_vfio_iommu() {
+    msg_info2 "$(translate "Reverting IOMMU/VFIO configuration...")"
+    NECESSARY_REBOOT=1
+
+    # Remove VFIO modules from /etc/modules
+    local modules_file="/etc/modules"
+    if [ -f "$modules_file" ]; then
+        sed -i '/^vfio$/d;/^vfio_iommu_type1$/d;/^vfio_pci$/d;/^vfio_virqfd$/d' "$modules_file"
+        msg_ok "$(translate "VFIO modules removed from /etc/modules")"
+    fi
+
+    # Remove driver blacklists added by ProxMenux
+    local blacklist_file="/etc/modprobe.d/blacklist.conf"
+    if [ -f "$blacklist_file" ]; then
+        sed -i '/^blacklist nouveau$/d;/^blacklist lbm-nouveau$/d;/^blacklist radeon$/d;/^blacklist nvidia$/d;/^blacklist nvidiafb$/d;/^options nouveau modeset=0$/d' "$blacklist_file"
+        [ ! -s "$blacklist_file" ] && rm -f "$blacklist_file"
+        msg_ok "$(translate "Driver blacklist entries removed")"
+    fi
+
+    # Remove IOMMU kernel parameters
+    local cmdline_file="/etc/kernel/cmdline"
+    if [[ -f "$cmdline_file" ]] && grep -qE 'root=ZFS=|root=ZFS/' "$cmdline_file"; then
+        # systemd-boot / ZFS
+        if grep -qE 'intel_iommu=on|amd_iommu=on|iommu=pt|pcie_acs_override=' "$cmdline_file"; then
+            cp "$cmdline_file" "${cmdline_file}.bak.$(date +%Y%m%d_%H%M%S)"
+            sed -i -E 's/\b(intel_iommu=on|amd_iommu=on|iommu=pt|pcie_acs_override=[^ ]*)\b//g' "$cmdline_file"
+            sed -i -E 's/[[:space:]]+/ /g; s/^ //; s/ $//' "$cmdline_file"
+            command -v proxmox-boot-tool >/dev/null 2>&1 && proxmox-boot-tool refresh >/dev/null 2>&1 || true
+            msg_ok "$(translate "IOMMU parameters removed from /etc/kernel/cmdline")"
+        fi
+    else
+        # GRUB
+        local grub_file="/etc/default/grub"
+        if [[ -f "$grub_file" ]] && grep -qE 'intel_iommu=on|amd_iommu=on|iommu=pt|pcie_acs_override=' "$grub_file"; then
+            cp "$grub_file" "${grub_file}.bak.$(date +%Y%m%d_%H%M%S)"
+            sed -i -E 's/\b(intel_iommu=on|amd_iommu=on|iommu=pt|pcie_acs_override=[^ "]*)\b//g' "$grub_file"
+            awk -F\" 'BEGIN{OFS="\""} /GRUB_CMDLINE_LINUX_DEFAULT=/{gsub(/[[:space:]]+/," ",$2);sub(/^ /,"",$2);sub(/ $/,"",$2)}1' \
+                "$grub_file" > "${grub_file}.tmp" && mv "${grub_file}.tmp" "$grub_file"
+            update-grub >/dev/null 2>&1 || true
+            msg_ok "$(translate "IOMMU parameters removed from GRUB")"
+        fi
+    fi
+
+    update-initramfs -u -k all >/dev/null 2>&1 || true
+
+    msg_ok "$(translate "IOMMU/VFIO configuration reverted")"
+    register_tool "vfio_iommu" false
+}
+
+################################################################
 
 uninstall_amd_fixes() {
     msg_info2 "$(translate "Reverting AMD (Ryzen/EPYC) fixes...")"
@@ -926,6 +841,7 @@ show_uninstall_menu() {
             fastfetch) desc="Fastfetch";;
             log2ram) desc="Log2ram (SSD Protection)";;
             amd_fixes) desc="AMD CPU (Ryzen/EPYC) fixes";;
+            vfio_iommu) desc="IOMMU/VFIO PCI Passthrough";;
             persistent_network) desc="Setting persistent network interfaces";;
             *) desc="$tool";;
         esac

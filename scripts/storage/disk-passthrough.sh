@@ -6,8 +6,8 @@
 # Author      : MacRimi
 # Copyright   : (c) 2024 MacRimi
 # License     : (GPL-3.0) (https://github.com/MacRimi/ProxMenux/blob/main/LICENSE)
-# Version     : 1.0
-# Last Updated: 28/01/2025
+# Version     : 1.2
+# Last Updated: 12/04/2026
 # ==========================================================
 # Description:
 # This script allows users to assign physical disks to existing
@@ -20,6 +20,7 @@
 # - Ensures that disks are not already assigned to active VMs.
 # - Warns about disk sharing between multiple VMs to avoid data corruption.
 # - Configures the selected disks for the VM and verifies the assignment.
+# - Prefers persistent /dev/disk/by-id paths for assignment when available.
 #
 # The goal of this script is to simplify the process of assigning
 # physical disks to Proxmox VMs, reducing manual configurations
@@ -28,129 +29,181 @@
 
 
 # Configuration ============================================
-LOCAL_SCRIPTS="/usr/local/share/proxmenux/scripts"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_SCRIPTS_LOCAL="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCAL_SCRIPTS_DEFAULT="/usr/local/share/proxmenux/scripts"
+LOCAL_SCRIPTS="$LOCAL_SCRIPTS_DEFAULT"
 BASE_DIR="/usr/local/share/proxmenux"
-UTILS_FILE="$BASE_DIR/utils.sh"
-VENV_PATH="/opt/googletrans-env"
+UTILS_FILE="$LOCAL_SCRIPTS/utils.sh"
 
+if [[ -f "$LOCAL_SCRIPTS_LOCAL/utils.sh" ]]; then
+    LOCAL_SCRIPTS="$LOCAL_SCRIPTS_LOCAL"
+    UTILS_FILE="$LOCAL_SCRIPTS/utils.sh"
+elif [[ ! -f "$UTILS_FILE" ]]; then
+    UTILS_FILE="$BASE_DIR/utils.sh"
+fi
+
+# shellcheck source=/dev/null
 if [[ -f "$UTILS_FILE" ]]; then
     source "$UTILS_FILE"
 fi
+
+# shellcheck source=/dev/null
+if [[ -f "$LOCAL_SCRIPTS_LOCAL/global/vm_storage_helpers.sh" ]]; then
+    source "$LOCAL_SCRIPTS_LOCAL/global/vm_storage_helpers.sh"
+elif [[ -f "$LOCAL_SCRIPTS_DEFAULT/global/vm_storage_helpers.sh" ]]; then
+    source "$LOCAL_SCRIPTS_DEFAULT/global/vm_storage_helpers.sh"
+fi
+
+BACKTITLE="ProxMenux"
+UI_MENU_H=20
+UI_MENU_W=84
+UI_MENU_LIST_H=10
+UI_SHORT_MENU_H=16
+UI_SHORT_MENU_W=72
+UI_SHORT_MENU_LIST_H=6
+UI_MSG_H=10
+UI_MSG_W=72
+UI_YESNO_H=18
+UI_YESNO_W=86
+UI_RESULT_H=18
+UI_RESULT_W=86
+
 load_language
 initialize_cache
-# ==========================================================
 
+if ! command -v pveversion >/dev/null 2>&1; then
+    dialog --backtitle "$BACKTITLE" --title "$(translate "Error")" \
+        --msgbox "$(translate "This script must be run on a Proxmox host.")" 8 60
+    exit 1
+fi
+# ==========================================================
 
 
 get_disk_info() {
     local disk=$1
-    MODEL=$(lsblk -dn -o MODEL "$disk" | xargs)
-    SIZE=$(lsblk -dn -o SIZE "$disk" | xargs)
-    echo "$MODEL" "$SIZE"
+    local model size
+    model=$(lsblk -dn -o MODEL "$disk" | xargs)
+    size=$(lsblk -dn -o SIZE "$disk" | xargs)
+    [[ -z "$model" ]] && model="Unknown"
+    printf '%s\t%s\n' "$model" "$size"
+}
+
+get_all_disk_paths() {
+    local disk="$1"
+    local real_path
+    real_path=$(readlink -f "$disk" 2>/dev/null)
+
+    [[ -n "$disk" ]] && echo "$disk"
+    [[ -n "$real_path" ]] && echo "$real_path"
+
+    local link
+    for link in /dev/disk/by-id/* /dev/disk/by-path/*; do
+        [[ -e "$link" ]] || continue
+        [[ "$(readlink -f "$link" 2>/dev/null)" == "$real_path" ]] || continue
+        echo "$link"
+    done | sort -u
+}
+
+get_preferred_disk_path() {
+    local disk="$1"
+    local real_path
+    real_path=$(readlink -f "$disk" 2>/dev/null)
+    [[ -z "$real_path" ]] && { echo "$disk"; return 0; }
+
+    local best="" best_score=99999
+    local link name score
+    for link in /dev/disk/by-id/*; do
+        [[ -e "$link" ]] || continue
+        [[ "$(readlink -f "$link" 2>/dev/null)" == "$real_path" ]] || continue
+        name=$(basename "$link")
+        [[ "$name" == *-part* ]] && continue
+
+        case "$name" in
+            ata-*|scsi-*|nvme-*) score=100 ;;
+            wwn-*) score=200 ;;
+            *) score=300 ;;
+        esac
+        score=$((score + ${#name}))
+        if (( score < best_score )); then
+            best="$link"
+            best_score=$score
+        fi
+    done
+
+    if [[ -n "$best" ]]; then
+        echo "$best"
+    else
+        echo "$disk"
+    fi
+}
+
+disk_referenced_in_config() {
+    local config_text="$1"
+    local disk="$2"
+    local alias
+    while read -r alias; do
+        [[ -z "$alias" ]] && continue
+        if grep -Fq "$alias" <<< "$config_text"; then
+            return 0
+        fi
+    done < <(get_all_disk_paths "$disk")
+    return 1
 }
 
 
+# ── DIALOG PHASE ──────────────────────────────────────────────────────────────
+
 VM_LIST=$(qm list | awk 'NR>1 {print $1, $2}')
 if [ -z "$VM_LIST" ]; then
-    whiptail --title "$(translate "Error")" --msgbox "$(translate "No VMs available in the system.")" 8 40
+    dialog --backtitle "$BACKTITLE" \
+           --title "$(translate "Error")" \
+           --msgbox "$(translate "No VMs available in the system.")" $UI_MSG_H $UI_MSG_W
     exit 1
 fi
 
-
-VMID=$(whiptail --title "$(translate "Select VM")" --menu "$(translate "Select the VM to which you want to add disks:")" 15 60 8 $VM_LIST 3>&1 1>&2 2>&3)
+# shellcheck disable=SC2086
+VMID=$(dialog --backtitle "$BACKTITLE" \
+              --title "$(translate "Select VM")" \
+              --menu "$(translate "Select the VM to which you want to add disks:")" $UI_MENU_H $UI_MENU_W $UI_MENU_LIST_H \
+              $VM_LIST \
+              2>&1 >/dev/tty)
 
 if [ -z "$VMID" ]; then
-    whiptail --title "$(translate "Error")" --msgbox "$(translate "No VM was selected.")" 8 40
+    dialog --backtitle "$BACKTITLE" \
+           --title "$(translate "Error")" \
+           --msgbox "$(translate "No VM was selected.")" $UI_MSG_H $UI_MSG_W
     exit 1
 fi
 
 VMID=$(echo "$VMID" | tr -d '"')
 
-
-msg_ok "$(translate "VM selected successfully.")"
-
-
 VM_STATUS=$(qm status "$VMID" | awk '{print $2}')
 if [ "$VM_STATUS" == "running" ]; then
-    whiptail --title "$(translate "Warning")" --msgbox "$(translate "The VM is powered on. Turn it off before adding disks.")" 12 60
+    dialog --backtitle "$BACKTITLE" \
+           --title "$(translate "Warning")" \
+           --msgbox "$(translate "The VM is powered on. Turn it off before adding disks.")" $UI_MSG_H $UI_MSG_W
     exit 1
 fi
 
 
-##########################################
-
+# ── TERMINAL PHASE 1: detect disks ────────────────────────────────────────────
+show_proxmenux_logo
+msg_title "$(translate "Import Disk to VM")"
+msg_ok "$(translate "VM $VMID selected successfully.")"
 msg_info "$(translate "Detecting available disks...")"
 
-USED_DISKS=$(lsblk -n -o PKNAME,TYPE | grep 'lvm' | awk '{print "/dev/" $1}')
-MOUNTED_DISKS=$(lsblk -ln -o NAME,MOUNTPOINT | awk '$2!="" {print "/dev/" $1}')
-
-ZFS_DISKS=""
-ZFS_RAW=$(zpool list -v -H 2>/dev/null | awk '{print $1}' | grep -v '^NAME$' | grep -v '^-' | grep -v '^mirror')
-
-for entry in $ZFS_RAW; do
-
-    path=""
-    if [[ "$entry" == wwn-* || "$entry" == ata-* ]]; then
-        if [ -e "/dev/disk/by-id/$entry" ]; then
-            path=$(readlink -f "/dev/disk/by-id/$entry")
-        fi
-    elif [[ "$entry" == /dev/* ]]; then
-        path="$entry"
-    fi
-
-
-    if [ -n "$path" ]; then
-        base_disk=$(lsblk -no PKNAME "$path" 2>/dev/null)
-        if [ -n "$base_disk" ]; then
-            ZFS_DISKS+="/dev/$base_disk"$'\n'
-        fi
-    fi
-done
-
-ZFS_DISKS=$(echo "$ZFS_DISKS" | sort -u)
-
-
-is_disk_in_use() {
-    local disk="$1"
-
-
-    while read -r part fstype; do
-        case "$fstype" in
-            zfs_member|linux_raid_member)
-                return 0 ;;
-        esac
-
-        if echo "$MOUNTED_DISKS" | grep -q "/dev/$part"; then
-            return 0
-        fi
-    done < <(lsblk -ln -o NAME,FSTYPE "$disk" | tail -n +2)
-
-
-    if echo "$USED_DISKS" | grep -q "$disk" || echo "$ZFS_DISKS" | grep -q "$disk"; then
-        return 0
-    fi
-
-    return 1
-}
-
-
-
+_refresh_host_storage_cache
+VM_CONFIG=$(qm config "$VMID" 2>/dev/null | grep -vE '^\s*#|^description:')
 
 FREE_DISKS=()
 
-LVM_DEVICES=$(pvs --noheadings -o pv_name 2> >(grep -v 'File descriptor .* leaked') | xargs -n1 readlink -f | sort -u)
-RAID_ACTIVE=$(grep -Po 'md\d+\s*:\s*active\s+raid[0-9]+' /proc/mdstat | awk '{print $1}' | sort -u)
-
 while read -r DISK; do
-
     [[ "$DISK" =~ /dev/zd ]] && continue
 
-    INFO=($(get_disk_info "$DISK"))
-    MODEL="${INFO[@]::${#INFO[@]}-1}"
-    SIZE="${INFO[-1]}"
+    IFS=$'\t' read -r MODEL SIZE < <(get_disk_info "$DISK")
     LABEL=""
     SHOW_DISK=true
-
     IS_MOUNTED=false
     IS_RAID=false
     IS_ZFS=false
@@ -170,27 +223,10 @@ while read -r DISK; do
         IS_MOUNTED=true
     fi
 
-
-
     USED_BY=""
-    REAL_PATH=$(readlink -f "$DISK")
-    CONFIG_DATA=$(grep -vE '^\s*#' /etc/pve/qemu-server/*.conf /etc/pve/lxc/*.conf 2>/dev/null)
-
-    if grep -Fq "$REAL_PATH" <<< "$CONFIG_DATA"; then
+    if _disk_used_in_guest_configs "$DISK"; then
         USED_BY="⚠ $(translate "In use")"
-    else
-        for SYMLINK in /dev/disk/by-id/*; do
-            if [[ "$(readlink -f "$SYMLINK")" == "$REAL_PATH" ]]; then
-                if grep -Fq "$SYMLINK" <<< "$CONFIG_DATA"; then
-                    USED_BY="⚠ $(translate "In use")"
-                    break
-                fi
-            fi
-        done
     fi
-
-
-
 
     if $IS_RAID && grep -q "$DISK" <<< "$(cat /proc/mdstat)"; then
         if grep -q "active raid" /proc/mdstat; then
@@ -198,18 +234,23 @@ while read -r DISK; do
         fi
     fi
 
-
     if $IS_ZFS; then
         SHOW_DISK=false
     fi
 
+    # Catch whole-disk ZFS vdevs with no partitions (e.g. bare NVMe ZFS)
+    # The tail -n +2 trick misses them; ZFS_DISKS from _refresh_host_storage_cache covers them.
+    if [[ -n "$ZFS_DISKS" ]] && \
+       { grep -qFx "$DISK" <<< "$ZFS_DISKS" || \
+         { [[ -n "$REAL_PATH" ]] && grep -qFx "$REAL_PATH" <<< "$ZFS_DISKS"; }; }; then
+        SHOW_DISK=false
+    fi
 
     if $IS_MOUNTED; then
         SHOW_DISK=false
     fi
 
-
-    if qm config "$VMID" | grep -vE '^\s*#|^description:' | grep -q "$DISK"; then
+    if disk_referenced_in_config "$VM_CONFIG" "$DISK"; then
         SHOW_DISK=false
     fi
 
@@ -224,144 +265,188 @@ while read -r DISK; do
     fi
 done < <(lsblk -dn -e 7,11 -o PATH)
 
-
-
 if [ "${#FREE_DISKS[@]}" -eq 0 ]; then
-    cleanup
-    whiptail --title "$(translate "Error")" --msgbox "$(translate "No disks available for this VM.")" 8 40
-    clear
+    stop_spinner
+    dialog --backtitle "$BACKTITLE" \
+           --title "$(translate "Error")" \
+           --msgbox "$(translate "No disks available for this VM.")" $UI_MSG_H $UI_MSG_W
     exit 1
 fi
 
+stop_spinner
 msg_ok "$(translate "Available disks detected.")"
 
 
-
-######################################################
-
-
-
+# ── DIALOG PHASE: select disks + interface ────────────────────────────────────
 
 MAX_WIDTH=$(printf "%s\n" "${FREE_DISKS[@]}" | awk '{print length}' | sort -nr | head -n1)
 TOTAL_WIDTH=$((MAX_WIDTH + 20))
-
-if [ $TOTAL_WIDTH -lt 50 ]; then
-    TOTAL_WIDTH=50
+if [ $TOTAL_WIDTH -lt $UI_MENU_W ]; then
+    TOTAL_WIDTH=$UI_MENU_W
+fi
+if [ $TOTAL_WIDTH -gt 116 ]; then
+    TOTAL_WIDTH=116
 fi
 
-
-SELECTED=$(whiptail --title "$(translate "Select Disks")" --checklist \
-    "$(translate "Select the disks you want to add:")" 20 $TOTAL_WIDTH 10 "${FREE_DISKS[@]}" 3>&1 1>&2 2>&3)
+SELECTED=$(dialog --backtitle "$BACKTITLE" \
+    --title "$(translate "Select Disks")" \
+    --checklist "\n$(translate "Select the disks you want to add:")" $UI_MENU_H $TOTAL_WIDTH $UI_MENU_LIST_H \
+    "${FREE_DISKS[@]}" \
+    2>&1 >/dev/tty)
 
 if [ -z "$SELECTED" ]; then
-    whiptail --title "$(translate "Error")" --msgbox "$(translate "No disks were selected.")" 10 64
-    clear
+    dialog --backtitle "$BACKTITLE" \
+           --title "$(translate "Error")" \
+           --msgbox "$(translate "No disks were selected.")" $UI_MSG_H $UI_MSG_W
     exit 1
 fi
 
-msg_ok "$(translate "Disks selected successfully.")"
-
-
-INTERFACE=$(whiptail --title "$(translate "Interface Type")" --menu "$(translate "Select the interface type for all disks:")" 15 40 4 \
-    "sata" "$(translate "Add as SATA")" \
-    "scsi" "$(translate "Add as SCSI")" \
+INTERFACE=$(dialog --backtitle "$BACKTITLE" \
+    --title "$(translate "Interface Type")" \
+    --menu "$(translate "Select the interface type for all disks:")" $UI_SHORT_MENU_H $UI_SHORT_MENU_W $UI_SHORT_MENU_LIST_H \
+    "sata"   "$(translate "Add as SATA")" \
+    "scsi"   "$(translate "Add as SCSI")" \
     "virtio" "$(translate "Add as VirtIO")" \
-    "ide" "$(translate "Add as IDE")" 3>&1 1>&2 2>&3)
+    "ide"    "$(translate "Add as IDE")" \
+    2>&1 >/dev/tty)
 
 if [ -z "$INTERFACE" ]; then
-    whiptail --title "$(translate "Error")" --msgbox "$(translate "No interface type was selected for the disks.")" 8 40
-    clear
+    dialog --backtitle "$BACKTITLE" \
+           --title "$(translate "Error")" \
+           --msgbox "$(translate "No interface type was selected for the disks.")" $UI_MSG_H $UI_MSG_W
     exit 1
 fi
 
-msg_ok "$(translate "Interface type selected: $INTERFACE")"
 
-DISKS_ADDED=0
-ERROR_MESSAGES=""
-SUCCESS_MESSAGES=""
-
-
-
-msg_info "$(translate "Processing selected disks...")"
+# ── DIALOG PHASE: per-disk pre-check ──────────────────────────────────────────
+declare -a DISK_LIST=()
+declare -a DISK_DESCRIPTIONS=()
+declare -a DISK_ASSIGNED_TOS=()
+declare -a NVME_SKIPPED=()
 
 for DISK in $SELECTED; do
-    DISK=$(echo "$DISK" | tr -d '"')
+    DISK="${DISK//\"/}"
     DISK_INFO=$(get_disk_info "$DISK")
 
     ASSIGNED_TO=""
     RUNNING_VMS=""
     RUNNING_CTS=""
 
-  
     while read -r VM_ID VM_NAME; do
-        if [[ "$VM_ID" =~ ^[0-9]+$ ]] && qm config "$VM_ID" | grep -q "$DISK"; then
+        VM_CONFIG_RAW=$(qm config "$VM_ID" 2>/dev/null)
+        if [[ "$VM_ID" =~ ^[0-9]+$ ]] && disk_referenced_in_config "$VM_CONFIG_RAW" "$DISK"; then
             ASSIGNED_TO+="VM $VM_ID $VM_NAME\n"
-            VM_STATUS=$(qm status "$VM_ID" | awk '{print $2}')
-            if [ "$VM_STATUS" == "running" ]; then
-                RUNNING_VMS+="VM $VM_ID $VM_NAME\n"
-            fi
+            VM_STATUS_CHK=$(qm status "$VM_ID" | awk '{print $2}')
+            [[ "$VM_STATUS_CHK" == "running" ]] && RUNNING_VMS+="VM $VM_ID $VM_NAME\n"
         fi
     done < <(qm list | awk 'NR>1 {print $1, $2}')
 
-
     while read -r CT_ID CT_NAME; do
-        if [[ "$CT_ID" =~ ^[0-9]+$ ]] && pct config "$CT_ID" | grep -q "$DISK"; then
+        CT_CONFIG_RAW=$(pct config "$CT_ID" 2>/dev/null)
+        if [[ "$CT_ID" =~ ^[0-9]+$ ]] && disk_referenced_in_config "$CT_CONFIG_RAW" "$DISK"; then
             ASSIGNED_TO+="CT $CT_ID $CT_NAME\n"
-            CT_STATUS=$(pct status "$CT_ID" | awk '{print $2}')
-            if [ "$CT_STATUS" == "running" ]; then
-                RUNNING_CTS+="CT $CT_ID $CT_NAME\n"
-            fi
+            CT_STATUS_CHK=$(pct status "$CT_ID" | awk '{print $2}')
+            [[ "$CT_STATUS_CHK" == "running" ]] && RUNNING_CTS+="CT $CT_ID $CT_NAME\n"
         fi
-    done < <(pct list | awk 'NR>1 {print $1, $2}')
+    done < <(pct list | awk 'NR>1 {print $1, $3}')
 
     if [ -n "$RUNNING_VMS" ] || [ -n "$RUNNING_CTS" ]; then
-        ERROR_MESSAGES+="$(translate "The disk") $DISK_INFO $(translate "is currently in use by the following running VM(s) or CT(s):")\\n$RUNNING_VMS$RUNNING_CTS\\n\\n$(translate "You cannot add this disk while the VM or CT is running.")\\n$(translate "Please shut it down first and run this script again to add the disk.")\\n\\n"
+        dialog --backtitle "$BACKTITLE" \
+               --title "$(translate "Disk In Use")" \
+               --msgbox "$(translate "The disk") $DISK_INFO $(translate "is in use by the following running VM(s) or CT(s):")\\n$RUNNING_VMS$RUNNING_CTS\\n\\n$(translate "Stop them first and run this script again.")" $UI_RESULT_H $UI_RESULT_W
         continue
     fi
 
     if [ -n "$ASSIGNED_TO" ]; then
-        cleanup
-        whiptail --title "$(translate "Disk Already Assigned")" --yesno "$(translate "The disk") $DISK_INFO $(translate "is already assigned to the following VM(s) or CT(s):")\\n$ASSIGNED_TO\\n\\n$(translate "Do you want to continue anyway?")" 15 70
-        if [ $? -ne 0 ]; then
-            sleep 1
-            exec "$0"
+        if ! dialog --backtitle "$BACKTITLE" \
+               --title "$(translate "Disk Already Assigned")" \
+               --yesno "\n\n$(translate "The disk") $DISK_INFO $(translate "is already assigned to the following VM(s) or CT(s):")\\n$ASSIGNED_TO\\n\\n$(translate "Do you want to continue anyway?")" $UI_YESNO_H $UI_YESNO_W; then
+            continue
         fi
     fi
 
+    # NVMe: suggest PCIe passthrough for better performance
+    if [[ "$DISK" =~ /dev/nvme ]] || \
+       [[ "$(lsblk -dn -o TRAN "$DISK" 2>/dev/null | xargs)" == "nvme" ]]; then
+        NVME_CHOICE=$(dialog --backtitle "$BACKTITLE" \
+            --title "$(translate "NVMe Disk Detected")" \
+            --default-item "disk" \
+            --menu "\n$(translate "Adding this NVMe as a PCIe device (via 'Add Controller or NVMe PCIe to VM') gives better performance.")\n\n$(translate "How do you want to add it?")" \
+            $UI_YESNO_H $UI_YESNO_W 2 \
+            "disk" "$(translate "Add as disk (standard)")" \
+            "pci"  "$(translate "Skip — I will add it as PCIe device")" \
+            2>&1 >/dev/tty)
+        if [[ "$NVME_CHOICE" == "pci" ]]; then
+            NVME_SKIPPED+=("$DISK")
+            continue
+        fi
+    fi
+
+    DISK_LIST+=("$DISK")
+    DISK_DESCRIPTIONS+=("$DISK_INFO")
+    DISK_ASSIGNED_TOS+=("$ASSIGNED_TO")
+done
+
+if [ "${#DISK_LIST[@]}" -eq 0 ]; then
+    show_proxmenux_logo
+    msg_title "$(translate "Import Disk to VM")"
+    msg_warn "$(translate "No disks were configured for processing.")"
+    echo ""
+    msg_success "$(translate "Press Enter to return to menu...")"
+    read -r
+    exit 0
+fi
+
+
+# ── TERMINAL PHASE: execute all disk operations ───────────────────────────────
+show_proxmenux_logo
+msg_title "$(translate "Import Disk to VM")"
+msg_ok "$(translate "VM $VMID selected successfully.")"
+msg_ok "$(translate "Disks to process:") ${#DISK_LIST[@]}"
+for i in "${!DISK_LIST[@]}"; do
+    IFS=$'\t' read -r _desc_model _desc_size <<< "${DISK_DESCRIPTIONS[$i]}"
+    echo -e "${TAB}${BL}${DISK_LIST[$i]}  $_desc_model  $_desc_size${CL}"
+done
+if [[ ${#NVME_SKIPPED[@]} -gt 0 ]]; then
+    echo ""
+    msg_warn "$(translate "NVMe skipped (to add as PCIe use 'Add Controller or NVMe PCIe to VM'):")"
+    for _nvme in "${NVME_SKIPPED[@]}"; do
+        echo -e "${TAB}${BL}${_nvme}${CL}"
+    done
+fi
+echo ""
+msg_ok "$(translate "Interface type:") $INTERFACE"
+echo ""
+
+DISKS_ADDED=0
+
+for i in "${!DISK_LIST[@]}"; do
+    DISK="${DISK_LIST[$i]}"
+    ASSIGNED_TO="${DISK_ASSIGNED_TOS[$i]}"
+    IFS=$'\t' read -r _model _size <<< "${DISK_DESCRIPTIONS[$i]}"
 
     INDEX=0
     while qm config "$VMID" | grep -q "${INTERFACE}${INDEX}"; do
         ((INDEX++))
     done
 
-    RESULT=$(qm set "$VMID" -${INTERFACE}${INDEX} "$DISK" 2>&1)
-
-    if [ $? -eq 0 ]; then
-        MESSAGE="$(translate "The disk") $DISK_INFO $(translate "has been successfully added to VM") $VMID."
-        if [ -n "$ASSIGNED_TO" ]; then
-            MESSAGE+="\\n\\n$(translate "WARNING: This disk is also assigned to the following VM(s):")\\n$ASSIGNED_TO"
-            MESSAGE+="\\n$(translate "Make sure not to start VMs that share this disk at the same time to avoid data corruption.")"
-        fi
-        SUCCESS_MESSAGES+="$MESSAGE\\n\\n"
+    ASSIGN_PATH=$(get_preferred_disk_path "$DISK")
+    msg_info "$(translate "Adding") $_model $_size $(translate "as") ${INTERFACE}${INDEX}..."
+    if RESULT=$(qm set "$VMID" "-${INTERFACE}${INDEX}" "$ASSIGN_PATH" 2>&1); then
+        msg_ok "$(translate "Disk added as") ${INTERFACE}${INDEX} $(translate "using") $ASSIGN_PATH"
+        [[ -n "$ASSIGNED_TO" ]] && msg_warn "$(translate "WARNING: This disk is also assigned to:") $(echo -e "$ASSIGNED_TO" | tr '\n' ' ')"
         ((DISKS_ADDED++))
     else
-        ERROR_MESSAGES+="$(translate "Could not add disk") $DISK_INFO $(translate "to VM") $VMID.\\n$(translate "Error:") $RESULT\\n\\n"
+        msg_error "$(translate "Could not add") $_model $_size: $RESULT"
     fi
 done
 
-msg_ok "$(translate "Disk processing completed.")"
-
-
-
-if [ -n "$SUCCESS_MESSAGES" ]; then
-    MSG_LINES=$(echo "$SUCCESS_MESSAGES" | wc -l)
-    whiptail --title "$(translate "Successful Operations")" --msgbox "$SUCCESS_MESSAGES" 16 70
+echo ""
+if [ "$DISKS_ADDED" -gt 0 ]; then
+    msg_ok "$(translate "Completed.") $DISKS_ADDED $(translate "disk(s) added to VM") $VMID."
+else
+    msg_warn "$(translate "No disks were added.")"
 fi
-
-if [ -n "$ERROR_MESSAGES" ]; then
-    whiptail --title "$(translate "Warnings and Errors")" --msgbox "$ERROR_MESSAGES" 16 70
-fi
-
-
-
+msg_success "$(translate "Press Enter to return to menu...")"
+read -r
 exit 0

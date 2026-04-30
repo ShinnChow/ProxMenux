@@ -1,6 +1,6 @@
 {
   "name": "ProxMenux-Monitor",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "description": "Proxmox System Monitoring Dashboard",
   "private": true,
   "scripts": {

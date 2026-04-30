@@ -1,0 +1,4234 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import {
+  Shield, Lock, User, AlertCircle, CheckCircle, Info, LogOut, Key, Copy, Eye, EyeOff,
+  Trash2, RefreshCw, Clock, ShieldCheck, Globe, FileKey, AlertTriangle,
+  Flame, Bug, Search, Download, Power, PowerOff, Plus, Minus, Activity, Settings, Ban,
+  FileText, Printer, Play, BarChart3, TriangleAlert, ChevronDown, ArrowDownLeft, ArrowUpRight,
+  ChevronRight, Network, Zap, Pencil, Check, X,
+} from "lucide-react"
+import { getApiUrl, fetchApi } from "../lib/api-config"
+import { TwoFactorSetup } from "./two-factor-setup"
+import { ScriptTerminalModal } from "./script-terminal-modal"
+import { SecureGatewaySetup } from "./secure-gateway-setup"
+
+interface ApiTokenEntry {
+  id: string
+  name: string
+  token_prefix: string
+  created_at: string
+  expires_at: string
+  revoked: boolean
+}
+
+export function Security() {
+  const [authEnabled, setAuthEnabled] = useState(false)
+  const [totpEnabled, setTotpEnabled] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+
+  // Setup form state
+  const [showSetupForm, setShowSetupForm] = useState(false)
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+
+  // Change password form state
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmNewPassword, setConfirmNewPassword] = useState("")
+
+  const [show2FASetup, setShow2FASetup] = useState(false)
+  const [show2FADisable, setShow2FADisable] = useState(false)
+  const [disable2FAPassword, setDisable2FAPassword] = useState("")
+
+  // API Token state management
+  const [showApiTokenSection, setShowApiTokenSection] = useState(false)
+  const [apiToken, setApiToken] = useState("")
+  const [apiTokenVisible, setApiTokenVisible] = useState(false)
+  const [tokenPassword, setTokenPassword] = useState("")
+  const [tokenTotpCode, setTokenTotpCode] = useState("")
+  const [generatingToken, setGeneratingToken] = useState(false)
+  const [tokenCopied, setTokenCopied] = useState(false)
+
+  // Token list state
+  const [existingTokens, setExistingTokens] = useState<ApiTokenEntry[]>([])
+  const [loadingTokens, setLoadingTokens] = useState(false)
+  const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null)
+  const [tokenName, setTokenName] = useState("API Token")
+
+  // Proxmox Firewall state
+  const [firewallLoading, setFirewallLoading] = useState(true)
+  const [firewallData, setFirewallData] = useState<{
+    pve_firewall_installed: boolean
+    pve_firewall_active: boolean
+    cluster_fw_enabled: boolean
+    host_fw_enabled: boolean
+    rules_count: number
+    rules: Array<{ raw: string; direction?: string; action?: string; dport?: string; p?: string; source?: string; source_file?: string; section?: string; rule_index: number }>
+    monitor_port_open: boolean
+  } | null>(null)
+  const [firewallAction, setFirewallAction] = useState(false)
+  const [showAddRule, setShowAddRule] = useState(false)
+  const [newRule, setNewRule] = useState({
+    direction: "IN",
+    action: "ACCEPT",
+    protocol: "tcp",
+    dport: "",
+    sport: "",
+    source: "",
+    iface: "",
+    comment: "",
+    level: "host",
+  })
+  const [addingRule, setAddingRule] = useState(false)
+  const [deletingRuleIdx, setDeletingRuleIdx] = useState<number | null>(null)
+  const [expandedRuleKey, setExpandedRuleKey] = useState<string | null>(null)
+  const [editingRuleKey, setEditingRuleKey] = useState<string | null>(null)
+  const [editRule, setEditRule] = useState({
+    direction: "IN", action: "ACCEPT", protocol: "tcp",
+    dport: "", sport: "", source: "", iface: "", comment: "", level: "host",
+  })
+  const [savingRule, setSavingRule] = useState(false)
+  const [networkInterfaces, setNetworkInterfaces] = useState<{name: string, type: string, status: string}[]>([])
+
+  // Security Tools state
+  const [toolsLoading, setToolsLoading] = useState(true)
+  const [fail2banInfo, setFail2banInfo] = useState<{
+    installed: boolean; active: boolean; version: string; jails: string[]; banned_ips_count: number
+  } | null>(null)
+  const [lynisInfo, setLynisInfo] = useState<{
+    installed: boolean; version: string; last_scan: string | null; hardening_index: number | null
+  } | null>(null)
+  const [showFail2banInstaller, setShowFail2banInstaller] = useState(false)
+  const [showLynisInstaller, setShowLynisInstaller] = useState(false)
+  const [uninstallingFail2ban, setUninstallingFail2ban] = useState(false)
+  const [uninstallingLynis, setUninstallingLynis] = useState(false)
+  const [showFail2banUninstallConfirm, setShowFail2banUninstallConfirm] = useState(false)
+  const [showLynisUninstallConfirm, setShowLynisUninstallConfirm] = useState(false)
+
+  // Lynis audit state
+  interface LynisWarning { test_id: string; severity: string; description: string; solution: string; proxmox_context?: string; proxmox_expected?: boolean; proxmox_severity?: string }
+  interface LynisSuggestion { test_id: string; description: string; solution: string; details: string; proxmox_context?: string; proxmox_expected?: boolean; proxmox_severity?: string }
+  interface LynisCheck {
+    name: string; status: string; detail?: string
+  }
+  interface LynisSection {
+    name: string; checks: LynisCheck[]
+  }
+  interface LynisReport {
+    datetime_start: string; datetime_end: string; lynis_version: string
+    os_name: string; os_version: string; os_fullname: string; hostname: string
+    hardening_index: number | null; tests_performed: number
+    warnings: LynisWarning[]; suggestions: LynisSuggestion[]
+    categories: Record<string, { score?: number }>
+    installed_packages: number; kernel_version: string
+    firewall_active: boolean; malware_scanner: boolean
+    sections: LynisSection[]
+    proxmox_adjusted_score?: number
+    proxmox_expected_warnings?: number
+    proxmox_expected_suggestions?: number
+    proxmox_context_applied?: boolean
+  }
+  const [lynisAuditRunning, setLynisAuditRunning] = useState(false)
+  const [lynisReport, setLynisReport] = useState<LynisReport | null>(null)
+  const [lynisReportLoading, setLynisReportLoading] = useState(false)
+  const [lynisShowReport, setLynisShowReport] = useState(false)
+  const [lynisActiveTab, setLynisActiveTab] = useState<"overview" | "warnings" | "suggestions" | "checks">("overview")
+
+  // Fail2Ban detailed state
+  interface BannedIp {
+    ip: string
+    type: "local" | "external" | "unknown"
+  }
+  interface JailDetail {
+    name: string
+    currently_failed: number
+    total_failed: number
+    currently_banned: number
+    total_banned: number
+    banned_ips: BannedIp[]
+    findtime: string
+    bantime: string
+    maxretry: string
+  }
+  interface F2bEvent {
+    timestamp: string
+    jail: string
+    ip: string
+    action: "ban" | "unban" | "found"
+  }
+  const [f2bDetails, setF2bDetails] = useState<{
+    installed: boolean; active: boolean; version: string; jails: JailDetail[]
+  } | null>(null)
+  const [f2bActivity, setF2bActivity] = useState<F2bEvent[]>([])
+  const [f2bDetailsLoading, setF2bDetailsLoading] = useState(false)
+  const [f2bUnbanning, setF2bUnbanning] = useState<string | null>(null)
+  const [f2bActiveTab, setF2bActiveTab] = useState<"jails" | "activity">("jails")
+  const [f2bEditingJail, setF2bEditingJail] = useState<string | null>(null)
+  const [f2bJailConfig, setF2bJailConfig] = useState<{maxretry: string; bantime: string; findtime: string; permanent: boolean}>({
+    maxretry: "", bantime: "", findtime: "", permanent: false,
+  })
+  const [f2bSavingConfig, setF2bSavingConfig] = useState(false)
+  const [f2bApplyingJails, setF2bApplyingJails] = useState(false)
+
+  // SSL/HTTPS state
+  const [sslEnabled, setSslEnabled] = useState(false)
+  const [sslSource, setSslSource] = useState<"none" | "proxmox" | "custom">("none")
+  const [sslCertPath, setSslCertPath] = useState("")
+  const [sslKeyPath, setSslKeyPath] = useState("")
+  const [proxmoxCertAvailable, setProxmoxCertAvailable] = useState(false)
+  const [proxmoxCertInfo, setProxmoxCertInfo] = useState<{subject?: string; expires?: string; issuer?: string; is_self_signed?: boolean} | null>(null)
+  const [loadingSsl, setLoadingSsl] = useState(true)
+  const [configuringSsl, setConfiguringSsl] = useState(false)
+  const [sslRestarting, setSslRestarting] = useState(false)
+  const [showCustomCertForm, setShowCustomCertForm] = useState(false)
+  const [customCertPath, setCustomCertPath] = useState("")
+  const [customKeyPath, setCustomKeyPath] = useState("")
+
+  useEffect(() => {
+    checkAuthStatus()
+    loadApiTokens()
+    loadSslStatus()
+    loadFirewallStatus()
+    loadNetworkInterfaces()
+    loadSecurityTools()
+  }, [])
+
+  const loadFirewallStatus = async () => {
+    try {
+      setFirewallLoading(true)
+      const data = await fetchApi("/api/security/firewall/status")
+      if (data.success) {
+        setFirewallData({
+          pve_firewall_installed: data.pve_firewall_installed,
+          pve_firewall_active: data.pve_firewall_active,
+          cluster_fw_enabled: data.cluster_fw_enabled,
+          host_fw_enabled: data.host_fw_enabled,
+          rules_count: data.rules_count,
+          rules: data.rules || [],
+          monitor_port_open: data.monitor_port_open,
+        })
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setFirewallLoading(false)
+    }
+  }
+
+  const loadNetworkInterfaces = async () => {
+    try {
+      const data = await fetchApi("/api/network")
+      // The API returns interfaces in separate arrays: physical_interfaces, bridge_interfaces, etc.
+      // The generic "interfaces" array only holds uncategorized types and is usually empty.
+      const all = [
+        ...(data.physical_interfaces || []),
+        ...(data.bridge_interfaces || []),
+        ...(data.interfaces || []),
+      ].sort((a: any, b: any) => a.name.localeCompare(b.name))
+      setNetworkInterfaces(all)
+    } catch {
+      // Silently fail - select will just show "Any interface"
+    }
+  }
+
+  const loadSecurityTools = async () => {
+    try {
+      setToolsLoading(true)
+      const data = await fetchApi("/api/security/tools")
+      if (data.success && data.tools) {
+        setFail2banInfo(data.tools.fail2ban || null)
+        setLynisInfo(data.tools.lynis || null)
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setToolsLoading(false)
+    }
+  }
+
+  const handleUninstallFail2ban = async () => {
+    setUninstallingFail2ban(true)
+    setError("")
+    setSuccess("")
+    setShowFail2banUninstallConfirm(false)
+    try {
+      const data = await fetchApi("/api/security/fail2ban/uninstall", {
+        method: "POST",
+      })
+      if (data.success) {
+        setSuccess(data.message || "Fail2Ban has been uninstalled")
+        loadSecurityTools()
+        setF2bDetails(null)
+      } else {
+        setError(data.message || "Failed to uninstall Fail2Ban")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to uninstall Fail2Ban")
+    } finally {
+      setUninstallingFail2ban(false)
+    }
+  }
+
+  const handleUninstallLynis = async () => {
+    setUninstallingLynis(true)
+    setError("")
+    setSuccess("")
+    setShowLynisUninstallConfirm(false)
+    try {
+      const data = await fetchApi("/api/security/lynis/uninstall", {
+        method: "POST",
+      })
+      if (data.success) {
+        setSuccess(data.message || "Lynis has been uninstalled")
+        loadSecurityTools()
+        setLynisReport(null)
+      } else {
+        setError(data.message || "Failed to uninstall Lynis")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to uninstall Lynis")
+    } finally {
+      setUninstallingLynis(false)
+    }
+  }
+
+  const loadFail2banDetails = async () => {
+    try {
+      setF2bDetailsLoading(true)
+      const [detailsRes, activityRes] = await Promise.all([
+        fetchApi("/api/security/fail2ban/details"),
+        fetchApi("/api/security/fail2ban/activity"),
+      ])
+      if (detailsRes.success) {
+        setF2bDetails({
+          installed: detailsRes.installed,
+          active: detailsRes.active,
+          version: detailsRes.version,
+          jails: detailsRes.jails || [],
+        })
+      }
+      if (activityRes.success) {
+        setF2bActivity(activityRes.events || [])
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setF2bDetailsLoading(false)
+    }
+  }
+
+  const handleUnbanIp = async (jail: string, ip: string) => {
+    const key = `${jail}:${ip}`
+    setF2bUnbanning(key)
+    setError("")
+    setSuccess("")
+    try {
+      const data = await fetchApi("/api/security/fail2ban/unban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jail, ip }),
+      })
+      if (data.success) {
+        setSuccess(data.message || `IP ${ip} unbanned from ${jail}`)
+        loadFail2banDetails()
+        loadSecurityTools()
+      } else {
+        setError(data.message || "Failed to unban IP")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to unban IP")
+    } finally {
+      setF2bUnbanning(null)
+    }
+  }
+
+  const handleApplyMissingJails = async () => {
+    setF2bApplyingJails(true)
+    setError("")
+    setSuccess("")
+    try {
+      const data = await fetchApi("/api/security/fail2ban/apply-jails", {
+        method: "POST",
+      })
+      if (data.success) {
+        setSuccess(data.message || "Missing jails applied successfully")
+        // Reload to see the new jails
+        await loadFail2banDetails()
+        loadSecurityTools()
+      } else {
+        setError(data.message || "Failed to apply missing jails")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to apply missing jails")
+    } finally {
+      setF2bApplyingJails(false)
+    }
+  }
+
+  // --- Lynis audit handlers ---
+  const handleRunLynisAudit = async () => {
+    setLynisAuditRunning(true)
+    setError("")
+    setSuccess("")
+    try {
+      const data = await fetchApi("/api/security/lynis/run", { method: "POST" })
+      if (data.success) {
+        // Poll for completion
+        const pollInterval = setInterval(async () => {
+          try {
+            const status = await fetchApi("/api/security/lynis/status")
+            if (!status.running) {
+              clearInterval(pollInterval)
+              setLynisAuditRunning(false)
+              if (status.progress === "completed") {
+                setSuccess("Security audit completed successfully")
+                loadSecurityTools()
+                loadLynisReport()
+              } else {
+                setError(status.progress || "Audit failed")
+              }
+            }
+          } catch {
+            clearInterval(pollInterval)
+            setLynisAuditRunning(false)
+          }
+        }, 3000)
+      } else {
+        setError(data.message || "Failed to start audit")
+        setLynisAuditRunning(false)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start audit")
+      setLynisAuditRunning(false)
+    }
+  }
+
+  const loadLynisReport = async () => {
+    setLynisReportLoading(true)
+    try {
+      const data = await fetchApi("/api/security/lynis/report")
+      if (data.success && data.report) {
+        setLynisReport(data.report)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLynisReportLoading(false)
+    }
+  }
+
+  // Load report on mount if lynis is installed
+  useEffect(() => {
+    if (lynisInfo?.installed && lynisInfo?.last_scan) {
+      loadLynisReport()
+    }
+  }, [lynisInfo?.installed, lynisInfo?.last_scan])
+
+  const openJailConfig = (jail: JailDetail) => {
+    const bt = parseInt(jail.bantime, 10)
+    const isPermanent = bt === -1
+    setF2bEditingJail(jail.name)
+    setF2bJailConfig({
+      maxretry: jail.maxretry,
+      bantime: isPermanent ? "" : jail.bantime,
+      findtime: jail.findtime,
+      permanent: isPermanent,
+    })
+  }
+
+  const handleSaveJailConfig = async () => {
+    if (!f2bEditingJail) return
+    setF2bSavingConfig(true)
+    setError("")
+    setSuccess("")
+    try {
+      const payload: Record<string, string | number> = { jail: f2bEditingJail }
+      if (f2bJailConfig.maxretry) payload.maxretry = parseInt(f2bJailConfig.maxretry, 10)
+      if (f2bJailConfig.permanent) {
+        payload.bantime = -1
+      } else if (f2bJailConfig.bantime) {
+        payload.bantime = parseInt(f2bJailConfig.bantime, 10)
+      }
+      if (f2bJailConfig.findtime) payload.findtime = parseInt(f2bJailConfig.findtime, 10)
+
+      const data = await fetchApi("/api/security/fail2ban/jail/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (data.success) {
+        setSuccess(data.message || "Jail configuration updated")
+        setF2bEditingJail(null)
+        loadFail2banDetails()
+      } else {
+        setError(data.message || "Failed to update jail config")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update jail config")
+    } finally {
+      setF2bSavingConfig(false)
+    }
+  }
+
+  // Load fail2ban details when basic info shows it's installed and active
+  useEffect(() => {
+    if (fail2banInfo?.installed && fail2banInfo?.active) {
+      loadFail2banDetails()
+    }
+  }, [fail2banInfo?.installed, fail2banInfo?.active])
+
+  const formatBanTime = (seconds: string) => {
+    const s = parseInt(seconds, 10)
+    if (s === -1) return "Permanent"
+    if (isNaN(s) || s <= 0) return seconds
+    if (s < 60) return `${s}s`
+    if (s < 3600) return `${Math.floor(s / 60)}m`
+    if (s < 86400) return `${Math.floor(s / 3600)}h`
+    return `${Math.floor(s / 86400)}d`
+  }
+
+  const handleAddRule = async () => {
+    if (!newRule.dport && !newRule.source) {
+      setError("Please specify at least a destination port or source address")
+      return
+    }
+    setAddingRule(true)
+    setError("")
+    setSuccess("")
+    try {
+      const data = await fetchApi("/api/security/firewall/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newRule),
+      })
+      if (data.success) {
+        setSuccess(data.message || "Rule added successfully")
+        setShowAddRule(false)
+        setNewRule({ direction: "IN", action: "ACCEPT", protocol: "tcp", dport: "", sport: "", source: "", iface: "", comment: "", level: "host" })
+        loadFirewallStatus()
+      } else {
+        setError(data.message || "Failed to add rule")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add rule")
+    } finally {
+      setAddingRule(false)
+    }
+  }
+
+  const handleDeleteRule = async (ruleIndex: number, level: string) => {
+    setDeletingRuleIdx(ruleIndex)
+    setError("")
+    setSuccess("")
+    try {
+      const data = await fetchApi("/api/security/firewall/rules", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rule_index: ruleIndex, level }),
+      })
+      if (data.success) {
+        setSuccess(data.message || "Rule deleted")
+        loadFirewallStatus()
+      } else {
+        setError(data.message || "Failed to delete rule")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete rule")
+    } finally {
+      setDeletingRuleIdx(null)
+    }
+  }
+
+  const startEditRule = (rule: any) => {
+    const ruleKey = `${rule.source_file}-${rule.rule_index}`
+    const comment = rule.raw?.includes("#") ? rule.raw.split("#").slice(1).join("#").trim() : ""
+    setEditingRuleKey(ruleKey)
+    setEditRule({
+      direction: rule.direction || "IN",
+      action: rule.action || "ACCEPT",
+      protocol: rule.p || "tcp",
+      dport: rule.dport || "",
+      sport: "",
+      source: rule.source || "",
+      iface: rule.i || "",
+      comment,
+      level: rule.source_file || "host",
+    })
+  }
+
+  const handleSaveEditRule = async (oldRuleIndex: number, oldLevel: string) => {
+    setSavingRule(true)
+    setError("")
+    setSuccess("")
+    try {
+      const data = await fetchApi("/api/security/firewall/rules/edit", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rule_index: oldRuleIndex,
+          level: oldLevel,
+          new_rule: editRule,
+        }),
+      })
+      if (data.success) {
+        setSuccess(data.message || "Rule updated successfully")
+        setEditingRuleKey(null)
+        loadFirewallStatus()
+      } else {
+        setError(data.message || "Failed to update rule")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update rule")
+    } finally {
+      setSavingRule(false)
+    }
+  }
+
+  const handleFirewallToggle = async (level: "host" | "cluster", enable: boolean) => {
+    setFirewallAction(true)
+    setError("")
+    setSuccess("")
+    try {
+      const endpoint = enable ? "/api/security/firewall/enable" : "/api/security/firewall/disable"
+      const data = await fetchApi(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level }),
+      })
+      if (data.success) {
+        setSuccess(data.message || `Firewall ${enable ? "enabled" : "disabled"} at ${level} level`)
+        loadFirewallStatus()
+      } else {
+        setError(data.message || "Failed to update firewall")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update firewall")
+    } finally {
+      setFirewallAction(false)
+    }
+  }
+
+  const handleMonitorPortToggle = async (add: boolean) => {
+    setFirewallAction(true)
+    setError("")
+    setSuccess("")
+    try {
+      const data = await fetchApi("/api/security/firewall/monitor-port", {
+        method: add ? "POST" : "DELETE",
+      })
+      if (data.success) {
+        setSuccess(data.message || `Monitor port rule ${add ? "added" : "removed"}`)
+        loadFirewallStatus()
+      } else {
+        setError(data.message || "Failed to update monitor port rule")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update monitor port rule")
+    } finally {
+      setFirewallAction(false)
+    }
+  }
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch(getApiUrl("/api/auth/status"))
+      
+      // Check if response is valid JSON before parsing
+      if (!response.ok) return
+      
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) return
+      
+      const data = await response.json()
+      setAuthEnabled(data.auth_enabled || false)
+      setTotpEnabled(data.totp_enabled || false)
+    } catch {
+      // API not available (preview environment)
+    }
+  }
+
+  const handleEnableAuth = async () => {
+    setError("")
+    setSuccess("")
+
+    if (!username || !password) {
+      setError("Please fill in all fields")
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
+      return
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const response = await fetch(getApiUrl("/api/auth/setup"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          password,
+          enable_auth: true,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to enable authentication")
+      }
+
+      localStorage.setItem("proxmenux-auth-token", data.token)
+      localStorage.setItem("proxmenux-auth-setup-complete", "true")
+
+      setSuccess("Authentication enabled successfully!")
+      setAuthEnabled(true)
+      setShowSetupForm(false)
+      setUsername("")
+      setPassword("")
+      setConfirmPassword("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to enable authentication")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDisableAuth = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to disable authentication? This will remove password protection from your dashboard.",
+      )
+    ) {
+      return
+    }
+
+    setLoading(true)
+    setError("")
+    setSuccess("")
+
+    try {
+      const token = localStorage.getItem("proxmenux-auth-token")
+      const response = await fetch(getApiUrl("/api/auth/disable"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to disable authentication")
+      }
+
+      localStorage.removeItem("proxmenux-auth-token")
+      localStorage.removeItem("proxmenux-auth-setup-complete")
+
+      setSuccess("Authentication disabled successfully! Reloading...")
+
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to disable authentication. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    setError("")
+    setSuccess("")
+
+    if (!currentPassword || !newPassword) {
+      setError("Please fill in all fields")
+      return
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setError("New passwords do not match")
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const response = await fetch(getApiUrl("/api/auth/change-password"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("proxmenux-auth-token")}`,
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to change password")
+      }
+
+      if (data.token) {
+        localStorage.setItem("proxmenux-auth-token", data.token)
+      }
+
+      setSuccess("Password changed successfully!")
+      setShowChangePassword(false)
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmNewPassword("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change password")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDisable2FA = async () => {
+    setError("")
+    setSuccess("")
+
+    if (!disable2FAPassword) {
+      setError("Please enter your password")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const token = localStorage.getItem("proxmenux-auth-token")
+      const response = await fetch(getApiUrl("/api/auth/totp/disable"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ password: disable2FAPassword }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to disable 2FA")
+      }
+
+      setSuccess("2FA disabled successfully!")
+      setTotpEnabled(false)
+      setShow2FADisable(false)
+      setDisable2FAPassword("")
+      checkAuthStatus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to disable 2FA")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem("proxmenux-auth-token")
+    localStorage.removeItem("proxmenux-auth-setup-complete")
+    window.location.reload()
+  }
+
+  const loadApiTokens = async () => {
+    try {
+      setLoadingTokens(true)
+      const data = await fetchApi("/api/auth/api-tokens")
+      if (data.success) {
+        setExistingTokens(data.tokens || [])
+      }
+    } catch {
+      // Silently fail - tokens section is optional
+    } finally {
+      setLoadingTokens(false)
+    }
+  }
+
+  const handleRevokeToken = async (tokenId: string) => {
+    if (!confirm("Are you sure you want to revoke this token? Any integration using it will stop working immediately.")) {
+      return
+    }
+
+    setRevokingTokenId(tokenId)
+    setError("")
+    setSuccess("")
+
+    try {
+      const data = await fetchApi(`/api/auth/api-tokens/${tokenId}`, {
+        method: "DELETE",
+      })
+
+      if (data.success) {
+        setSuccess("Token revoked successfully")
+        setExistingTokens((prev) => prev.filter((t) => t.id !== tokenId))
+      } else {
+        setError(data.message || "Failed to revoke token")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke token")
+    } finally {
+      setRevokingTokenId(null)
+    }
+  }
+
+  const handleGenerateApiToken = async () => {
+    setError("")
+    setSuccess("")
+
+    if (!tokenPassword) {
+      setError("Please enter your password")
+      return
+    }
+
+    if (totpEnabled && !tokenTotpCode) {
+      setError("Please enter your 2FA code")
+      return
+    }
+
+    setGeneratingToken(true)
+
+    try {
+      const data = await fetchApi("/api/auth/generate-api-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: tokenPassword,
+          totp_token: totpEnabled ? tokenTotpCode : undefined,
+          token_name: tokenName || "API Token",
+        }),
+      })
+
+      if (!data.success) {
+        setError(data.message || data.error || "Failed to generate API token")
+        return
+      }
+
+      if (!data.token) {
+        setError("No token received from server")
+        return
+      }
+
+      setApiToken(data.token)
+      setSuccess("API token generated successfully! Make sure to copy it now as you won't be able to see it again.")
+      setTokenPassword("")
+      setTokenTotpCode("")
+      setTokenName("API Token")
+      loadApiTokens()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate API token. Please try again.")
+    } finally {
+      setGeneratingToken(false)
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    // Preferred path (HTTPS / localhost). On plain HTTP the Promise rejects,
+    // so we catch and fall through to the textarea fallback.
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+        return true
+      }
+    } catch {
+      // fall through to execCommand fallback
+    }
+
+    try {
+      const textarea = document.createElement("textarea")
+      textarea.value = text
+      textarea.style.position = "fixed"
+      textarea.style.left = "-9999px"
+      textarea.style.top = "-9999px"
+      textarea.style.opacity = "0"
+      textarea.readOnly = true
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      const ok = document.execCommand("copy")
+      document.body.removeChild(textarea)
+      return ok
+    } catch {
+      return false
+    }
+  }
+
+  const copyApiToken = async () => {
+    const ok = await copyToClipboard(apiToken)
+    if (ok) {
+      setTokenCopied(true)
+      setTimeout(() => setTokenCopied(false), 2000)
+    }
+  }
+
+  const generatePrintableReport = (report: LynisReport) => {
+    const adjScore = report.proxmox_adjusted_score ?? report.hardening_index
+    const rawScore = report.hardening_index
+    const displayScore = adjScore ?? rawScore
+    const hasAdjustment = adjScore != null && rawScore != null && adjScore !== rawScore
+    const scoreColor = displayScore === null ? "#888"
+      : displayScore >= 70 ? "#16a34a"
+      : displayScore >= 50 ? "#ca8a04"
+      : "#dc2626"
+    const scoreLabel = displayScore === null ? "N/A"
+      : displayScore >= 70 ? "GOOD"
+      : displayScore >= 50 ? "MODERATE"
+      : "CRITICAL"
+    const now = new Date().toLocaleString()
+    const logoUrl = `${window.location.origin}/images/proxmenux-logo.png`
+
+    const actionableWarnings = report.warnings.length - (report.proxmox_expected_warnings ?? 0)
+    const actionableSuggestions = report.suggestions.length - (report.proxmox_expected_suggestions ?? 0)
+    const totalExpected = (report.proxmox_expected_warnings ?? 0) + (report.proxmox_expected_suggestions ?? 0)
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Audit Report - ${report.hostname || "ProxMenux"}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #fff; font-size: 13px; line-height: 1.5; }
+  @page { margin: 10mm; size: A4; }
+  @media print {
+    html, body { margin: 0 !important; padding: 0 !important; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { font-size: 11px; padding-top: 0; }
+    .section { margin-bottom: 16px; }
+    /* Darken light grays for PDF readability */
+    .rpt-header-left p, .rpt-header-right { color: #374151; }
+    .rpt-header-right .rid { color: #4b5563; }
+    .exec-text p { color: #374151; }
+    .score-bar-labels { color: #4b5563; }
+    .card-label { color: #4b5563; }
+    .card-sub { color: #374151; }
+    .f-num { color: #4b5563; }
+    .f-sol { color: #374151; }
+    .f-sol strong { color: #1e293b; }
+    .f-det { color: #4b5563; }
+    .cat-cnt { color: #4b5563; }
+    .chk-tbl th { color: #374151; }
+    .chk-det { color: #4b5563; }
+    .rpt-footer { color: #4b5563; }
+    /* Force inline style overrides for print */
+    [style*="color:#64748b"] { color: #374151 !important; }
+    [style*="color:#94a3b8"] { color: #4b5563 !important; }
+    [style*="color: #64748b"] { color: #374151 !important; }
+    [style*="color: #94a3b8"] { color: #4b5563 !important; }
+    /* Ensure all greens are exactly the same shade in print */
+    [style*="color:#16a34a"], [style*="color: #16a34a"] { color: #16a34a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    [style*="border-color:#16a34a"], [style*="border-color: #16a34a"] { border-color: #16a34a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    [style*="background:#16a34a"], [style*="background: #16a34a"] { background: #16a34a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .score-ring, .score-bar-fill, .card-value, .chk-tbl td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    /* Ensure red and yellow consistency too */
+    [style*="color:#dc2626"] { color: #dc2626 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    [style*="color:#ca8a04"] { color: #ca8a04 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    [style*="color:#0891b2"] { color: #0891b2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  @media screen {
+    body { max-width: 1000px; margin: 0 auto; padding: 24px 32px; padding-top: 64px; }
+  }
+  
+  /* Top bar for screen only */
+  .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; background: #0f172a; color: #e2e8f0;
+    padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; z-index: 100;
+    font-size: 13px;
+  }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .top-bar-title { font-weight: 600; }
+  .top-bar-subtitle { font-size: 11px; color: #94a3b8; display: none; }
+  .top-bar button {
+    background: #06b6d4; color: #fff; border: none; padding: 10px 20px; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .top-bar button:hover { background: #0891b2; }
+  .hide-mobile { }
+  @media (min-width: 640px) {
+    .top-bar { padding: 12px 24px; }
+    .top-bar-subtitle { display: block; }
+  }
+  @media (max-width: 639px) {
+    .hide-mobile { display: none !important; }
+  }
+  @media print { .top-bar { display: none; } body { padding-top: 0; } }
+
+  /* Header */
+  .rpt-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 0; border-bottom: 3px solid #0f172a; margin-bottom: 22px;
+  }
+  .rpt-header-left { display: flex; align-items: center; gap: 14px; }
+  .rpt-header-left img { height: 44px; width: auto; }
+  .rpt-header-left h1 { font-size: 22px; font-weight: 700; color: #0f172a; }
+  .rpt-header-left p { font-size: 11px; color: #64748b; }
+  .rpt-header-right { text-align: right; font-size: 11px; color: #64748b; line-height: 1.6; }
+  .rpt-header-right .rid { font-family: monospace; font-size: 10px; color: #94a3b8; }
+
+  /* Sections */
+  .section { margin-bottom: 22px; }
+  .section-title {
+    font-size: 14px; font-weight: 700; color: #0f172a; text-transform: uppercase;
+    letter-spacing: 0.05em; padding-bottom: 5px; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px;
+  }
+
+  /* Executive summary */
+  .exec-box {
+    display: flex; align-items: center; gap: 24px; padding: 20px;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 16px;
+  }
+  .score-ring {
+    width: 96px; height: 96px; border-radius: 50%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; border: 4px solid; flex-shrink: 0;
+  }
+  .score-num { font-size: 32px; font-weight: 800; line-height: 1; }
+  .score-lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+  .exec-text { flex: 1; }
+  .exec-text h3 { font-size: 16px; margin-bottom: 4px; }
+  .exec-text p { font-size: 12px; color: #64748b; line-height: 1.5; }
+
+  /* Score bar */
+  .score-bar-wrap { margin: 10px 0 6px; }
+  .score-bar-bg { height: 10px; background: #e2e8f0; border-radius: 5px; position: relative; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 5px; }
+  .score-bar-labels { display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; margin-top: 3px; }
+
+  /* Grids */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .card { padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; }
+  .card-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+  .card-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+  .card-c { text-align: center; }
+  .card-c .card-value { font-size: 20px; font-weight: 800; }
+  .card-c .card-label { margin-top: 3px; margin-bottom: 0; }
+  .card-sub { font-size: 9px; color: #64748b; margin-top: 2px; }
+  .card-sub.pve { color: #0891b2; }
+
+  /* Findings */
+  .finding { padding: 10px 12px; margin-bottom: 6px; border-left: 4px solid; border-radius: 0 4px 4px 0; page-break-inside: avoid; }
+  .f-warn { border-color: #dc2626; background: #fef2f2; }
+  .f-sugg { border-color: #ca8a04; background: #fefce8; }
+  .f-pve { border-color: #06b6d4; background: #ecfeff; opacity: 0.85; }
+  .f-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+  .f-num { font-size: 10px; color: #94a3b8; font-weight: 700; }
+  .f-id { font-family: 'Courier New', monospace; font-size: 10px; background: #e2e8f0; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+  .f-id.pve { background: #ecfeff; color: #0891b2; }
+  .f-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .f-tag-pve { background: #ecfeff; color: #0891b2; }
+  .f-tag-low { background: #fefce8; color: #a16207; }
+  .f-tag-sev { color: #dc2626; font-weight: 700; text-transform: uppercase; }
+  .f-desc { font-size: 12px; color: #1e293b; }
+  .f-ctx { font-size: 10px; color: #0891b2; margin-top: 3px; }
+  .f-ctx strong { font-weight: 700; }
+  .f-sol { font-size: 11px; color: #64748b; margin-top: 3px; }
+  .f-sol strong { color: #475569; }
+  .f-det { font-size: 10px; font-family: 'Courier New', monospace; color: #94a3b8; margin-top: 2px; }
+
+  /* Category tables */
+  .cat-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #f1f5f9; border-radius: 4px; margin-bottom: 6px; }
+  .cat-num { font-size: 10px; font-weight: 700; color: #0891b2; background: #ecfeff; padding: 2px 6px; border-radius: 3px; }
+  .cat-name { font-size: 12px; font-weight: 700; color: #0f172a; }
+  .cat-cnt { font-size: 10px; color: #94a3b8; margin-left: auto; }
+  .chk-tbl { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 14px; }
+  .chk-tbl th { text-align: left; padding: 4px 8px; font-size: 10px; color: #64748b; font-weight: 600; border-bottom: 1px solid #e2e8f0; }
+  .chk-tbl th:last-child { text-align: right; width: 120px; }
+  .chk-tbl td { padding: 3px 8px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+  .chk-tbl td:last-child { text-align: right; font-weight: 700; font-size: 10px; }
+  .chk-tbl tr.warn { background: #fef2f2; }
+  .chk-tbl tr.sugg { background: #fefce8; }
+  .chk-det { color: #94a3b8; font-size: 10px; }
+
+  /* Footer */
+  .rpt-footer {
+    margin-top: 32px; padding-top: 12px; border-top: 1px solid #e2e8f0;
+    display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8;
+  }
+</style>
+</head>
+<body>
+
+<script>
+function pmxPrint(){
+  try { window.print(); }
+  catch(e) {
+    // Fallback hint
+    var isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    var el = document.getElementById('pmx-print-hint');
+    if(el) el.textContent = isMac ? 'Use Cmd+P to save as PDF' : 'Use Ctrl+P to save as PDF';
+  }
+}
+</script>
+<div class="top-bar no-print">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <strong>ProxMenux Security Audit Report</strong>
+    <span id="pmx-print-hint" class="hide-mobile" style="font-size:11px;opacity:0.7;">Review the report, then print or save as PDF</span>
+  </div>
+  <button onclick="pmxPrint()">Print / Save as PDF</button>
+</div>
+
+<!-- Header -->
+<div class="rpt-header">
+  <div class="rpt-header-left">
+    <img src="${logoUrl}" alt="ProxMenux" onerror="this.style.display='none'" />
+    <div>
+      <h1>Security Audit Report</h1>
+      <p>ProxMenux Monitor - Lynis System Audit</p>
+    </div>
+  </div>
+  <div class="rpt-header-right">
+    <div><strong>Date:</strong> ${now}</div>
+    <div><strong>Auditor:</strong> Lynis ${report.lynis_version || ""}</div>
+    <div class="rid">ID: PMXA-${Date.now().toString(36).toUpperCase()}</div>
+  </div>
+</div>
+
+<!-- 1. Executive Summary -->
+<div class="section">
+  <div class="section-title">1. Executive Summary</div>
+  <div class="exec-box">
+    <div class="score-ring" style="border-color:${scoreColor};color:${scoreColor};">
+      <div class="score-num">${displayScore ?? "N/A"}</div>
+      <div class="score-lbl">${scoreLabel}</div>
+    </div>
+    <div class="exec-text">
+      <h3>System Hardening Assessment${hasAdjustment ? " (Proxmox Adjusted)" : ""}</h3>
+      <p>
+        Audit of <strong>${report.hostname || "Unknown"}</strong>
+        running <strong>${report.os_fullname || `${report.os_name} ${report.os_version}`.trim() || "Unknown OS"}</strong> (Proxmox VE).
+        ${report.tests_performed} tests executed.
+        ${actionableWarnings > 0 ? `<strong style="color:#dc2626;">${actionableWarnings} actionable warning(s)</strong>` : '<strong style="color:#16a34a;">No actionable warnings</strong>'}
+        and <strong style="color:${actionableSuggestions > 0 ? '#ca8a04' : '#16a34a'};">${actionableSuggestions} actionable suggestion(s)</strong>.
+        ${totalExpected > 0 ? `<span style="color:#0891b2;">${totalExpected} findings are expected behavior in Proxmox VE.</span>` : ""}
+      </p>
+      ${hasAdjustment ? `
+      <div class="score-bar-wrap">
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
+          <span style="color:#64748b;">Lynis raw: ${rawScore}/100</span>
+          <span style="color:${scoreColor};font-weight:700;">PVE adjusted: ${displayScore}/100</span>
+        </div>
+        <div class="score-bar-bg">
+          <div class="score-bar-fill" style="width:${displayScore}%;background:${scoreColor};"></div>
+        </div>
+        <div class="score-bar-labels"><span>0 - Critical</span><span>50 - Moderate</span><span>70 - Good</span><span>100</span></div>
+      </div>` : ""}
+    </div>
+  </div>
+</div>
+
+<!-- 2. System Information -->
+<div class="section">
+  <div class="section-title">2. System Information</div>
+  <div class="grid-3">
+    <div class="card"><div class="card-label">Hostname</div><div class="card-value">${report.hostname || "N/A"}</div></div>
+    <div class="card"><div class="card-label">Operating System</div><div class="card-value">${report.os_fullname || `${report.os_name} ${report.os_version}`.trim() || "N/A"}</div></div>
+    <div class="card"><div class="card-label">Kernel</div><div class="card-value">${report.kernel_version || "N/A"}</div></div>
+    <div class="card"><div class="card-label">Lynis Version</div><div class="card-value">${report.lynis_version || "N/A"}</div></div>
+    <div class="card"><div class="card-label">Report Date</div><div class="card-value">${report.datetime_start ? report.datetime_start.replace("T", " ").substring(0, 16) : "N/A"}</div></div>
+    <div class="card"><div class="card-label">Tests Performed</div><div class="card-value">${report.tests_performed}</div></div>
+  </div>
+</div>
+
+<!-- 3. Security Posture -->
+<div class="section">
+  <div class="section-title">3. Security Posture Overview</div>
+  <div class="grid-4">
+    <div class="card card-c">
+      <div class="card-value" style="color:${scoreColor};">${displayScore ?? "N/A"}<span style="font-size:10px;color:#64748b;">/100</span></div>
+      <div class="card-label">PVE Score (${scoreLabel})</div>
+      ${hasAdjustment ? `<div class="card-sub">Lynis raw: ${rawScore}</div>` : ""}
+    </div>
+    <div class="card card-c">
+      <div class="card-value" style="color:${actionableWarnings > 0 ? "#dc2626" : "#16a34a"};">${actionableWarnings}</div>
+      <div class="card-label">Actionable Warnings</div>
+      ${(report.proxmox_expected_warnings ?? 0) > 0 ? `<div class="card-sub pve">+${report.proxmox_expected_warnings} PVE expected</div>` : ""}
+    </div>
+    <div class="card card-c">
+      <div class="card-value" style="color:${actionableSuggestions > 0 ? "#ca8a04" : "#16a34a"};">${actionableSuggestions}</div>
+      <div class="card-label">Actionable Suggestions</div>
+      ${(report.proxmox_expected_suggestions ?? 0) > 0 ? `<div class="card-sub pve">+${report.proxmox_expected_suggestions} PVE expected</div>` : ""}
+    </div>
+    <div class="card card-c">
+      <div class="card-value">${report.tests_performed}</div>
+      <div class="card-label">Tests Performed</div>
+    </div>
+  </div>
+  <div class="grid-3">
+    <div class="card card-c">
+      <div class="card-label">Firewall</div>
+      <div class="card-value" style="color:${report.firewall_active ? "#16a34a" : "#dc2626"};font-size:13px;">${report.firewall_active ? "Active" : "Inactive"}</div>
+    </div>
+    <div class="card card-c">
+      <div class="card-label">Malware Scanner</div>
+      <div class="card-value" style="color:${report.malware_scanner ? "#16a34a" : "#ca8a04"};font-size:13px;">${report.malware_scanner ? "Installed" : "Not Found"}</div>
+    </div>
+    <div class="card card-c">
+      <div class="card-label">Installed Packages</div>
+      <div class="card-value" style="font-size:13px;">${report.installed_packages || "N/A"}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Warnings -->
+<div class="section page-break">
+  <div class="section-title">4. Warnings (${report.warnings.length}${(report.proxmox_expected_warnings ?? 0) > 0 ? ` - ${actionableWarnings} actionable` : ""})</div>
+  <p style="font-size:11px;color:#64748b;margin-bottom:10px;">Issues that require attention and may represent security vulnerabilities.</p>
+  ${report.warnings.length === 0 ?
+    '<div style="padding:16px;text-align:center;color:#16a34a;background:#f0fdf4;border-radius:6px;border:1px solid #bbf7d0;">No warnings detected. System appears to be well-configured.</div>' :
+    report.warnings.map((w, i) => `
+    <div class="finding ${w.proxmox_expected ? 'f-pve' : 'f-warn'}">
+      <div class="f-hdr">
+        <span class="f-num">#${i + 1}</span>
+        <span class="f-id${w.proxmox_expected ? ' pve' : ''}">${w.test_id}</span>
+        ${w.proxmox_expected ? '<span class="f-tag f-tag-pve">PVE Expected</span>' : ''}
+        ${!w.proxmox_expected && w.proxmox_severity === "low" ? '<span class="f-tag f-tag-low">Low Risk</span>' : ''}
+        ${!w.proxmox_expected && !w.proxmox_severity && w.severity ? `<span class="f-tag f-tag-sev">${w.severity}</span>` : ""}
+      </div>
+      <div class="f-desc">${w.description}</div>
+      ${w.proxmox_context ? `<div class="f-ctx"><strong>Proxmox:</strong> ${w.proxmox_context}</div>` : ""}
+      ${w.solution ? `<div class="f-sol"><strong>Recommendation:</strong> ${w.solution}</div>` : ""}
+    </div>`).join("")}
+</div>
+
+<!-- Suggestions -->
+<div class="section page-break">
+  <div class="section-title">5. Suggestions (${report.suggestions.length}${(report.proxmox_expected_suggestions ?? 0) > 0 ? ` - ${actionableSuggestions} actionable` : ""})</div>
+  <p style="font-size:11px;color:#64748b;margin-bottom:10px;">Recommended improvements to strengthen your system's security posture.${(report.proxmox_expected_suggestions ?? 0) > 0 ? ` <span style="color:#0891b2;">${report.proxmox_expected_suggestions} items are expected behavior in Proxmox VE.</span>` : ""}</p>
+  ${report.suggestions.length === 0 ?
+    '<div style="padding:16px;text-align:center;color:#16a34a;background:#f0fdf4;border-radius:6px;border:1px solid #bbf7d0;">No suggestions. System is fully hardened.</div>' :
+    report.suggestions.map((s, i) => `
+    <div class="finding ${s.proxmox_expected ? 'f-pve' : 'f-sugg'}">
+      <div class="f-hdr">
+        <span class="f-num">#${i + 1}</span>
+        <span class="f-id${s.proxmox_expected ? ' pve' : ''}">${s.test_id}</span>
+        ${s.proxmox_expected ? '<span class="f-tag f-tag-pve">PVE Expected</span>' : ''}
+        ${!s.proxmox_expected && s.proxmox_severity === "low" ? '<span class="f-tag f-tag-low">Low Priority</span>' : ''}
+      </div>
+      <div class="f-desc">${s.description}</div>
+      ${s.proxmox_context ? `<div class="f-ctx"><strong>Proxmox:</strong> ${s.proxmox_context}</div>` : ""}
+      ${s.solution ? `<div class="f-sol"><strong>Recommendation:</strong> ${s.solution}</div>` : ""}
+      ${s.details ? `<div class="f-det">${s.details}</div>` : ""}
+    </div>`).join("")}
+</div>
+
+<!-- Detailed Checks -->
+${(report.sections && report.sections.length > 0) ? `
+<div class="section page-break">
+  <div class="section-title">6. Detailed Security Checks (${report.sections.length} categories)</div>
+  <p style="font-size:11px;color:#64748b;margin-bottom:12px;">Complete list of all security checks performed during the audit, organized by category.</p>
+  ${report.sections.map((section, sIdx) => `
+  <div style="margin-bottom:10px;page-break-inside:avoid;">
+    <div class="cat-head">
+      <span class="cat-num">${sIdx + 1}</span>
+      <span class="cat-name">${section.name}</span>
+      <span class="cat-cnt">${section.checks.length} checks</span>
+    </div>
+    <table class="chk-tbl">
+      <thead><tr><th>Check</th><th>Status</th></tr></thead>
+      <tbody>
+        ${section.checks.map(check => {
+          const st = check.status.toUpperCase()
+          const isWarn = ["WARNING", "UNSAFE", "WEAK", "DIFFERENT", "DISABLED"].includes(st)
+          const isSugg = ["SUGGESTION", "PARTIALLY HARDENED", "MEDIUM", "NON DEFAULT"].includes(st)
+          const isOk = ["OK", "FOUND", "DONE", "ENABLED", "ACTIVE", "YES", "HARDENED", "PROTECTED"].includes(st)
+          const color = isWarn ? "#dc2626" : isSugg ? "#ca8a04" : isOk ? "#16a34a" : "#64748b"
+          const cls = isWarn ? ' class="warn"' : isSugg ? ' class="sugg"' : ""
+          return `<tr${cls}>
+            <td>${check.name}${check.detail ? ` <span class="chk-det">(${check.detail})</span>` : ""}</td>
+            <td style="color:${color};">${check.status}</td>
+          </tr>`
+        }).join("")}
+      </tbody>
+    </table>
+  </div>`).join("")}
+</div>` : ""}
+
+<!-- Footer -->
+<div class="rpt-footer">
+  <div>Generated by ProxMenux Monitor / Lynis ${report.lynis_version || ""}</div>
+  <div>${now}</div>
+  <div style="font-style:italic;">Confidential</div>
+</div>
+
+</body>
+</html>`
+  }
+
+  const loadSslStatus = async () => {
+    try {
+      setLoadingSsl(true)
+      const data = await fetchApi("/api/ssl/status")
+      if (data.success) {
+        setSslEnabled(data.ssl_enabled || false)
+        setSslSource(data.source || "none")
+        setSslCertPath(data.cert_path || "")
+        setSslKeyPath(data.key_path || "")
+        setProxmoxCertAvailable(data.proxmox_available || false)
+        setProxmoxCertInfo(data.cert_info || null)
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setLoadingSsl(false)
+    }
+  }
+
+  // Wait for the monitor service to come back on the new protocol, then redirect
+  const waitForServiceAndRedirect = async (newProtocol: "https" | "http") => {
+    const host = window.location.hostname
+    const port = window.location.port || "8008"
+    const newUrl = `${newProtocol}://${host}:${port}${window.location.pathname}`
+    
+    // Wait for service to restart (try up to 30 seconds)
+    const maxAttempts = 15
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, 2000))
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 3000)
+        const resp = await fetch(`${newProtocol}://${host}:${port}/api/ssl/status`, {
+          signal: controller.signal,
+          // For self-signed certs, we need to handle rejection
+          mode: "no-cors"
+        }).catch(() => null)
+        clearTimeout(timeout)
+        
+        // For HTTPS with self-signed certs, even a failed CORS request means the server is up
+        if (resp || newProtocol === "https") {
+          // Give it one more second to fully stabilize
+          await new Promise(r => setTimeout(r, 1000))
+          window.location.href = newUrl
+          return
+        }
+      } catch {
+        // Server not ready yet, keep waiting
+      }
+    }
+    
+    // Fallback: redirect anyway after timeout
+    window.location.href = newUrl
+  }
+
+  const handleEnableSsl = async (source: "proxmox" | "custom", certPath?: string, keyPath?: string) => {
+    setConfiguringSsl(true)
+    setError("")
+    setSuccess("")
+
+    try {
+      const body: Record<string, string | boolean> = { source, auto_restart: true }
+      if (source === "custom" && certPath && keyPath) {
+        body.cert_path = certPath
+        body.key_path = keyPath
+      }
+
+      const data = await fetchApi("/api/ssl/configure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+
+      if (data.success) {
+        setSslEnabled(true)
+        setSslSource(source)
+        setShowCustomCertForm(false)
+        setCustomCertPath("")
+        setCustomKeyPath("")
+        setConfiguringSsl(false)
+        setSslRestarting(true)
+        setSuccess("SSL enabled. Restarting service and switching to HTTPS...")
+        await waitForServiceAndRedirect("https")
+      } else {
+        setError(data.message || "Failed to configure SSL")
+        setConfiguringSsl(false)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to configure SSL")
+      setConfiguringSsl(false)
+    }
+  }
+
+  const handleDisableSsl = async () => {
+    if (!confirm("Are you sure you want to disable HTTPS? The monitor will switch to HTTP.")) {
+      return
+    }
+
+    setConfiguringSsl(true)
+    setError("")
+    setSuccess("")
+
+    try {
+      const data = await fetchApi("/api/ssl/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auto_restart: true }),
+      })
+
+      if (data.success) {
+        setSslEnabled(false)
+        setSslSource("none")
+        setSslCertPath("")
+        setSslKeyPath("")
+        setConfiguringSsl(false)
+        setSslRestarting(true)
+        setSuccess("SSL disabled. Restarting service and switching to HTTP...")
+        await waitForServiceAndRedirect("http")
+      } else {
+        setError(data.message || "Failed to disable SSL")
+        setConfiguringSsl(false)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to disable SSL")
+      setConfiguringSsl(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Security</h1>
+        <p className="text-muted-foreground mt-2">Manage authentication, encryption, and access control</p>
+      </div>
+
+      {/* ── ProxMenux Monitor Security Group ── */}
+      <div className="flex items-center gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-cyan-500">ProxMenux Monitor</h2>
+        <div className="flex-1 h-px bg-cyan-500/20" />
+      </div>
+
+      {/* Authentication Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-blue-500" />
+            <CardTitle>Authentication</CardTitle>
+          </div>
+          <CardDescription>Protect your dashboard with username and password authentication</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-500">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-green-500">{success}</p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center ${authEnabled ? "bg-green-500/10" : "bg-gray-500/10"}`}
+              >
+                <Lock className={`h-5 w-5 ${authEnabled ? "text-green-500" : "text-gray-500"}`} />
+              </div>
+              <div>
+                <p className="font-medium">Authentication Status</p>
+                <p className="text-sm text-muted-foreground">
+                  {authEnabled ? "Password protection is enabled" : "No password protection"}
+                </p>
+              </div>
+            </div>
+            <div
+              className={`px-3 py-1 rounded-full text-sm font-medium ${authEnabled ? "bg-green-500/10 text-green-500" : "bg-gray-500/10 text-gray-500"}`}
+            >
+              {authEnabled ? "Enabled" : "Disabled"}
+            </div>
+          </div>
+
+          {!authEnabled && !showSetupForm && (
+            <div className="space-y-3">
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-start gap-2">
+                <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-500">
+                  Enable authentication to protect your dashboard when accessing from non-private networks.
+                </p>
+              </div>
+              <Button onClick={() => setShowSetupForm(true)} className="bg-blue-500 hover:bg-blue-600">
+                <Shield className="h-4 w-4 mr-2" />
+                Enable Authentication
+              </Button>
+            </div>
+          )}
+
+          {!authEnabled && showSetupForm && (
+            <div className="space-y-4 border border-border rounded-lg p-4">
+              <h3 className="font-semibold">Setup Authentication</h3>
+
+              <div className="space-y-2">
+                <Label htmlFor="setup-username">Username</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="setup-username"
+                    type="text"
+                    placeholder="Enter username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="pl-10"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="setup-password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="setup-password"
+                    type="password"
+                    placeholder="Enter password (min 6 characters)"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="setup-confirm-password">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="setup-confirm-password"
+                    type="password"
+                    placeholder="Confirm password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="pl-10"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleEnableAuth} className="flex-1 bg-blue-500 hover:bg-blue-600" disabled={loading}>
+                  {loading ? "Enabling..." : "Enable"}
+                </Button>
+                <Button onClick={() => setShowSetupForm(false)} variant="outline" className="flex-1" disabled={loading}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {authEnabled && (
+            <div className="space-y-3">
+              <Button onClick={handleLogout} variant="outline" className="bg-transparent">
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+
+              {!showChangePassword && (
+                <Button onClick={() => setShowChangePassword(true)} variant="outline">
+                  <Lock className="h-4 w-4 mr-2" />
+                  Change Password
+                </Button>
+              )}
+
+              {showChangePassword && (
+                <div className="space-y-4 border border-border rounded-lg p-4">
+                  <h3 className="font-semibold">Change Password</h3>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="current-password">Current Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="current-password"
+                        type="password"
+                        placeholder="Enter current password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="pl-10"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="new-password"
+                        type="password"
+                        placeholder="Enter new password (min 6 characters)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="pl-10"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-new-password">Confirm New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="confirm-new-password"
+                        type="password"
+                        placeholder="Confirm new password"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        className="pl-10"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleChangePassword}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600"
+                      disabled={loading}
+                    >
+                      {loading ? "Changing..." : "Change Password"}
+                    </Button>
+                    <Button
+                      onClick={() => setShowChangePassword(false)}
+                      variant="outline"
+                      className="flex-1"
+                      disabled={loading}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!totpEnabled && (
+                <div className="space-y-3">
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-start gap-2">
+                    <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-400">
+                      <p className="font-medium mb-1">Two-Factor Authentication (2FA)</p>
+                      <p className="text-blue-300">
+                        Add an extra layer of security by requiring a code from your authenticator app in addition to
+                        your password.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button onClick={() => setShow2FASetup(true)} variant="outline">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Enable Two-Factor Authentication
+                  </Button>
+                </div>
+              )}
+
+              {totpEnabled && (
+                <div className="space-y-3">
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <p className="text-sm text-green-500 font-medium">2FA is enabled</p>
+                  </div>
+
+                  {!show2FADisable && (
+                    <Button onClick={() => setShow2FADisable(true)} variant="outline">
+                      <Shield className="h-4 w-4 mr-2" />
+                      Disable 2FA
+                    </Button>
+                  )}
+
+                  {show2FADisable && (
+                    <div className="space-y-4 border border-border rounded-lg p-4">
+                      <h3 className="font-semibold">Disable Two-Factor Authentication</h3>
+                      <p className="text-sm text-muted-foreground">Enter your password to confirm</p>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="disable-2fa-password">Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="disable-2fa-password"
+                            type="password"
+                            placeholder="Enter your password"
+                            value={disable2FAPassword}
+                            onChange={(e) => setDisable2FAPassword(e.target.value)}
+                            className="pl-10"
+                            disabled={loading}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button onClick={handleDisable2FA} variant="destructive" className="flex-1" disabled={loading}>
+                          {loading ? "Disabling..." : "Disable 2FA"}
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setShow2FADisable(false)
+                            setDisable2FAPassword("")
+                            setError("")
+                          }}
+                          variant="outline"
+                          className="flex-1"
+                          disabled={loading}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button onClick={handleDisableAuth} variant="destructive" disabled={loading}>
+                Disable Authentication
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* SSL/HTTPS Configuration */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-green-500" />
+            <CardTitle>SSL / HTTPS</CardTitle>
+          </div>
+          <CardDescription>
+            Serve ProxMenux Monitor over HTTPS using your Proxmox host certificate or a custom certificate
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loadingSsl ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin h-8 w-8 border-4 border-green-500 border-t-transparent rounded-full" />
+            </div>
+          ) : (
+            <>
+              {/* Current Status */}
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${sslEnabled ? "bg-green-500/10" : "bg-gray-500/10"}`}>
+                    <Globe className={`h-5 w-5 ${sslEnabled ? "text-green-500" : "text-gray-500"}`} />
+                  </div>
+                  <div>
+                    <p className="font-medium">
+                      {sslEnabled ? "HTTPS Enabled" : "HTTP (No SSL)"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {sslEnabled
+                        ? `Using ${sslSource === "proxmox" ? "Proxmox host" : "custom"} certificate`
+                        : "Monitor is served over unencrypted HTTP"}
+                    </p>
+                  </div>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${sslEnabled ? "bg-green-500/10 text-green-500" : "bg-gray-500/10 text-gray-500"}`}>
+                  {sslEnabled ? "HTTPS" : "HTTP"}
+                </div>
+              </div>
+
+              {/* Active certificate info */}
+              {sslEnabled && (
+                <div className="space-y-2 p-3 bg-green-500/5 border border-green-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm font-medium text-green-500">
+                    <FileKey className="h-4 w-4" />
+                    Active Certificate
+                  </div>
+                  <div className="grid gap-1 text-sm text-muted-foreground">
+                    <p><span className="font-medium text-foreground">Cert:</span> <code className="text-xs">{sslCertPath}</code></p>
+                    <p><span className="font-medium text-foreground">Key:</span> <code className="text-xs">{sslKeyPath}</code></p>
+                  </div>
+                  <Button
+                    onClick={handleDisableSsl}
+                    variant="outline"
+                    size="sm"
+                    disabled={configuringSsl || sslRestarting}
+                    className="mt-2 text-red-500 border-red-500/30 hover:bg-red-500/10 bg-transparent"
+                  >
+                    {configuringSsl ? "Disabling..." : sslRestarting ? "Restarting..." : "Disable HTTPS"}
+                  </Button>
+                </div>
+              )}
+
+              {/* Proxmox certificate detection */}
+              {!sslEnabled && proxmoxCertAvailable && (
+                <div className="space-y-3 p-4 border border-border rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-green-500" />
+                    <h3 className="font-semibold text-sm">Proxmox Host Certificate Detected</h3>
+                  </div>
+
+                  {proxmoxCertInfo && (
+                    <div className="grid gap-1 text-sm text-muted-foreground bg-muted/50 p-3 rounded">
+                      {proxmoxCertInfo.subject && (
+                        <p><span className="font-medium text-foreground">Subject:</span> {proxmoxCertInfo.subject}</p>
+                      )}
+                      {proxmoxCertInfo.issuer && (
+                        <p><span className="font-medium text-foreground">Issuer:</span> {proxmoxCertInfo.issuer}</p>
+                      )}
+                      {proxmoxCertInfo.expires && (
+                        <p><span className="font-medium text-foreground">Expires:</span> {proxmoxCertInfo.expires}</p>
+                      )}
+                      {proxmoxCertInfo.is_self_signed && (
+                        <div className="flex items-center gap-1.5 mt-1 text-yellow-500">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <span className="text-xs">Self-signed certificate (browsers will show a security warning)</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={() => handleEnableSsl("proxmox")}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    disabled={configuringSsl || sslRestarting}
+                  >
+                    {configuringSsl ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        Configuring...
+                      </div>
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-4 w-4 mr-2" />
+                        Use Proxmox Certificate
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {!sslEnabled && !proxmoxCertAvailable && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-yellow-500">
+                    No Proxmox host certificate detected. You can configure a custom certificate below.
+                  </p>
+                </div>
+              )}
+
+              {/* Custom certificate option */}
+              {!sslEnabled && (
+                <div className="space-y-3">
+                  {!showCustomCertForm ? (
+                    <Button
+                      onClick={() => setShowCustomCertForm(true)}
+                      variant="outline"
+                    >
+                      <FileKey className="h-4 w-4 mr-2" />
+                      Use Custom Certificate
+                    </Button>
+                  ) : (
+                    <div className="space-y-4 border border-border rounded-lg p-4">
+                      <h3 className="font-semibold text-sm">Custom Certificate Paths</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Enter the absolute paths to your SSL certificate and private key files on the Proxmox server.
+                      </p>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="ssl-cert-path">Certificate Path (.pem / .crt)</Label>
+                        <Input
+                          id="ssl-cert-path"
+                          type="text"
+                          placeholder="/etc/ssl/certs/mydomain.pem"
+                          value={customCertPath}
+                          onChange={(e) => setCustomCertPath(e.target.value)}
+                          disabled={configuringSsl}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="ssl-key-path">Private Key Path (.key / .pem)</Label>
+                        <Input
+                          id="ssl-key-path"
+                          type="text"
+                          placeholder="/etc/ssl/private/mydomain.key"
+                          value={customKeyPath}
+                          onChange={(e) => setCustomKeyPath(e.target.value)}
+                          disabled={configuringSsl}
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                        onClick={() => handleEnableSsl("custom", customCertPath, customKeyPath)}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                        disabled={configuringSsl || sslRestarting || !customCertPath || !customKeyPath}
+                        >
+                          {configuringSsl ? "Configuring..." : "Enable HTTPS"}
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setShowCustomCertForm(false)
+                            setCustomCertPath("")
+                            setCustomKeyPath("")
+                          }}
+                          variant="outline"
+                          className="flex-1"
+                          disabled={configuringSsl}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Restarting overlay or info note */}
+              {sslRestarting ? (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex items-center gap-3">
+                  <div className="h-5 w-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-500">
+                      Restarting monitor service...
+                    </p>
+                    <p className="text-xs text-amber-400 mt-0.5">
+                      The page will automatically redirect to the new address.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-start gap-2">
+                  <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-blue-500">
+                    SSL changes will automatically restart the monitor service and redirect to the new address.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* API Access Tokens */}
+      {authEnabled && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-purple-500" />
+              <CardTitle>API Access Tokens</CardTitle>
+            </div>
+            <CardDescription>
+              Generate long-lived API tokens for external integrations like Homepage and Home Assistant
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-500">{error}</p>
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 flex items-start gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-green-500">{success}</p>
+              </div>
+            )}
+
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-2 text-sm text-blue-400">
+                  <p className="font-medium">About API Tokens</p>
+                  <ul className="list-disc list-inside space-y-1 text-blue-300">
+                    <li>Tokens are valid for 1 year</li>
+                    <li>Use them to access APIs from external services</li>
+                    <li>{'Include in Authorization header: Bearer YOUR_TOKEN'}</li>
+                    <li>See README.md for complete integration examples</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {!showApiTokenSection && !apiToken && (
+              <Button onClick={() => setShowApiTokenSection(true)} className="bg-purple-500 hover:bg-purple-600">
+                <Key className="h-4 w-4 mr-2" />
+                Generate New API Token
+              </Button>
+            )}
+
+            {showApiTokenSection && !apiToken && (
+              <div className="space-y-4 border border-border rounded-lg p-4">
+                <h3 className="font-semibold">Generate API Token</h3>
+                <p className="text-sm text-muted-foreground">
+                  Enter your credentials to generate a new long-lived API token
+                </p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="token-name">Token Name</Label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="token-name"
+                      type="text"
+                      placeholder="e.g. Homepage, Home Assistant"
+                      value={tokenName}
+                      onChange={(e) => setTokenName(e.target.value)}
+                      className="pl-10"
+                      disabled={generatingToken}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="token-password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="token-password"
+                      type="password"
+                      placeholder="Enter your password"
+                      value={tokenPassword}
+                      onChange={(e) => setTokenPassword(e.target.value)}
+                      className="pl-10"
+                      disabled={generatingToken}
+                    />
+                  </div>
+                </div>
+
+                {totpEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="token-totp">2FA Code</Label>
+                    <div className="relative">
+                      <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="token-totp"
+                        type="text"
+                        placeholder="Enter 6-digit code"
+                        value={tokenTotpCode}
+                        onChange={(e) => setTokenTotpCode(e.target.value)}
+                        className="pl-10"
+                        maxLength={6}
+                        disabled={generatingToken}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleGenerateApiToken}
+                    className="flex-1 bg-purple-500 hover:bg-purple-600"
+                    disabled={generatingToken}
+                  >
+                    {generatingToken ? "Generating..." : "Generate Token"}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowApiTokenSection(false)
+                      setTokenPassword("")
+                      setTokenTotpCode("")
+                      setTokenName("API Token")
+                      setError("")
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                    disabled={generatingToken}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {apiToken && (
+              <div className="space-y-4 border border-green-500/20 bg-green-500/5 rounded-lg p-4">
+                <div className="flex items-center gap-2 text-green-500">
+                  <CheckCircle className="h-5 w-5" />
+                  <h3 className="font-semibold">Your API Token</h3>
+                </div>
+
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm text-amber-600 dark:text-amber-400 font-semibold">
+                      Important: Save this token now!
+                    </p>
+                    <p className="text-xs text-amber-600/80 dark:text-amber-400/80">
+                      {"You won't be able to see it again. Store it securely."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Token</Label>
+                  <div className="relative">
+                    <Input
+                      value={apiToken}
+                      readOnly
+                      type={apiTokenVisible ? "text" : "password"}
+                      className="pr-20 font-mono text-sm"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setApiTokenVisible(!apiTokenVisible)}
+                        className="h-7 w-7 p-0"
+                      >
+                        {apiTokenVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={copyApiToken} className="h-7 w-7 p-0">
+                        <Copy className={`h-4 w-4 ${tokenCopied ? "text-green-500" : ""}`} />
+                      </Button>
+                    </div>
+                  </div>
+                  {tokenCopied && (
+                    <p className="text-xs text-green-500 flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      Copied to clipboard!
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">How to use this token:</p>
+                  <div className="bg-muted/50 rounded p-3 text-xs font-mono">
+                    <p className="text-muted-foreground mb-2"># Add to request headers:</p>
+                    <p>{'Authorization: Bearer YOUR_TOKEN_HERE'}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    See the README documentation for complete integration examples with Homepage and Home Assistant.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => {
+                    setApiToken("")
+                  setShowApiTokenSection(false)
+                }}
+                variant="outline"
+              >
+                  Done
+                </Button>
+              </div>
+            )}
+
+            {/* Existing Tokens List */}
+            {!loadingTokens && existingTokens.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-muted-foreground">Active Tokens</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadApiTokens}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Refresh
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {existingTokens.map((token) => (
+                    <div
+                      key={token.id}
+                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                          <Key className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{token.name}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <code className="font-mono">{token.token_prefix}</code>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {token.created_at
+                                ? new Date(token.created_at).toLocaleDateString()
+                                : "Unknown"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRevokeToken(token.id)}
+                        disabled={revokingTokenId === token.id}
+                        className="h-8 px-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
+                      >
+                        {revokingTokenId === token.id ? (
+                          <div className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                        <span className="ml-1 text-xs hidden sm:inline">Revoke</span>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {loadingTokens && (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading tokens...</span>
+              </div>
+            )}
+
+            {!loadingTokens && existingTokens.length === 0 && !showApiTokenSection && !apiToken && (
+              <div className="text-center py-4 text-sm text-muted-foreground">
+                No API tokens created yet
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Proxmox VE Security Group ── */}
+      <div className="flex items-center gap-3 mt-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-500">Proxmox VE</h2>
+        <div className="flex-1 h-px bg-orange-500/20" />
+      </div>
+
+      {/* Proxmox Firewall */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Flame className="h-5 w-5 text-orange-500" />
+              <CardTitle>Proxmox Firewall</CardTitle>
+            </div>
+            {firewallData?.pve_firewall_installed && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={loadFirewallStatus}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Refresh
+              </Button>
+            )}
+          </div>
+          <CardDescription>
+            Manage the Proxmox VE built-in firewall: enable/disable, configure rules, and protect your services
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {firewallLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full" />
+            </div>
+          ) : !firewallData?.pve_firewall_installed ? (
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-yellow-500">Proxmox Firewall Not Detected</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  The pve-firewall service was not found on this system. It should be included with Proxmox VE by default.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Firewall Status Overview */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {/* Cluster Firewall */}
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${firewallData.cluster_fw_enabled ? "bg-green-500/10" : "bg-gray-500/10"}`}>
+                      <Globe className={`h-5 w-5 ${firewallData.cluster_fw_enabled ? "text-green-500" : "text-gray-500"}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Cluster Firewall</p>
+                      <p className="text-xs text-muted-foreground">
+                        {firewallData.cluster_fw_enabled ? "Active - Required for host rules to work" : "Disabled - Must be enabled first"}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={firewallAction}
+                    onClick={() => handleFirewallToggle("cluster", !firewallData.cluster_fw_enabled)}
+                    className={firewallData.cluster_fw_enabled
+                      ? "text-red-500 border-red-500/30 hover:bg-red-500/10 bg-transparent"
+                      : "text-green-500 border-green-500/30 hover:bg-green-500/10 bg-transparent"
+                    }
+                  >
+                    {firewallData.cluster_fw_enabled ? (
+                      <><PowerOff className="h-3.5 w-3.5 mr-1" /> Disable</>
+                    ) : (
+                      <><Power className="h-3.5 w-3.5 mr-1" /> Enable</>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Host Firewall */}
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${firewallData.host_fw_enabled ? "bg-green-500/10" : "bg-gray-500/10"}`}>
+                      <Shield className={`h-5 w-5 ${firewallData.host_fw_enabled ? "text-green-500" : "text-gray-500"}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Host Firewall</p>
+                      <p className="text-xs text-muted-foreground">
+                        {firewallData.host_fw_enabled ? "Active - Rules are being enforced" : "Disabled"}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={firewallAction}
+                    onClick={() => handleFirewallToggle("host", !firewallData.host_fw_enabled)}
+                    className={firewallData.host_fw_enabled
+                      ? "text-red-500 border-red-500/30 hover:bg-red-500/10 bg-transparent"
+                      : "text-green-500 border-green-500/30 hover:bg-green-500/10 bg-transparent"
+                    }
+                  >
+                    {firewallData.host_fw_enabled ? (
+                      <><PowerOff className="h-3.5 w-3.5 mr-1" /> Disable</>
+                    ) : (
+                      <><Power className="h-3.5 w-3.5 mr-1" /> Enable</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {!firewallData.cluster_fw_enabled && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-start gap-2">
+                  <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-blue-500">
+                    The Cluster Firewall must be enabled for any host-level firewall rules to take effect. Enable it first, then configure your host rules.
+                  </p>
+                </div>
+              )}
+
+              {/* Quick Presets */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground">Quick Access Rules</h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {/* Monitor Port 8008 */}
+                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-2.5 h-2.5 rounded-full ${firewallData.monitor_port_open ? "bg-green-500" : "bg-yellow-500"}`} />
+                      <div>
+                        <p className="text-sm font-medium">ProxMenux Monitor</p>
+                        <p className="text-xs text-muted-foreground">Port 8008/TCP</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={firewallAction}
+                      onClick={() => handleMonitorPortToggle(!firewallData.monitor_port_open)}
+                      className={`h-7 text-xs ${firewallData.monitor_port_open
+                        ? "text-red-500 border-red-500/30 hover:bg-red-500/10 bg-transparent"
+                        : "text-green-500 border-green-500/30 hover:bg-green-500/10 bg-transparent"
+                      }`}
+                    >
+                      {firewallData.monitor_port_open ? "Remove" : "Allow"}
+                    </Button>
+                  </div>
+
+                  {/* Proxmox Web UI hint */}
+                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                      <div>
+                        <p className="text-sm font-medium">Proxmox Web UI</p>
+                        <p className="text-xs text-muted-foreground">Port 8006/TCP (always allowed)</p>
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground px-2 py-1 bg-muted/50 rounded">Built-in</span>
+                  </div>
+                </div>
+
+                {!firewallData.monitor_port_open && (firewallData.cluster_fw_enabled || firewallData.host_fw_enabled) && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-yellow-500">
+                      The firewall is active but port 8008 is not allowed. ProxMenux Monitor may be inaccessible from other devices.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Rules Summary Dashboard */}
+              {firewallData.rules.length > 0 && (() => {
+                const acceptCount = firewallData.rules.filter(r => r.action === "ACCEPT").length
+                const dropCount = firewallData.rules.filter(r => r.action === "DROP").length
+                const rejectCount = firewallData.rules.filter(r => r.action === "REJECT").length
+                const blockCount = dropCount + rejectCount
+                const total = firewallData.rules.length
+                const clusterCount = firewallData.rules.filter(r => r.source_file === "cluster").length
+                const hostCount = firewallData.rules.filter(r => r.source_file === "host").length
+                const inCount = firewallData.rules.filter(r => (r.direction || "IN") === "IN").length
+                const outCount = firewallData.rules.filter(r => r.direction === "OUT").length
+                // Collect unique protected ports
+                const protectedPorts = new Set<string>()
+                firewallData.rules.forEach(r => {
+                  if (r.dport) r.dport.split(",").forEach(p => protectedPorts.add(p.trim()))
+                })
+
+                return (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-muted-foreground">Rules Overview</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="p-3 bg-muted/50 rounded-lg border border-border text-center">
+                        <p className="text-lg font-bold text-foreground">{total}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Rules</p>
+                      </div>
+                      <div className="p-3 bg-green-500/5 rounded-lg border border-green-500/20 text-center">
+                        <p className="text-lg font-bold text-green-500">{acceptCount}</p>
+                        <p className="text-[10px] text-green-500/70 uppercase tracking-wider">Accept</p>
+                      </div>
+                      <div className="p-3 bg-red-500/5 rounded-lg border border-red-500/20 text-center">
+                        <p className="text-lg font-bold text-red-500">{blockCount}</p>
+                        <p className="text-[10px] text-red-500/70 uppercase tracking-wider">Block / Reject</p>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg border border-border text-center">
+                        <p className="text-lg font-bold text-foreground">{protectedPorts.size}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Ports Covered</p>
+                      </div>
+                    </div>
+                    {/* Visual bar */}
+                    <div className="space-y-1.5 sm:space-y-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden flex">
+                          {acceptCount > 0 && (
+                            <div className="h-full bg-green-500 transition-all" style={{ width: `${(acceptCount / total) * 100}%` }} />
+                          )}
+                          {dropCount > 0 && (
+                            <div className="h-full bg-red-500 transition-all" style={{ width: `${(dropCount / total) * 100}%` }} />
+                          )}
+                          {rejectCount > 0 && (
+                            <div className="h-full bg-orange-500 transition-all" style={{ width: `${(rejectCount / total) * 100}%` }} />
+                          )}
+                        </div>
+                        <div className="hidden sm:flex items-center gap-3 text-[10px] text-muted-foreground flex-shrink-0">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />Accept</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />Drop</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Reject</span>
+                        </div>
+                      </div>
+                      <div className="flex sm:hidden items-center gap-3 text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />Accept</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />Drop</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Reject</span>
+                      </div>
+                    </div>
+                    {/* Scope breakdown */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Globe className="h-3 w-3 text-blue-400" /> Cluster: {clusterCount}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Shield className="h-3 w-3 text-purple-400" /> Host: {hostCount}
+                      </span>
+                      <span className="text-border">|</span>
+                      <span className="flex items-center gap-1.5">
+                        <ArrowDownLeft className="h-3 w-3" /> IN: {inCount}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <ArrowUpRight className="h-3 w-3" /> OUT: {outCount}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Firewall Rules */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    Firewall Rules ({firewallData.rules_count})
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddRule(!showAddRule)}
+                    className="h-7 text-xs text-orange-500 border-orange-500/30 hover:bg-orange-500/10 bg-transparent"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Rule
+                  </Button>
+                </div>
+
+                {/* Add Rule Form */}
+                {showAddRule && (
+                  <div className="border border-orange-500/30 rounded-lg p-4 bg-orange-500/5 space-y-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Plus className="h-4 w-4 text-orange-500" />
+                      <p className="text-sm font-semibold text-orange-500">New Firewall Rule</p>
+                    </div>
+
+                    {/* Service Presets */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Quick Presets</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: "HTTP", port: "80", proto: "tcp", comment: "HTTP Web" },
+                          { label: "HTTPS", port: "443", proto: "tcp", comment: "HTTPS Web" },
+                          { label: "SSH", port: "22", proto: "tcp", comment: "SSH Remote Access" },
+                          { label: "DNS", port: "53", proto: "udp", comment: "DNS" },
+                          { label: "SMTP", port: "25", proto: "tcp", comment: "SMTP Mail" },
+                          { label: "NFS", port: "2049", proto: "tcp", comment: "NFS" },
+                          { label: "SMB", port: "445", proto: "tcp", comment: "SMB/CIFS" },
+                          { label: "Ping", port: "", proto: "icmp", comment: "ICMP Ping" },
+                        ].map((preset) => (
+                          <Button
+                            key={preset.label}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setNewRule({
+                              ...newRule,
+                              dport: preset.port,
+                              protocol: preset.proto,
+                              comment: preset.comment,
+                              direction: "IN",
+                              action: "ACCEPT",
+                            })}
+                            className="h-6 text-[10px] px-2 text-muted-foreground border-border hover:text-orange-500 hover:border-orange-500/30 bg-transparent"
+                          >
+                            <Zap className="h-2.5 w-2.5 mr-1" />
+                            {preset.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Direction</Label>
+                        <select
+                          value={newRule.direction}
+                          onChange={(e) => setNewRule({...newRule, direction: e.target.value})}
+                          className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm"
+                        >
+                          <option value="IN">IN (incoming)</option>
+                          <option value="OUT">OUT (outgoing)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Action</Label>
+                        <select
+                          value={newRule.action}
+                          onChange={(e) => setNewRule({...newRule, action: e.target.value})}
+                          className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm"
+                        >
+                          <option value="ACCEPT">ACCEPT (allow)</option>
+                          <option value="DROP">DROP (block silently)</option>
+                          <option value="REJECT">REJECT (block with response)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Protocol</Label>
+                        <select
+                          value={newRule.protocol}
+                          onChange={(e) => setNewRule({...newRule, protocol: e.target.value})}
+                          className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm"
+                        >
+                          <option value="tcp">TCP</option>
+                          <option value="udp">UDP</option>
+                          <option value="icmp">ICMP (ping)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Destination Port</Label>
+                        <Input
+                          placeholder="e.g. 80, 443, 8000:9000"
+                          value={newRule.dport}
+                          onChange={(e) => setNewRule({...newRule, dport: e.target.value})}
+                          className="h-9 text-sm"
+                        />
+                        <p className="text-[10px] text-muted-foreground">Single port, comma-separated, or range (8000:9000)</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Source Address (optional)</Label>
+                        <Input
+                          placeholder="e.g. 192.168.1.0/24"
+                          value={newRule.source}
+                          onChange={(e) => setNewRule({...newRule, source: e.target.value})}
+                          className="h-9 text-sm"
+                        />
+                        <p className="text-[10px] text-muted-foreground">IP, CIDR, or leave empty for any source</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Interface (optional)</Label>
+                        <select
+                          value={newRule.iface}
+                          onChange={(e) => setNewRule({...newRule, iface: e.target.value})}
+                          className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm"
+                        >
+                          <option value="">Any interface</option>
+                          {networkInterfaces.map((iface) => (
+                            <option key={iface.name} value={iface.name}>
+                              {iface.name} ({iface.type}{iface.status === "up" ? ", up" : ", down"})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Apply to</Label>
+                        <select
+                          value={newRule.level}
+                          onChange={(e) => setNewRule({...newRule, level: e.target.value})}
+                          className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm"
+                        >
+                          <option value="host">Host firewall (this node)</option>
+                          <option value="cluster">Cluster firewall (all nodes)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Comment (optional)</Label>
+                      <Input
+                        placeholder="e.g. Allow web traffic"
+                        value={newRule.comment}
+                        onChange={(e) => setNewRule({...newRule, comment: e.target.value})}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowAddRule(false)}
+                        className="text-muted-foreground"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={addingRule}
+                        onClick={handleAddRule}
+                        className="bg-orange-600 hover:bg-orange-700 text-white"
+                      >
+                        {addingRule ? (
+                          <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full mr-1" />
+                        ) : (
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Add Rule
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rules List */}
+                {firewallData.rules.length > 0 ? (
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    {/* Table header */}
+                    <div className="hidden sm:grid grid-cols-[2rem_4.5rem_2rem_3rem_5rem_1fr_3.5rem_2rem] gap-2 px-3 py-2 bg-muted/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider items-center">
+                      <span />
+                      <span>Action</span>
+                      <span />
+                      <span>Proto</span>
+                      <span>Port</span>
+                      <span>Source</span>
+                      <span>Level</span>
+                      <span />
+                    </div>
+
+                    <div className="divide-y divide-border max-h-80 overflow-y-auto">
+                      {firewallData.rules.map((rule, idx) => {
+                        const ruleKey = `${rule.source_file}-${rule.rule_index}`
+                        const isExpanded = expandedRuleKey === ruleKey
+                        const direction = rule.direction || "IN"
+                        const comment = rule.raw?.includes("#") ? rule.raw.split("#").slice(1).join("#").trim() : ""
+                        
+                        return (
+                          <div key={ruleKey}>
+                            {/* Main row */}
+                            <div
+                              className="grid grid-cols-[2rem_4.5rem_1fr_2rem] sm:grid-cols-[2rem_4.5rem_2rem_3rem_5rem_1fr_3.5rem_2rem] gap-2 px-3 py-2.5 items-center hover:bg-white/5 transition-colors cursor-pointer"
+                              onClick={() => setExpandedRuleKey(isExpanded ? null : ruleKey)}
+                            >
+                              {/* Direction icon */}
+                              <div className="flex items-center justify-center">
+                                {direction === "IN" ? (
+                                  <ArrowDownLeft className="h-4 w-4 text-blue-400" />
+                                ) : (
+                                  <ArrowUpRight className="h-4 w-4 text-amber-400" />
+                                )}
+                              </div>
+                              {/* Action badge */}
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold text-center ${
+                                rule.action === "ACCEPT" ? "bg-green-500/10 text-green-500" :
+                                rule.action === "DROP" ? "bg-red-500/10 text-red-500" :
+                                rule.action === "REJECT" ? "bg-orange-500/10 text-orange-500" :
+                                "bg-gray-500/10 text-gray-500"
+                              }`}>
+                                {rule.action || "?"}
+                              </span>
+                              {/* Mobile: combined info on two lines */}
+                              <div className="sm:hidden min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-blue-400 font-mono flex-shrink-0">{rule.p || "*"}</span>
+                                  <span className="text-xs text-muted-foreground flex-shrink-0">:</span>
+                                  <span className="text-xs text-foreground font-mono font-medium">{rule.dport || "*"}</span>
+                                  <span className={`text-[10px] px-1 py-0 rounded flex-shrink-0 ${
+                                    rule.source_file === "cluster" ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
+                                  }`}>{rule.source_file}</span>
+                                </div>
+                                {comment && (
+                                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">{comment}</p>
+                                )}
+                              </div>
+                              {/* Desktop: direction label */}
+                              <span className="hidden sm:block text-xs text-muted-foreground font-mono">{direction}</span>
+                              {/* Protocol */}
+                              <span className="hidden sm:block text-xs text-blue-400 font-mono">{rule.p || "*"}</span>
+                              {/* Port */}
+                              <span className="hidden sm:block text-xs text-foreground font-mono font-medium">{rule.dport || "*"}</span>
+                              {/* Source */}
+                              <span className="hidden sm:block text-xs text-muted-foreground font-mono truncate">{rule.source || "any"}</span>
+                              {/* Level badge */}
+                              <span className={`hidden sm:block text-[10px] px-1.5 py-0.5 rounded text-center ${
+                                rule.source_file === "cluster" ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
+                              }`}>
+                                {rule.source_file}
+                              </span>
+                              {/* Expand/Delete */}
+                              <div className="flex items-center justify-end">
+                                <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                              </div>
+                            </div>
+                            
+                            {/* Expanded details */}
+                            {isExpanded && (
+                              <div className="px-3 pb-3 pt-0 border-t border-border/50 bg-muted/10">
+                                {editingRuleKey === ruleKey ? (
+                                  /* ── Inline Edit Form ── */
+                                  <div className="py-3 space-y-3">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                      <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase">Direction</Label>
+                                        <select value={editRule.direction} onChange={(e) => setEditRule({ ...editRule, direction: e.target.value })}
+                                          className="w-full h-8 text-xs rounded-md border border-border bg-background px-2 mt-0.5">
+                                          <option value="IN">IN</option>
+                                          <option value="OUT">OUT</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase">Action</Label>
+                                        <select value={editRule.action} onChange={(e) => setEditRule({ ...editRule, action: e.target.value })}
+                                          className="w-full h-8 text-xs rounded-md border border-border bg-background px-2 mt-0.5">
+                                          <option value="ACCEPT">ACCEPT</option>
+                                          <option value="DROP">DROP</option>
+                                          <option value="REJECT">REJECT</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase">Protocol</Label>
+                                        <select value={editRule.protocol} onChange={(e) => setEditRule({ ...editRule, protocol: e.target.value })}
+                                          className="w-full h-8 text-xs rounded-md border border-border bg-background px-2 mt-0.5">
+                                          <option value="tcp">TCP</option>
+                                          <option value="udp">UDP</option>
+                                          <option value="icmp">ICMP</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase">Port</Label>
+                                        <Input value={editRule.dport} onChange={(e) => setEditRule({ ...editRule, dport: e.target.value })}
+                                          placeholder="e.g. 80,443" className="h-8 text-xs mt-0.5" />
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                      <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase">Source</Label>
+                                        <Input value={editRule.source} onChange={(e) => setEditRule({ ...editRule, source: e.target.value })}
+                                          placeholder="IP or CIDR" className="h-8 text-xs mt-0.5" />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase">Interface</Label>
+                                        <select value={editRule.iface} onChange={(e) => setEditRule({ ...editRule, iface: e.target.value })}
+                                          className="w-full h-8 text-xs rounded-md border border-border bg-background px-2 mt-0.5">
+                                          <option value="">Any</option>
+                                          {networkInterfaces.map((iface) => (
+                                            <option key={iface.name} value={iface.name}>
+                                              {iface.name} ({iface.type})
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div className="col-span-2 sm:col-span-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase">Comment</Label>
+                                        <Input value={editRule.comment} onChange={(e) => setEditRule({ ...editRule, comment: e.target.value })}
+                                          placeholder="Description" className="h-8 text-xs mt-0.5" />
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2 pt-1">
+                                      <Button variant="ghost" size="sm"
+                                        onClick={(e) => { e.stopPropagation(); setEditingRuleKey(null) }}
+                                        className="h-7 text-xs text-muted-foreground">
+                                        <X className="h-3 w-3 mr-1" /> Cancel
+                                      </Button>
+                                      <Button variant="outline" size="sm"
+                                        onClick={(e) => { e.stopPropagation(); handleSaveEditRule(rule.rule_index, rule.source_file || "host") }}
+                                        disabled={savingRule}
+                                        className="h-7 text-xs text-green-500 border-green-500/30 hover:bg-green-500/10 bg-transparent">
+                                        {savingRule ? (
+                                          <div className="animate-spin h-3 w-3 border-2 border-green-500 border-t-transparent rounded-full mr-1" />
+                                        ) : (
+                                          <Check className="h-3 w-3 mr-1" />
+                                        )}
+                                        Save Changes
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* ── Read-only Details ── */
+                                  <>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3">
+                                      <div>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Direction</p>
+                                        <p className="text-xs font-medium flex items-center gap-1">
+                                          {direction === "IN" ? <ArrowDownLeft className="h-3 w-3 text-blue-400" /> : <ArrowUpRight className="h-3 w-3 text-amber-400" />}
+                                          {direction === "IN" ? "Incoming" : "Outgoing"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Protocol</p>
+                                        <p className="text-xs font-medium font-mono">{rule.p || "any"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Port</p>
+                                        <p className="text-xs font-medium font-mono">{rule.dport || "any"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Source</p>
+                                        <p className="text-xs font-medium font-mono">{rule.source || "any"}</p>
+                                      </div>
+                                      {rule.i && (
+                                        <div>
+                                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Interface</p>
+                                          <p className="text-xs font-medium font-mono">{rule.i}</p>
+                                        </div>
+                                      )}
+                                      <div>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Scope</p>
+                                        <p className="text-xs font-medium flex items-center gap-1">
+                                          {rule.source_file === "cluster" ? <Globe className="h-3 w-3 text-blue-400" /> : <Shield className="h-3 w-3 text-purple-400" />}
+                                          {rule.source_file === "cluster" ? "Cluster" : "Host"}
+                                        </p>
+                                      </div>
+                                      {comment && (
+                                        <div className="col-span-2">
+                                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Comment</p>
+                                          <p className="text-xs text-muted-foreground">{comment}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                                      <code className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[50%]">{rule.raw}</code>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={(e) => { e.stopPropagation(); startEditRule(rule) }}
+                                          className="h-7 text-xs text-blue-400 border-blue-400/30 hover:bg-blue-400/10 bg-transparent"
+                                        >
+                                          <Pencil className="h-3 w-3 mr-1" />
+                                          Edit
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={(e) => { e.stopPropagation(); handleDeleteRule(rule.rule_index, rule.source_file) }}
+                                          disabled={deletingRuleIdx === rule.rule_index}
+                                          className="h-7 text-xs text-red-500 border-red-500/30 hover:bg-red-500/10 bg-transparent"
+                                        >
+                                          {deletingRuleIdx === rule.rule_index ? (
+                                            <div className="animate-spin h-3 w-3 border-2 border-red-500 border-t-transparent rounded-full mr-1" />
+                                          ) : (
+                                            <Trash2 className="h-3 w-3 mr-1" />
+                                          )}
+                                          Delete
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 border border-dashed border-border rounded-lg">
+                    <Shield className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No firewall rules configured yet</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">Click "Add Rule" above to create your first rule</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Secure Gateway */}
+      <SecureGatewaySetup />
+
+      {/* Fail2Ban */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bug className="h-5 w-5 text-red-500" />
+              <CardTitle>Fail2Ban</CardTitle>
+            </div>
+            {fail2banInfo?.installed && (
+              <div className="flex items-center gap-1">
+                {fail2banInfo?.active && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { loadFail2banDetails(); loadSecurityTools(); }}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Refresh
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFail2banUninstallConfirm(true)}
+                  disabled={uninstallingFail2ban}
+                  className="h-8 px-3 text-xs border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50"
+                >
+                  {uninstallingFail2ban ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Uninstall
+                </Button>
+              </div>
+            )}
+          </div>
+          <CardDescription>
+            Intrusion prevention system that bans IPs after repeated failed login attempts
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {toolsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin h-8 w-8 border-4 border-red-500 border-t-transparent rounded-full" />
+            </div>
+          ) : !fail2banInfo?.installed ? (
+            /* --- NOT INSTALLED --- */
+            <div className="space-y-4">
+  <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
+  <div className="w-10 h-10 rounded-full bg-gray-500/10 flex items-center justify-center shrink-0">
+  <Bug className="h-5 w-5 text-gray-500" />
+  </div>
+  <div>
+  <p className="font-medium">Fail2Ban Not Installed</p>
+  <p className="text-sm text-muted-foreground">Protect SSH, Proxmox web interface, and ProxMenux Monitor from brute force attacks</p>
+  </div>
+  </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-2 text-sm text-blue-400">
+                    <p className="font-medium">What Fail2Ban will configure:</p>
+                    <ul className="list-disc list-inside space-y-1 text-blue-300">
+                      <li>SSH protection (max 2 retries, 9h ban)</li>
+                      <li>Proxmox web interface protection (port 8006, max 3 retries, 1h ban)</li>
+                      <li>ProxMenux Monitor protection (port 8008 + reverse proxy, max 3 retries, 1h ban)</li>
+                      <li>Global settings with nftables backend</li>
+                    </ul>
+                    <p className="text-xs text-blue-300/70 mt-1">All settings can be customized after installation. You can change retries, ban time, or set permanent bans.</p>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => setShowFail2banInstaller(true)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Install and Configure Fail2Ban
+              </Button>
+            </div>
+          ) : (
+            /* --- INSTALLED --- */
+            <div className="space-y-4">
+              {/* Status bar */}
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${fail2banInfo.active ? "bg-green-500/10" : "bg-yellow-500/10"}`}>
+                    <Bug className={`h-5 w-5 ${fail2banInfo.active ? "text-green-500" : "text-yellow-500"}`} />
+                  </div>
+                  <div>
+                    <p className="font-medium">{fail2banInfo.version}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {fail2banInfo.active ? "Service is running" : "Service is not running"}
+                    </p>
+                  </div>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${fail2banInfo.active ? "bg-green-500/10 text-green-500" : "bg-yellow-500/10 text-yellow-500"}`}>
+                  {fail2banInfo.active ? "Active" : "Inactive"}
+                </div>
+              </div>
+
+              {fail2banInfo.active && f2bDetails && (
+                <>
+                  {/* Summary stats - inline */}
+                  <div className="flex items-center gap-4 flex-wrap px-3 py-2.5 bg-muted/30 rounded-lg border border-border">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="text-muted-foreground">Jails:</span>
+                      <span className="font-bold">{f2bDetails.jails.length}</span>
+                    </div>
+                    <div className="w-px h-4 bg-border" />
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="text-muted-foreground">Banned IPs:</span>
+                      <span className={`font-bold ${f2bDetails.jails.reduce((a, j) => a + j.currently_banned, 0) > 0 ? "text-red-500" : "text-green-500"}`}>
+                        {f2bDetails.jails.reduce((a, j) => a + j.currently_banned, 0)}
+                      </span>
+                    </div>
+                    <div className="w-px h-4 bg-border" />
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="text-muted-foreground">Total Bans:</span>
+                      <span className="font-bold text-orange-500">
+                        {f2bDetails.jails.reduce((a, j) => a + j.total_banned, 0)}
+                      </span>
+                    </div>
+                    <div className="w-px h-4 bg-border" />
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="text-muted-foreground">Failed Attempts:</span>
+                      <span className="font-bold text-yellow-500">
+                        {f2bDetails.jails.reduce((a, j) => a + j.total_failed, 0)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Missing jails warning */}
+                  {(() => {
+                    const expectedJails = ["sshd", "proxmox", "proxmenux"]
+                    const currentNames = f2bDetails.jails.map(j => j.name.toLowerCase())
+                    const missing = expectedJails.filter(j => !currentNames.includes(j))
+                    if (missing.length === 0) return null
+
+                    const jailLabels: Record<string, string> = {
+                      sshd: "SSH (sshd)",
+                      proxmox: "Proxmox UI (port 8006)",
+                      proxmenux: "ProxMenux Monitor (port 8008)",
+                    }
+
+                    return (
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-yellow-500">Missing protections detected</p>
+                              <p className="text-xs text-yellow-400/80">
+                                The following jails are not configured:{" "}
+                                {missing.map(j => jailLabels[j] || j).join(", ")}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            disabled={f2bApplyingJails}
+                            onClick={handleApplyMissingJails}
+                            className="bg-yellow-600 hover:bg-yellow-700 text-white flex-shrink-0"
+                          >
+                            {f2bApplyingJails ? (
+                              <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full mr-1.5" />
+                            ) : (
+                              <Shield className="h-3.5 w-3.5 mr-1.5" />
+                            )}
+                            Apply Missing Jails
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Tab switcher */}
+                  <div className="flex gap-0 rounded-lg border border-border overflow-hidden">
+                    <button
+                      onClick={() => setF2bActiveTab("jails")}
+                      className={`flex-1 px-3 py-2.5 text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+                        f2bActiveTab === "jails"
+                          ? "bg-red-500 text-white"
+                          : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      <Shield className="h-3.5 w-3.5" />
+                      Jails & Banned IPs
+                    </button>
+                    <button
+                      onClick={() => setF2bActiveTab("activity")}
+                      className={`flex-1 px-3 py-2.5 text-sm font-medium transition-all flex items-center justify-center gap-1.5 border-l border-border ${
+                        f2bActiveTab === "activity"
+                          ? "bg-red-500 text-white"
+                          : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      Recent Activity
+                    </button>
+                  </div>
+
+                  {/* JAILS TAB */}
+                  {f2bActiveTab === "jails" && (
+                    <div className="space-y-3">
+                      {f2bDetails.jails.map((jail) => (
+                        <div key={jail.name} className="border border-border rounded-lg overflow-hidden">
+                          {/* Jail header */}
+                          <div className="flex items-center justify-between p-3 bg-muted/40">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-2.5 h-2.5 rounded-full ${jail.currently_banned > 0 ? "bg-red-500 animate-pulse" : "bg-green-500"}`} />
+                              <span className="font-semibold text-sm">{jail.name}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {jail.name === "sshd" ? "SSH Remote Access" :
+                                 jail.name === "proxmox" ? "Proxmox UI :8006" :
+                                 jail.name === "proxmenux" ? "ProxMenux Monitor :8008" :
+                                 ""}
+                              </span>
+                              {parseInt(jail.bantime, 10) === -1 && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-500">PERMANENT BAN</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground mr-2">
+                                <span title="Max retries before ban">
+                                  Retries: <span className="text-foreground font-medium">{jail.maxretry}</span>
+                                </span>
+                                <span title="Ban duration">
+                                  Ban: <span className="text-foreground font-medium">{parseInt(jail.bantime, 10) === -1 ? "Permanent" : formatBanTime(jail.bantime)}</span>
+                                </span>
+                                <span title="Time window for counting failures">
+                                  Window: <span className="text-foreground font-medium">{formatBanTime(jail.findtime)}</span>
+                                </span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => f2bEditingJail === jail.name ? setF2bEditingJail(null) : openJailConfig(jail)}
+                                className={`h-7 w-7 p-0 ${f2bEditingJail === jail.name ? "text-red-500 bg-red-500/10" : "text-muted-foreground hover:text-foreground"}`}
+                                title="Configure jail settings"
+                              >
+                                <Settings className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Jail config editor */}
+                          {f2bEditingJail === jail.name && (
+                            <div className="border-t border-border bg-muted/20 p-4 space-y-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Settings className="h-4 w-4 text-red-500" />
+                                <p className="text-sm font-semibold text-red-500">Configure {jail.name}</p>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-3">
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">Max Retries</Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={f2bJailConfig.maxretry}
+                                    onChange={(e) => setF2bJailConfig({...f2bJailConfig, maxretry: e.target.value})}
+                                    className="h-9 text-sm"
+                                    placeholder="e.g. 3"
+                                  />
+                                  <p className="text-[10px] text-muted-foreground">Failed attempts before ban</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">Ban Time (seconds)</Label>
+                                  <Input
+                                    type="number"
+                                    min="60"
+                                    value={f2bJailConfig.permanent ? "" : f2bJailConfig.bantime}
+                                    onChange={(e) => setF2bJailConfig({...f2bJailConfig, bantime: e.target.value, permanent: false})}
+                                    className="h-9 text-sm"
+                                    placeholder={f2bJailConfig.permanent ? "Permanent" : "e.g. 3600 = 1h"}
+                                    disabled={f2bJailConfig.permanent}
+                                  />
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                      type="checkbox"
+                                      id={`permanent-${jail.name}`}
+                                      checked={f2bJailConfig.permanent}
+                                      onChange={(e) => setF2bJailConfig({...f2bJailConfig, permanent: e.target.checked, bantime: ""})}
+                                      className="rounded border-border"
+                                    />
+                                    <label htmlFor={`permanent-${jail.name}`} className="text-[10px] text-red-500 font-medium cursor-pointer">
+                                      Permanent ban (never expires)
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">Find Time (seconds)</Label>
+                                  <Input
+                                    type="number"
+                                    min="60"
+                                    value={f2bJailConfig.findtime}
+                                    onChange={(e) => setF2bJailConfig({...f2bJailConfig, findtime: e.target.value})}
+                                    className="h-9 text-sm"
+                                    placeholder="e.g. 600 = 10m"
+                                  />
+                                  <p className="text-[10px] text-muted-foreground">Time window for counting retries</p>
+                                </div>
+                              </div>
+
+                              <div className="bg-blue-500/10 border border-blue-500/20 rounded p-2.5 flex items-start gap-2">
+                                <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                <p className="text-[11px] text-blue-400">
+                                  Common values: 600s = 10min, 3600s = 1h, 32400s = 9h, 86400s = 24h. Set ban to permanent if you want blocked IPs to stay blocked until you manually unban them.
+                                </p>
+                              </div>
+
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setF2bEditingJail(null)}
+                                  className="text-muted-foreground"
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  disabled={f2bSavingConfig}
+                                  onClick={handleSaveJailConfig}
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                >
+                                  {f2bSavingConfig ? (
+                                    <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full mr-1" />
+                                  ) : (
+                                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                  )}
+                                  Save Configuration
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Mobile config summary (visible only on small screens) */}
+                          <div className="sm:hidden flex items-center justify-around p-2 bg-muted/20 border-t border-border text-xs text-muted-foreground">
+                            <span>Retries: <span className="text-foreground font-medium">{jail.maxretry}</span></span>
+                            <span>Ban: <span className="text-foreground font-medium">{parseInt(jail.bantime, 10) === -1 ? "Perm" : formatBanTime(jail.bantime)}</span></span>
+                            <span>Window: <span className="text-foreground font-medium">{formatBanTime(jail.findtime)}</span></span>
+                          </div>
+
+                          {/* Jail stats - inline */}
+                          <div className="flex items-center gap-4 flex-wrap px-3 py-2 border-t border-border">
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <span className="text-muted-foreground">Banned:</span>
+                              <span className={`font-bold ${jail.currently_banned > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {jail.currently_banned}
+                              </span>
+                            </div>
+                            <div className="w-px h-4 bg-border" />
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <span className="text-muted-foreground">Total Bans:</span>
+                              <span className="font-bold text-orange-500">{jail.total_banned}</span>
+                            </div>
+                            <div className="w-px h-4 bg-border" />
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <span className="text-muted-foreground">Failed Now:</span>
+                              <span className="font-bold text-yellow-500">{jail.currently_failed}</span>
+                            </div>
+                            <div className="w-px h-4 bg-border" />
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <span className="text-muted-foreground">Total Failed:</span>
+                              <span className="font-bold text-muted-foreground">{jail.total_failed}</span>
+                            </div>
+                          </div>
+
+                          {/* Banned IPs list */}
+                          {jail.banned_ips.length > 0 && (
+                            <div className="border-t border-border">
+                              <div className="px-3 py-2 bg-red-500/5">
+                                <p className="text-xs font-semibold text-red-500 mb-2">
+                                  Banned IPs ({jail.banned_ips.length})
+                                </p>
+                                <div className="space-y-1.5">
+                                  {jail.banned_ips.map((entry) => (
+                                    <div key={entry.ip} className="flex items-center justify-between px-3 py-2 bg-card rounded-md border border-red-500/20">
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                                        <code className="text-sm font-mono">{entry.ip}</code>
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                          entry.type === "local"
+                                            ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                            : entry.type === "external"
+                                            ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                                            : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
+                                        }`}>
+                                          {entry.type === "local" ? "LAN" : entry.type === "external" ? "External" : "Unknown"}
+                                        </span>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleUnbanIp(jail.name, entry.ip)}
+                                        disabled={f2bUnbanning === `${jail.name}:${entry.ip}`}
+                                        className="h-7 px-2.5 text-xs text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                                      >
+                                        {f2bUnbanning === `${jail.name}:${entry.ip}` ? (
+                                          <div className="animate-spin h-3 w-3 border-2 border-green-500 border-t-transparent rounded-full" />
+                                        ) : (
+                                          <>
+                                            <ShieldCheck className="h-3 w-3 mr-1" />
+                                            Unban
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {jail.currently_banned === 0 && (
+                            <div className="px-3 py-2 border-t border-border text-center">
+                              <p className="text-xs text-muted-foreground">No IPs currently banned in this jail</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {f2bDetails.jails.length === 0 && (
+                        <div className="text-center py-6 text-muted-foreground text-sm">
+                          No jails configured
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ACTIVITY TAB */}
+                  {f2bActiveTab === "activity" && (
+                    <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                      {f2bActivity.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground text-sm">
+                          No recent activity in the Fail2Ban log
+                        </div>
+                      ) : (
+                        f2bActivity.map((event, idx) => (
+                          <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-muted/20 rounded-md hover:bg-muted/40 transition-colors">
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              event.action === "ban" ? "bg-red-500" :
+                              event.action === "unban" ? "bg-green-500" :
+                              "bg-yellow-500"
+                            }`} />
+                            <div className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              event.action === "ban" ? "bg-red-500/10 text-red-500" :
+                              event.action === "unban" ? "bg-green-500/10 text-green-500" :
+                              "bg-yellow-500/10 text-yellow-500"
+                            }`}>
+                              {event.action}
+                            </div>
+                            <code className="text-xs font-mono text-foreground flex-shrink-0">{event.ip}</code>
+                            <span className="text-xs text-muted-foreground">{event.jail}</span>
+                            <span className="text-[10px] text-muted-foreground/70 ml-auto flex-shrink-0">{event.timestamp}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {fail2banInfo.active && !f2bDetails && f2bDetailsLoading && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin h-6 w-6 border-3 border-red-500 border-t-transparent rounded-full" />
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Lynis */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Search className="h-5 w-5 text-cyan-500" />
+              <CardTitle>Lynis Security Audit</CardTitle>
+            </div>
+            {lynisInfo?.installed && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLynisUninstallConfirm(true)}
+                disabled={uninstallingLynis}
+                className="h-8 px-3 text-xs border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50"
+              >
+                {uninstallingLynis ? (
+                  <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Uninstall
+              </Button>
+            )}
+          </div>
+          <CardDescription>
+            System security auditing tool that performs comprehensive security scans
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {toolsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin h-8 w-8 border-4 border-cyan-500 border-t-transparent rounded-full" />
+            </div>
+          ) : !lynisInfo?.installed ? (
+            <div className="space-y-4">
+  <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
+  <div className="w-10 h-10 rounded-full bg-gray-500/10 flex items-center justify-center shrink-0">
+  <Search className="h-5 w-5 text-gray-500" />
+  </div>
+  <div>
+  <p className="font-medium">Lynis Not Installed</p>
+  <p className="text-sm text-muted-foreground">Comprehensive security auditing and hardening tool</p>
+  </div>
+  </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-2 text-sm text-blue-400">
+                    <p className="font-medium">Lynis features:</p>
+                    <ul className="list-disc list-inside space-y-1 text-blue-300">
+                      <li>System hardening scoring (0-100)</li>
+                      <li>Vulnerability detection and suggestions</li>
+                      <li>Compliance checking (PCI-DSS, HIPAA, etc.)</li>
+                      <li>Installed from latest GitHub source</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => setShowLynisInstaller(true)}
+                className="bg-cyan-600 hover:bg-cyan-700 text-white"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Install Lynis
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Status bar */}
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Search className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Lynis {lynisInfo.version}</p>
+                    <p className="text-sm text-muted-foreground">Security auditing tool installed</p>
+                  </div>
+                </div>
+                <div className="px-3 py-1 rounded-full text-sm font-medium bg-green-500/10 text-green-500">
+                  Installed
+                </div>
+              </div>
+
+              {/* Summary stats */}
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+                <div className="p-3 bg-muted/30 rounded-lg border border-border text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Last Scan</p>
+                  <p className="text-sm font-medium">
+                    {lynisInfo.last_scan ? lynisInfo.last_scan.replace("T", " ").substring(0, 16) : "Never"}
+                  </p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg border border-border text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Hardening Index</p>
+                  {(() => {
+                    const rawScore = lynisReport?.hardening_index ?? lynisInfo.hardening_index
+                    const adjScore = lynisReport?.proxmox_adjusted_score
+                    const displayScore = adjScore ?? rawScore
+                    const scoreColorClass = displayScore === null || displayScore === undefined ? "text-muted-foreground" :
+                      displayScore >= 70 ? "text-green-500" :
+                      displayScore >= 50 ? "text-yellow-500" : "text-red-500"
+                    return (
+                      <div>
+                        <p className={`text-xl font-bold ${scoreColorClass}`}>
+                          {displayScore !== null && displayScore !== undefined ? displayScore : "N/A"}
+                        </p>
+                        {adjScore != null && rawScore != null && adjScore !== rawScore && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Lynis: {rawScore} | PVE: {adjScore}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg border border-border text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Warnings</p>
+                  {(() => {
+                    if (!lynisReport) return <p className="text-xl font-bold text-muted-foreground">-</p>
+                    const total = lynisReport.warnings.length
+                    const expected = lynisReport.proxmox_expected_warnings ?? 0
+                    const real = total - expected
+                    return (
+                      <div>
+                        <p className={`text-xl font-bold ${real > 0 ? "text-red-500" : total > 0 ? "text-yellow-500" : "text-green-500"}`}>
+                          {real > 0 ? real : total}
+                        </p>
+                        {expected > 0 && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            +{expected} PVE expected
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg border border-border text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Suggestions</p>
+                  {(() => {
+                    if (!lynisReport) return <p className="text-xl font-bold text-muted-foreground">-</p>
+                    const total = lynisReport.suggestions.length
+                    const expected = lynisReport.proxmox_expected_suggestions ?? 0
+                    const real = total - expected
+                    return (
+                      <div>
+                        <p className={`text-xl font-bold ${real > 0 ? "text-yellow-500" : "text-green-500"}`}>
+                          {real > 0 ? real : total}
+                        </p>
+                        {expected > 0 && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            +{expected} PVE expected
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              {/* Hardening bar */}
+              {(() => {
+                const rawScore = lynisReport?.hardening_index ?? lynisInfo.hardening_index
+                const adjScore = lynisReport?.proxmox_adjusted_score
+                if (rawScore === null || rawScore === undefined) return null
+                const displayScore = adjScore ?? rawScore
+                const hasAdjustment = adjScore != null && adjScore !== rawScore
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        Security Hardening Score {hasAdjustment && <span className="text-cyan-400/70">(Proxmox Adjusted)</span>}
+                      </span>
+                      <span className={`font-bold ${
+                        displayScore >= 70 ? "text-green-500" : displayScore >= 50 ? "text-yellow-500" : "text-red-500"
+                      }`}>
+                        {displayScore}/100
+                      </span>
+                    </div>
+                    {hasAdjustment ? (
+                      <div className="relative w-full h-3 bg-muted/50 rounded-full overflow-hidden">
+                        {/* Raw score bar (dimmed) */}
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full bg-yellow-500/30"
+                          style={{ width: `${rawScore}%` }}
+                        />
+                        {/* Adjusted score bar */}
+                        <div
+                          className={`absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ${
+                            displayScore >= 70 ? "bg-green-500" : displayScore >= 50 ? "bg-yellow-500" : "bg-red-500"
+                          }`}
+                          style={{ width: `${displayScore}%` }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-3 bg-muted/50 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-1000 ${
+                            displayScore >= 70 ? "bg-green-500" : displayScore >= 50 ? "bg-yellow-500" : "bg-red-500"
+                          }`}
+                          style={{ width: `${displayScore}%` }}
+                        />
+                      </div>
+                    )}
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Critical (0-49)</span>
+                      <span>Moderate (50-69)</span>
+                      <span>Good (70-100)</span>
+                    </div>
+                    {hasAdjustment && (
+                      <p className="text-[10px] text-cyan-400/70 text-center">
+                        Lynis raw score: {rawScore}/100 | {(lynisReport?.proxmox_expected_warnings ?? 0) + (lynisReport?.proxmox_expected_suggestions ?? 0)} findings are expected in Proxmox VE
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* Running indicator */}
+              {lynisAuditRunning && (
+                <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin h-5 w-5 border-2 border-cyan-500 border-t-transparent rounded-full" />
+                    <div>
+                      <p className="text-sm font-medium text-cyan-500">Security audit in progress...</p>
+                      <p className="text-xs text-cyan-400/70">This may take 2-5 minutes. Lynis is scanning your system for vulnerabilities, misconfigurations, and hardening opportunities.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Reports list */}
+              {lynisReport && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Reports</p>
+
+                  {/* Report row - clickable to expand */}
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setLynisShowReport(!lynisShowReport)}
+                      className="w-full flex items-center justify-between p-3 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-4 w-4 text-cyan-500 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium">
+                            Security Audit - {lynisReport.datetime_start
+                              ? lynisReport.datetime_start.replace("T", " ").substring(0, 16)
+                              : lynisInfo.last_scan?.replace("T", " ").substring(0, 16) || "Unknown date"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {lynisReport.hostname || "System"} - {lynisReport.tests_performed} tests - PVE Score: {lynisReport.proxmox_adjusted_score ?? lynisReport.hardening_index ?? "N/A"}/100 - {lynisReport.warnings.length - (lynisReport.proxmox_expected_warnings ?? 0)} warnings - {lynisReport.suggestions.length - (lynisReport.proxmox_expected_suggestions ?? 0)} suggestions
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const html = generatePrintableReport(lynisReport)
+                            // Use Blob URL for Safari-safe preview (avoids document.write issues)
+                            const blob = new Blob([html], { type: "text/html" })
+                            const url = URL.createObjectURL(blob)
+                            const w = window.open(url, "_blank")
+                            // Revoke after a delay so it loads first
+                            if (w) setTimeout(() => URL.revokeObjectURL(url), 60000)
+                          }}
+                          className="h-7 gap-1.5 px-2.5 text-xs border-cyan-500/30 text-cyan-500 hover:text-cyan-400 hover:bg-cyan-500/10"
+                          title="Print / Save as PDF"
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">PDF</span>
+                        </Button>
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${lynisShowReport ? "rotate-180" : ""}`} />
+                        {/* Delete button separated with divider to prevent accidental clicks */}
+                        <div className="hidden sm:block w-px h-5 bg-border mx-1" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (confirm("Delete this audit report? The report file will be removed from the server.")) {
+                              fetchApi("/api/security/lynis/report", { method: "DELETE" })
+                                .then(() => {
+                                  setLynisReport(null)
+                                  setLynisShowReport(false)
+                                  setSuccess("Report deleted")
+                                  loadSecurityTools()
+                                })
+                                .catch(() => setError("Failed to delete report"))
+                            }
+                          }}
+                          className="h-7 px-2 text-xs text-red-500 hover:text-red-400 hover:bg-red-500/10 ml-2 sm:ml-0"
+                          title="Delete report"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </button>
+
+                    {/* Expanded report details */}
+                    {lynisShowReport && (
+                      <div className="border-t border-border">
+                        {/* System info strip */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border">
+                          <div className="p-2.5 bg-card text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase">Hostname</p>
+                            <p className="text-xs font-medium truncate">{lynisReport.hostname || "N/A"}</p>
+                          </div>
+                          <div className="p-2.5 bg-card text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase">OS</p>
+                            <p className="text-xs font-medium truncate">{lynisReport.os_fullname || `${lynisReport.os_name} ${lynisReport.os_version}`.trim() || "N/A"}</p>
+                          </div>
+                          <div className="p-2.5 bg-card text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase">Kernel</p>
+                            <p className="text-xs font-medium truncate">{lynisReport.kernel_version || "N/A"}</p>
+                          </div>
+                          <div className="p-2.5 bg-card text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase">Tests</p>
+                            <p className="text-xs font-medium">{lynisReport.tests_performed}</p>
+                          </div>
+                        </div>
+
+                        {/* Report tabs - responsive with shorter labels on mobile */}
+                        <div className="flex gap-0 border-t border-border overflow-x-auto">
+                          {(["overview", "checks", "warnings", "suggestions"] as const).map((tab) => (
+                            <button
+                              key={tab}
+                              onClick={() => setLynisActiveTab(tab)}
+                              className={`flex-1 min-w-0 px-2 sm:px-3 py-2 text-xs font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5 border-r last:border-r-0 border-border ${
+                                lynisActiveTab === tab
+                                  ? "bg-cyan-500 text-white"
+                                  : "bg-muted/20 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                              }`}
+                            >
+                              {tab === "overview" && <BarChart3 className="h-3 w-3 shrink-0" />}
+                              {tab === "checks" && <Search className="h-3 w-3 shrink-0" />}
+                              {tab === "warnings" && <TriangleAlert className="h-3 w-3 shrink-0" />}
+                              {tab === "suggestions" && <Info className="h-3 w-3 shrink-0" />}
+                              <span className="hidden sm:inline">
+                                {tab === "overview" ? "Overview"
+                                  : tab === "checks" ? `Checks (${lynisReport.sections?.length || 0})`
+                                  : tab === "warnings" ? `Warnings (${lynisReport.warnings.length})`
+                                  : `Suggestions (${lynisReport.suggestions.length})`}
+                              </span>
+                              <span className="sm:hidden">
+                                {tab === "overview" ? ""
+                                  : tab === "checks" ? `(${lynisReport.sections?.length || 0})`
+                                  : tab === "warnings" ? `(${lynisReport.warnings.length})`
+                                  : `(${lynisReport.suggestions.length})`}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Overview tab */}
+                        {lynisActiveTab === "overview" && (
+                          <div className="p-4 space-y-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
+                                <p className="text-[10px] text-muted-foreground uppercase mb-1">Packages</p>
+                                <p className="text-lg font-bold">{lynisReport.installed_packages || "N/A"}</p>
+                              </div>
+                              <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
+                                <p className="text-[10px] text-muted-foreground uppercase mb-1">Firewall</p>
+                                <p className={`text-lg font-bold ${lynisReport.firewall_active ? "text-green-500" : "text-red-500"}`}>
+                                  {lynisReport.firewall_active ? "Active" : "Inactive"}
+                                </p>
+                              </div>
+                              <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
+                                <p className="text-[10px] text-muted-foreground uppercase mb-1">Malware Scanner</p>
+                                <p className={`text-lg font-bold ${lynisReport.malware_scanner ? "text-green-500" : "text-yellow-500"}`}>
+                                  {lynisReport.malware_scanner ? "Installed" : "Not Found"}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Security checklist */}
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick Status</p>
+                              {(() => {
+                                const adjScore = lynisReport.proxmox_adjusted_score ?? lynisReport.hardening_index ?? 0
+                                const realWarnings = lynisReport.warnings.length - (lynisReport.proxmox_expected_warnings ?? 0)
+                                return [
+                                {
+                                  label: "Firewall",
+                                  ok: lynisReport.firewall_active,
+                                  passText: "Active",
+                                  failText: "Inactive",
+                                },
+                                {
+                                  label: "Malware Scanner",
+                                  ok: lynisReport.malware_scanner,
+                                  passText: "Installed",
+                                  failText: "Not Installed",
+                                  isWarning: true,
+                                },
+                                {
+                                  label: "Warnings",
+                                  ok: realWarnings <= 0,
+                                  passText: lynisReport.warnings.length === 0 ? "None" : `${lynisReport.warnings.length} (all PVE expected)`,
+                                  failText: `${realWarnings} actionable` + (lynisReport.proxmox_expected_warnings ? ` + ${lynisReport.proxmox_expected_warnings} PVE` : ""),
+                                  isWarning: realWarnings > 0 && realWarnings <= 5,
+                                },
+                                {
+                                  label: "Hardening Score (PVE)",
+                                  ok: adjScore >= 70,
+                                  passText: `${adjScore}/100`,
+                                  failText: `${adjScore}/100 (< 70)`,
+                                  isWarning: adjScore >= 50,
+                                },
+                              ].map((item) => {
+                                const color = item.ok ? "green" : item.isWarning ? "yellow" : "red"
+                                return (
+                                <div key={item.label} className="flex items-center gap-2 px-3 py-1.5 rounded bg-muted/20">
+                                  <div className={`w-2 h-2 rounded-full ${color === "green" ? "bg-green-500" : color === "yellow" ? "bg-yellow-500" : "bg-red-500"}`} />
+                                  <span className="text-xs">{item.label}</span>
+                                  <span className={`ml-auto text-[10px] font-bold ${color === "green" ? "text-green-500" : color === "yellow" ? "text-yellow-500" : "text-red-500"}`}>
+                                    {item.ok ? item.passText : item.failText}
+                                  </span>
+                                </div>
+                              )})
+                              })()}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Checks tab */}
+                        {lynisActiveTab === "checks" && (
+                          <div className="max-h-[500px] overflow-y-auto">
+                            {(!lynisReport.sections || lynisReport.sections.length === 0) ? (
+                              <div className="p-6 text-center text-sm text-muted-foreground">
+                                No check details available. Run an audit to generate detailed results.
+                              </div>
+                            ) : (
+                              <div className="divide-y divide-border">
+                                {lynisReport.sections.map((section, sIdx) => (
+                                  <div key={sIdx}>
+                                    <div className="px-3 py-2 bg-muted/30 flex items-center gap-2">
+                                      <span className="text-[10px] font-bold text-cyan-500 bg-cyan-500/10 px-1.5 py-0.5 rounded">{sIdx + 1}</span>
+                                      <span className="text-xs font-semibold">{section.name}</span>
+                                      <span className="text-[10px] text-muted-foreground ml-auto">{section.checks.length} checks</span>
+                                    </div>
+                                    <div className="divide-y divide-border/50">
+                                      {section.checks.map((check, cIdx) => {
+                                        const st = check.status.toUpperCase()
+                                        const isOk = ["OK", "FOUND", "DONE", "ENABLED", "ACTIVE", "YES", "HARDENED", "PROTECTED", "NONE", "NOT FOUND", "NOT RUNNING", "NOT ACTIVE", "NOT ENABLED", "DEFAULT", "NO"].includes(st)
+                                        const isWarn = ["WARNING", "UNSAFE", "WEAK", "DIFFERENT", "DISABLED"].includes(st)
+                                        const isSugg = ["SUGGESTION", "PARTIALLY HARDENED", "MEDIUM", "NON DEFAULT"].includes(st)
+                                        const dotColor = isWarn ? "bg-red-500" : isSugg ? "bg-yellow-500" : isOk ? "bg-green-500" : "bg-muted-foreground"
+                                        const textColor = isWarn ? "text-red-500" : isSugg ? "text-yellow-500" : isOk ? "text-green-500" : "text-muted-foreground"
+                                        return (
+                                          <div key={cIdx} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/10">
+                                            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor}`} />
+                                            <span className="text-[11px] flex-1 min-w-0 truncate">{check.name}</span>
+                                            {check.detail && <span className="text-[10px] text-muted-foreground/70 truncate max-w-[150px]">{check.detail}</span>}
+                                            <span className={`text-[10px] font-bold flex-shrink-0 ${textColor}`}>{check.status}</span>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Warnings tab */}
+                        {lynisActiveTab === "warnings" && (
+                          <div className="max-h-96 overflow-y-auto">
+                            {lynisReport.warnings.length === 0 ? (
+                              <div className="p-6 text-center text-sm text-muted-foreground">
+                                No warnings found. Your system is well configured.
+                              </div>
+                            ) : (
+                              <div className="divide-y divide-border">
+                                {lynisReport.warnings.map((w, idx) => (
+                                  <div key={idx} className={`p-3 hover:bg-muted/20 transition-colors ${w.proxmox_expected ? "opacity-60" : ""}`}>
+                                    <div className="flex items-start gap-2">
+                                      <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
+                                        w.proxmox_expected ? "bg-cyan-500" :
+                                        w.proxmox_severity === "low" ? "bg-yellow-500" : "bg-red-500"
+                                      }`} />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                          <code className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                            w.proxmox_expected ? "bg-cyan-500/10 text-cyan-400" : "bg-red-500/10 text-red-500"
+                                          }`}>{w.test_id}</code>
+                                          {w.proxmox_expected && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">PVE Expected</span>
+                                          )}
+                                          {!w.proxmox_expected && w.proxmox_severity === "low" && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-500">Low Risk</span>
+                                          )}
+                                          {!w.proxmox_expected && !w.proxmox_severity && w.severity && (
+                                            <span className="text-[10px] text-red-400">{w.severity}</span>
+                                          )}
+                                        </div>
+                                        <p className="text-sm text-foreground">{w.description}</p>
+                                        {w.proxmox_context && (
+                                          <p className="text-xs text-cyan-400/70 mt-1 flex items-start gap-1">
+                                            <span className="shrink-0">Proxmox:</span> {w.proxmox_context}
+                                          </p>
+                                        )}
+                                        {w.solution && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            Solution: {w.solution}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Suggestions tab */}
+                        {lynisActiveTab === "suggestions" && (
+                          <div className="max-h-96 overflow-y-auto">
+                            {lynisReport.suggestions.length === 0 ? (
+                              <div className="p-6 text-center text-sm text-muted-foreground">
+                                No suggestions. System is fully hardened.
+                              </div>
+                            ) : (
+                              <div className="divide-y divide-border">
+                                {lynisReport.suggestions.map((s, idx) => (
+                                  <div key={idx} className={`p-3 hover:bg-muted/20 transition-colors ${s.proxmox_expected ? "opacity-60" : ""}`}>
+                                    <div className="flex items-start gap-2">
+                                      <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
+                                        s.proxmox_expected ? "bg-cyan-500" :
+                                        s.proxmox_severity === "low" ? "bg-muted-foreground" : "bg-yellow-500"
+                                      }`} />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                          <code className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                            s.proxmox_expected ? "bg-cyan-500/10 text-cyan-400" : "bg-yellow-500/10 text-yellow-500"
+                                          }`}>{s.test_id}</code>
+                                          {s.proxmox_expected && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">PVE Expected</span>
+                                          )}
+                                          {!s.proxmox_expected && s.proxmox_severity === "low" && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Low Priority</span>
+                                          )}
+                                        </div>
+                                        <p className="text-sm text-foreground">{s.description}</p>
+                                        {s.proxmox_context && (
+                                          <p className="text-xs text-cyan-400/70 mt-1 flex items-start gap-1">
+                                            <span className="shrink-0">Proxmox:</span> {s.proxmox_context}
+                                          </p>
+                                        )}
+                                        {s.solution && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            Solution: {s.solution}
+                                          </p>
+                                        )}
+                                        {s.details && (
+                                          <p className="text-[10px] text-muted-foreground/70 mt-0.5 font-mono">{s.details}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Run audit button - at the bottom */}
+              <Button
+                onClick={handleRunLynisAudit}
+                disabled={lynisAuditRunning}
+                className="bg-cyan-600 hover:bg-cyan-700 text-white"
+              >
+                {lynisAuditRunning ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                    Running Audit...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Run Security Audit
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Script Terminal Modals */}
+      <ScriptTerminalModal
+        open={showFail2banInstaller}
+        onClose={() => {
+          setShowFail2banInstaller(false)
+          loadSecurityTools()
+        }}
+        scriptPath="/usr/local/share/proxmenux/scripts/security/fail2ban_installer.sh"
+        scriptName="fail2ban_installer"
+        params={{ EXECUTION_MODE: "web" }}
+        title="Fail2Ban Installation"
+        description="Installing and configuring Fail2Ban for SSH and Proxmox protection..."
+      />
+      <ScriptTerminalModal
+        open={showLynisInstaller}
+        onClose={() => {
+          setShowLynisInstaller(false)
+          loadSecurityTools()
+        }}
+        scriptPath="/usr/local/share/proxmenux/scripts/security/lynis_installer.sh"
+        scriptName="lynis_installer"
+        params={{ EXECUTION_MODE: "web" }}
+        title="Lynis Installation"
+        description="Installing Lynis security auditing tool from GitHub..."
+      />
+
+      {/* Uninstall Confirmation Dialogs */}
+      {showFail2banUninstallConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background border border-border rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">Uninstall Fail2Ban?</h3>
+                <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              This will completely remove Fail2Ban and all its configuration, including:
+            </p>
+            <ul className="text-sm text-muted-foreground mb-6 list-disc list-inside space-y-1">
+              <li>SSH protection jail</li>
+              <li>Proxmox web interface protection</li>
+              <li>ProxMenux Monitor protection</li>
+              <li>All custom jail configurations</li>
+              <li>Auth logger services</li>
+            </ul>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowFail2banUninstallConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleUninstallFail2ban}
+                disabled={uninstallingFail2ban}
+              >
+                {uninstallingFail2ban ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                    Uninstalling...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Uninstall
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLynisUninstallConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background border border-border rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">Uninstall Lynis?</h3>
+                <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              This will completely remove Lynis and all audit data, including:
+            </p>
+            <ul className="text-sm text-muted-foreground mb-6 list-disc list-inside space-y-1">
+              <li>Lynis installation (/opt/lynis)</li>
+              <li>Wrapper script (/usr/local/bin/lynis)</li>
+              <li>All audit reports and logs</li>
+            </ul>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowLynisUninstallConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleUninstallLynis}
+                disabled={uninstallingLynis}
+              >
+                {uninstallingLynis ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                    Uninstalling...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Uninstall
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <TwoFactorSetup
+        open={show2FASetup}
+        onClose={() => setShow2FASetup(false)}
+        onSuccess={() => {
+          setSuccess("2FA enabled successfully!")
+          checkAuthStatus()
+        }}
+      />
+    </div>
+  )
+}

@@ -173,13 +173,28 @@ run_script_by_slug() {
   credentials=$(format_credentials "$first")
 
   # Build info message
-  local msg="\Zb\Z4$(translate "Description"):\Zn\n$desc"
-  [[ -n "$notes_dialog" ]] && msg+="\n\n\Zb\Z4$(translate "Notes"):\Zn\n$notes_dialog"
+local msg="\Zb\Z4$(translate "Description"):\Zn\n$desc"
+  if [[ -n "$notes" ]]; then
+    local notes_short=""
+    local char_count=0
+    local max_chars=400
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      char_count=$(( char_count + ${#line} ))
+      if [[ $char_count -lt $max_chars ]]; then
+        notes_short+="• $line\n"
+      else
+        notes_short+="...\n"
+        break
+      fi
+    done <<< "$notes"
+    msg+="\n\n\Zb\Z4$(translate "Notes"):\Zn\n$notes_short"
+  fi
   [[ -n "$credentials" ]] && msg+="\n\n\Zb\Z4$(translate "Default Credentials"):\Zn\n$credentials"
   [[ "$port" -gt 0 ]] && msg+="\n\n\Zb\Z4$(translate "Default Port"):\Zn $port"
   [[ -n "$website" ]] && msg+="\n\Zb\Z4$(translate "Website"):\Zn $website"
 
-  msg+="\n\n$(translate "Choose how to run the script:"):"
+  msg+="\n\n$(translate "Choose how to run the script:")"
 
   # Build menu: one or two entries per script_info (GH + optional Mirror)
   declare -a MENU_OPTS=()
@@ -383,7 +398,7 @@ while true; do
   SELECTED_IDX=$(dialog --backtitle "ProxMenux" \
     --title "Proxmox VE Helper-Scripts" \
     --menu "$(translate "Select a category or search for scripts:"):" \
-    20 70 14 "${MENU_ITEMS[@]}" 3>&1 1>&2 2>&3) || {
+    22 75 15 "${MENU_ITEMS[@]}" 3>&1 1>&2 2>&3) || {
       dialog --clear --title "ProxMenux" \
         --msgbox "\n\n$(translate "Visit the website to discover more scripts, stay updated with the latest updates, and support the project:")\n\nhttps://community-scripts.github.io/ProxmoxVE" 15 70
       exec bash "$LOCAL_SCRIPTS/menus/main_menu.sh"
@@ -425,7 +440,7 @@ while true; do
     SCRIPT_INDEX=$(dialog --colors --backtitle "ProxMenux" \
       --title "$(translate "Scripts in") ${CATEGORY_NAMES[$SELECTED]}" \
       --menu "$(translate "Choose a script to execute:"):" \
-      20 70 14 "${SCRIPTS[@]}" 3>&1 1>&2 2>&3) || break
+      22 75 15 "${SCRIPTS[@]}" 3>&1 1>&2 2>&3) || break
 
     SCRIPT_SELECTED="${INDEX_TO_SLUG[$SCRIPT_INDEX]}"
     run_script_by_slug "$SCRIPT_SELECTED"

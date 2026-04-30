@@ -7,6 +7,7 @@ ProxMenux Flask Server
 - Integrates a web terminal powered by xterm.js
 """
 
+import glob
 import json
 import logging
 import math
@@ -16,11 +17,14 @@ import re
 import select
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
+import threading
 import urllib.parse
 import hardware_monitor
+from health_persistence import health_persistence
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from functools import wraps
@@ -43,7 +47,12 @@ from flask_terminal_routes import terminal_bp, init_terminal_routes  # noqa: E40
 from flask_health_routes import health_bp  # noqa: E402
 from flask_auth_routes import auth_bp  # noqa: E402
 from flask_proxmenux_routes import proxmenux_bp  # noqa: E402
+from flask_security_routes import security_bp  # noqa: E402
+from flask_notification_routes import notification_bp  # noqa: E402
+from flask_oci_routes import oci_bp  # noqa: E402
+from notification_manager import notification_manager  # noqa: E402
 from jwt_middleware import require_auth  # noqa: E402
+import auth_manager  # noqa: E402
 
 # -------------------------------------------------------------------
 # Logging
@@ -63,9 +72,10 @@ _PROXMOX_NODE_CACHE_TTL = 300  # seconds (5 minutes)
 
 def get_proxmox_node_name() -> str:
     """
-    Retrieve the real Proxmox node name.
+    Retrieve the real Proxmox node name for the LOCAL node.
 
     - First tries reading from: `pvesh get /nodes`
+    - In a cluster, matches the local hostname against the node list
     - Uses an in-memory cache to avoid repeated API calls
     - Falls back to the short hostname if the API call fails
     """
@@ -76,6 +86,9 @@ def get_proxmox_node_name() -> str:
     # Cache hit
     if cached_name and (now - float(cached_ts)) < _PROXMOX_NODE_CACHE_TTL:
         return str(cached_name)
+
+    # Get local hostname for matching
+    local_hostname = socket.gethostname().split(".", 1)[0].lower()
 
     # Try Proxmox API
     try:
@@ -90,19 +103,36 @@ def get_proxmox_node_name() -> str:
         if result.returncode == 0 and result.stdout:
             nodes = json.loads(result.stdout)
             if isinstance(nodes, list) and nodes:
-                node_name = nodes[0].get("node")
-                if node_name:
-                    _PROXMOX_NODE_CACHE["name"] = node_name
-                    _PROXMOX_NODE_CACHE["timestamp"] = now
-                    return node_name
+                # In a cluster, find the node that matches local hostname
+                # Node names in Proxmox typically match the hostname
+                for node_info in nodes:
+                    node_name = node_info.get("node", "")
+                    if node_name.lower() == local_hostname:
+                        _PROXMOX_NODE_CACHE["name"] = node_name
+                        _PROXMOX_NODE_CACHE["timestamp"] = now
+                        return node_name
+                
+                # If no exact match, try partial match (hostname might be truncated)
+                for node_info in nodes:
+                    node_name = node_info.get("node", "")
+                    if local_hostname.startswith(node_name.lower()) or node_name.lower().startswith(local_hostname):
+                        _PROXMOX_NODE_CACHE["name"] = node_name
+                        _PROXMOX_NODE_CACHE["timestamp"] = now
+                        return node_name
+                
+                # Last resort: if single node cluster, use that node
+                if len(nodes) == 1:
+                    node_name = nodes[0].get("node")
+                    if node_name:
+                        _PROXMOX_NODE_CACHE["name"] = node_name
+                        _PROXMOX_NODE_CACHE["timestamp"] = now
+                        return node_name
 
     except Exception as exc:
         logger.warning("Failed to get Proxmox node name from API: %s", exc)
 
     # Fallback: short hostname (without domain)
-    hostname = socket.gethostname()
-    short_hostname = hostname.split(".", 1)[0]
-    return short_hostname
+    return local_hostname
 
 
 # -------------------------------------------------------------------
@@ -115,9 +145,69 @@ CORS(app)  # Enable CORS for Next.js frontend
 app.register_blueprint(auth_bp)
 app.register_blueprint(health_bp)
 app.register_blueprint(proxmenux_bp)
+app.register_blueprint(security_bp)
+app.register_blueprint(notification_bp)
+app.register_blueprint(oci_bp)
 
 # Initialize terminal / WebSocket routes
 init_terminal_routes(app)
+
+
+# -------------------------------------------------------------------
+# Fail2Ban application-level ban check (for reverse proxy scenarios)
+# -------------------------------------------------------------------
+# When users access via a reverse proxy, iptables/nftables cannot block
+# the real client IP because the TCP connection comes from the proxy.
+# This middleware checks if the client's real IP (from X-Forwarded-For)
+# is banned in the 'proxmenux' fail2ban jail and blocks at app level.
+import subprocess as _f2b_subprocess
+import time as _f2b_time
+
+# Cache banned IPs for 30 seconds to avoid calling fail2ban-client on every request
+_f2b_banned_cache = {"ips": set(), "ts": 0, "ttl": 30}
+
+def _f2b_get_banned_ips():
+    """Get currently banned IPs from the proxmenux jail, with caching."""
+    now = _f2b_time.time()
+    if now - _f2b_banned_cache["ts"] < _f2b_banned_cache["ttl"]:
+        return _f2b_banned_cache["ips"]
+    try:
+        result = _f2b_subprocess.run(
+            ["fail2ban-client", "status", "proxmenux"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if "Banned IP list:" in line:
+                    ip_str = line.split(":", 1)[1].strip()
+                    banned = set(ip.strip() for ip in ip_str.split() if ip.strip())
+                    _f2b_banned_cache["ips"] = banned
+                    _f2b_banned_cache["ts"] = now
+                    return banned
+    except Exception:
+        pass
+    return _f2b_banned_cache["ips"]
+
+def _f2b_get_client_ip():
+    """Get the real client IP, supporting reverse proxies."""
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP", "")
+    if real_ip:
+        return real_ip.strip()
+    return request.remote_addr or "unknown"
+
+@app.before_request
+def check_fail2ban_ban():
+    """Block requests from IPs banned by fail2ban (works with reverse proxies)."""
+    client_ip = _f2b_get_client_ip()
+    banned_ips = _f2b_get_banned_ips()
+    if client_ip in banned_ips:
+        return jsonify({
+            "success": False,
+            "message": "Access denied. Your IP has been temporarily banned due to too many failed login attempts."
+        }), 403
 
 
 def identify_gpu_type(name, vendor=None, bus=None, driver=None):
@@ -345,6 +435,710 @@ def get_cpu_temperature():
         pass
     return temp
 
+# ── Temperature History (SQLite) ──────────────────────────────────────────────
+# Stores CPU temperature readings every 60s in a lightweight SQLite database.
+# Data is persisted in /usr/local/share/proxmenux/ alongside config.json.
+# Retention: 30 days max, cleaned up every hour.
+
+TEMP_DB_DIR = "/usr/local/share/proxmenux"
+TEMP_DB_PATH = os.path.join(TEMP_DB_DIR, "monitor.db")
+
+def _get_temp_db():
+    """Get a SQLite connection with WAL mode for concurrent reads."""
+    conn = sqlite3.connect(TEMP_DB_PATH, timeout=5)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
+
+def init_temperature_db():
+    """Create the temperature_history table if it doesn't exist."""
+    try:
+        os.makedirs(TEMP_DB_DIR, exist_ok=True)
+        conn = _get_temp_db()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS temperature_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER NOT NULL,
+                value REAL NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_temp_timestamp 
+            ON temperature_history(timestamp)
+        """)
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[ProxMenux] Temperature DB init failed: {e}")
+        return False
+
+def _record_temperature():
+    """Insert a single temperature reading into the DB."""
+    try:
+        temp = get_cpu_temperature()
+        if temp and temp > 0:
+            conn = _get_temp_db()
+            conn.execute(
+                "INSERT INTO temperature_history (timestamp, value) VALUES (?, ?)",
+                (int(time.time()), round(temp, 1))
+            )
+            conn.commit()
+            conn.close()
+    except Exception:
+        pass
+
+def _cleanup_old_temperature_data():
+    """Remove temperature records older than 30 days."""
+    try:
+        cutoff = int(time.time()) - (30 * 24 * 3600)
+        conn = _get_temp_db()
+        conn.execute("DELETE FROM temperature_history WHERE timestamp < ?", (cutoff,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+def get_temperature_sparkline(minutes=60):
+    """Get recent temperature data for the overview sparkline."""
+    try:
+        since = int(time.time()) - (minutes * 60)
+        conn = _get_temp_db()
+        cursor = conn.execute(
+            "SELECT timestamp, value FROM temperature_history WHERE timestamp >= ? ORDER BY timestamp ASC",
+            (since,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"timestamp": r[0], "value": r[1]} for r in rows]
+    except Exception:
+        return []
+
+def get_temperature_history(timeframe="hour"):
+    """Get temperature history with downsampling for longer timeframes."""
+    try:
+        now = int(time.time())
+        if timeframe == "hour":
+            since = now - 3600
+            interval = None  # All points (~60)
+        elif timeframe == "day":
+            since = now - 86400
+            interval = 300  # 5 min avg (288 points)
+        elif timeframe == "week":
+            since = now - 7 * 86400
+            interval = 1800  # 30 min avg (336 points)
+        elif timeframe == "month":
+            since = now - 30 * 86400
+            interval = 7200  # 2h avg (360 points)
+        else:
+            since = now - 3600
+            interval = None
+        
+        conn = _get_temp_db()
+        
+        if interval is None:
+            cursor = conn.execute(
+                "SELECT timestamp, value FROM temperature_history WHERE timestamp >= ? ORDER BY timestamp ASC",
+                (since,)
+            )
+            rows = cursor.fetchall()
+            data = [{"timestamp": r[0], "value": r[1]} for r in rows]
+        else:
+            # Downsample: average value per interval bucket
+            cursor = conn.execute(
+                """SELECT (timestamp / ?) * ? as bucket, 
+                          ROUND(AVG(value), 1) as avg_val,
+                          ROUND(MIN(value), 1) as min_val,
+                          ROUND(MAX(value), 1) as max_val
+                   FROM temperature_history 
+                   WHERE timestamp >= ? 
+                   GROUP BY bucket 
+                   ORDER BY bucket ASC""",
+                (interval, interval, since)
+            )
+            rows = cursor.fetchall()
+            data = [{"timestamp": r[0], "value": r[1], "min": r[2], "max": r[3]} for r in rows]
+        
+        conn.close()
+        
+        # Compute stats
+        if data:
+            values = [d["value"] for d in data]
+            # For downsampled data, use actual min/max from each bucket
+            # (not min/max of the averages, which would be wrong)
+            if interval is not None and "min" in data[0]:
+                actual_min = min(d["min"] for d in data)
+                actual_max = max(d["max"] for d in data)
+            else:
+                actual_min = min(values)
+                actual_max = max(values)
+            stats = {
+                "min": round(actual_min, 1),
+                "max": round(actual_max, 1),
+                "avg": round(sum(values) / len(values), 1),
+                "current": values[-1]
+            }
+        else:
+            stats = {"min": 0, "max": 0, "avg": 0, "current": 0}
+        
+        return {"data": data, "stats": stats}
+    except Exception as e:
+        return {"data": [], "stats": {"min": 0, "max": 0, "avg": 0, "current": 0}}
+
+def _temperature_collector_loop():
+    """Background thread: collect temperature and latency with staggered timing.
+    
+    Staggered schedule to avoid CPU spikes:
+    - Temperature record: every 60s at offset 40s
+    - Latency pings: every 60s at offset 25s  
+    - Cleanup: every 60 min at offset 120s
+    """
+    import time as _time
+    
+    RECORD_INTERVAL = 60
+    TEMP_OFFSET = 40      # Record temp at :40 of each minute
+    LATENCY_OFFSET = 25   # Record latency at :25 of each minute
+    CLEANUP_INTERVAL = 3600  # 60 minutes
+    CLEANUP_OFFSET = 120  # Cleanup at 2 min after the hour mark
+    
+    # Initial delays to stagger from other collectors
+    _time.sleep(LATENCY_OFFSET)  # Start latency first
+    
+    last_temp = _time.monotonic()
+    last_latency = _time.monotonic()
+    last_cleanup = _time.monotonic() - CLEANUP_INTERVAL + CLEANUP_OFFSET  # First cleanup after offset
+    
+    while True:
+        now = _time.monotonic()
+        
+        # Latency pings (offset 25s - runs first in each cycle)
+        if now - last_latency >= RECORD_INTERVAL:
+            _record_latency()
+            last_latency = now
+        
+        # Temperature record (offset 40s - 15s after latency)
+        _time.sleep(15)
+        _record_temperature()
+        last_temp = _time.monotonic()
+        
+        # Cleanup check (every hour, offset from main cycles)
+        if _time.monotonic() - last_cleanup >= CLEANUP_INTERVAL:
+            _cleanup_old_temperature_data()
+            _cleanup_old_latency_data()
+            last_cleanup = _time.monotonic()
+        
+        # Sleep remaining time until next cycle
+        elapsed = _time.monotonic() - last_latency
+        remaining = max(RECORD_INTERVAL - elapsed, 1)
+        _time.sleep(remaining)
+
+
+# ── Latency History (SQLite) ──────────────────────────────────────────────────
+# Stores network latency readings every 60s in the same database as temperature.
+# Supports multiple targets (gateway, cloudflare, google).
+# Retention: 7 days max, cleaned up every hour.
+
+LATENCY_TARGETS = {
+    'gateway': None,  # Auto-detect default gateway
+    'cloudflare': '1.1.1.1',
+    'google': '8.8.8.8',
+}
+
+def _get_default_gateway():
+    """Get the default gateway IP address."""
+    try:
+        result = subprocess.run(
+            ['ip', 'route', 'show', 'default'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            # Parse: "default via 192.168.1.1 dev eth0"
+            parts = result.stdout.strip().split()
+            if 'via' in parts:
+                idx = parts.index('via')
+                if idx + 1 < len(parts):
+                    return parts[idx + 1]
+    except Exception:
+        pass
+    return '192.168.1.1'  # Fallback
+
+def init_latency_db():
+    """Create the latency_history table if it doesn't exist."""
+    try:
+        conn = _get_temp_db()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS latency_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER NOT NULL,
+                target TEXT NOT NULL,
+                latency_avg REAL,
+                latency_min REAL,
+                latency_max REAL,
+                packet_loss REAL DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_latency_timestamp_target 
+            ON latency_history(timestamp, target)
+        """)
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[ProxMenux] Latency DB init failed: {e}")
+        return False
+
+def _measure_latency(target_ip: str) -> dict:
+    """Ping a target and return latency stats."""
+    try:
+        result = subprocess.run(
+            ['ping', '-c', '3', '-W', '2', target_ip],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode == 0:
+            latencies = []
+            for line in result.stdout.split('\n'):
+                if 'time=' in line:
+                    try:
+                        latency_str = line.split('time=')[1].split()[0]
+                        latencies.append(float(latency_str))
+                    except:
+                        pass
+            
+            if latencies:
+                return {
+                    'success': True,
+                    'avg': round(sum(latencies) / len(latencies), 1),
+                    'min': round(min(latencies), 1),
+                    'max': round(max(latencies), 1),
+                    'packet_loss': round((3 - len(latencies)) / 3 * 100, 1)
+                }
+        
+        # Ping failed - 100% packet loss
+        return {'success': False, 'avg': None, 'min': None, 'max': None, 'packet_loss': 100.0}
+    except Exception:
+        return {'success': False, 'avg': None, 'min': None, 'max': None, 'packet_loss': 100.0}
+
+def _record_latency():
+    """Record latency to the default gateway."""
+    try:
+        gateway = _get_default_gateway()
+        stats = _measure_latency(gateway)
+        
+        conn = _get_temp_db()
+        conn.execute(
+            """INSERT INTO latency_history 
+               (timestamp, target, latency_avg, latency_min, latency_max, packet_loss) 
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (int(time.time()), 'gateway', stats['avg'], stats['min'], stats['max'], stats['packet_loss'])
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+def _cleanup_old_latency_data():
+    """Remove latency records older than 7 days."""
+    try:
+        cutoff = int(time.time()) - (7 * 24 * 3600)
+        conn = _get_temp_db()
+        conn.execute("DELETE FROM latency_history WHERE timestamp < ?", (cutoff,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+def get_latency_history(target='gateway', timeframe='hour'):
+    """Get latency history with downsampling for longer timeframes."""
+    try:
+        now = int(time.time())
+        if timeframe == "hour":
+            since = now - 3600
+            interval = None  # All points (~60)
+        elif timeframe == "6hour":
+            since = now - 6 * 3600
+            interval = 300  # 5 min avg
+        elif timeframe == "day":
+            since = now - 86400
+            interval = 600  # 10 min avg
+        elif timeframe == "3day":
+            since = now - 3 * 86400
+            interval = 1800  # 30 min avg
+        elif timeframe == "week":
+            since = now - 7 * 86400
+            interval = 3600  # 1h avg
+        else:
+            since = now - 3600
+            interval = None
+        
+        conn = _get_temp_db()
+        
+        if interval is None:
+            cursor = conn.execute(
+                """SELECT timestamp, latency_avg, latency_min, latency_max, packet_loss 
+                   FROM latency_history 
+                   WHERE timestamp >= ? AND target = ? 
+                   ORDER BY timestamp ASC""",
+                (since, target)
+            )
+            rows = cursor.fetchall()
+            data = [{"timestamp": r[0], "value": r[1], "min": r[2], "max": r[3], "packet_loss": r[4]} for r in rows if r[1] is not None]
+        else:
+            cursor = conn.execute(
+                """SELECT (timestamp / ?) * ? as bucket, 
+                          ROUND(AVG(latency_avg), 1) as avg_val,
+                          ROUND(MIN(latency_min), 1) as min_val,
+                          ROUND(MAX(latency_max), 1) as max_val,
+                          ROUND(AVG(packet_loss), 1) as avg_loss
+                   FROM latency_history 
+                   WHERE timestamp >= ? AND target = ?
+                   GROUP BY bucket 
+                   ORDER BY bucket ASC""",
+                (interval, interval, since, target)
+            )
+            rows = cursor.fetchall()
+            data = [{"timestamp": r[0], "value": r[1], "min": r[2], "max": r[3], "packet_loss": r[4]} for r in rows if r[1] is not None]
+        
+        conn.close()
+        
+        # Compute stats - always use actual min/max values to preserve spikes
+        if data:
+            values = [d["value"] for d in data if d["value"] is not None]
+            mins = [d["min"] for d in data if d.get("min") is not None]
+            maxs = [d["max"] for d in data if d.get("max") is not None]
+            
+            if values:
+                stats = {
+                    # Use actual min from all samples (preserves lowest value)
+                    "min": round(min(mins) if mins else min(values), 1),
+                    # Use actual max from all samples (preserves spikes)
+                    "max": round(max(maxs) if maxs else max(values), 1),
+                    "avg": round(sum(values) / len(values), 1),
+                    "current": values[-1] if values else 0
+                }
+            else:
+                stats = {"min": 0, "max": 0, "avg": 0, "current": 0}
+        else:
+            stats = {"min": 0, "max": 0, "avg": 0, "current": 0}
+        
+        return {"data": data, "stats": stats, "target": target}
+    except Exception as e:
+        return {"data": [], "stats": {"min": 0, "max": 0, "avg": 0, "current": 0}, "target": target}
+
+def get_current_latency(target='gateway'):
+    """Get the most recent latency measurement for a target."""
+    try:
+        # If gateway, resolve to actual IP
+        if target == 'gateway':
+            target_ip = _get_default_gateway()
+        else:
+            target_ip = LATENCY_TARGETS.get(target, target)
+        
+        stats = _measure_latency(target_ip)
+        return {
+            'target': target,
+            'target_ip': target_ip,
+            'latency_avg': stats['avg'],
+            'latency_min': stats['min'],
+            'latency_max': stats['max'],
+            'packet_loss': stats['packet_loss'],
+            'status': 'ok' if stats['success'] and stats['avg'] and stats['avg'] < 100 else 'warning' if stats['success'] else 'error'
+        }
+    except Exception:
+        return {'target': target, 'latency_avg': None, 'status': 'error'}
+
+
+def _capture_health_journal_context(categories: list, reason: str = '') -> str:
+    """Capture journal context relevant to health issues.
+    
+    Maps health categories to specific journal keywords so the AI
+    receives relevant system logs for diagnosis.
+    
+    Args:
+        categories: List of health category keys (e.g., ['storage', 'network'])
+        reason: The reason string from health check (used to extract more keywords)
+    
+    Returns:
+        Filtered journal output as string
+    """
+    import subprocess
+    import re
+    
+    # Map health categories to relevant journal keywords
+    CATEGORY_KEYWORDS = {
+        'storage': ['mount', 'nfs', 'cifs', 'smb', 'zfs', 'lvm', 'disk', 'nvme', 
+                    'sata', 'ata', 'I/O error', 'read error', 'write error',
+                    'filesystem', 'ext4', 'xfs', 'btrfs', 'pbs', 'datastore'],
+        'disks': ['smartd', 'smart', 'ata', 'sata', 'nvme', 'disk', 'I/O error',
+                  'bad sector', 'reallocated', 'pending sector', 'uncorrectable'],
+        'network': ['bond', 'bridge', 'vmbr', 'eth', 'network', 'link down',
+                    'carrier', 'no route', 'unreachable', 'timeout', 'connection'],
+        'services': ['pveproxy', 'pvedaemon', 'pvestatd', 'corosync', 'ceph',
+                     'systemd', 'failed', 'service', 'unit', 'start', 'stop'],
+        'vms': ['qemu', 'kvm', 'lxc', 'vzdump', 'qm', 'pct', 'guest agent',
+                'qemu-ga', 'migration', 'snapshot', 'pve-container', 'vzstart',
+                'failed to start', 'start error', 'activation failed', 'cannot start',
+                'qemu-server', 'CT ', 'VM '],
+        'memory': ['oom', 'out of memory', 'killed process', 'swap', 'memory'],
+        'cpu': ['thermal', 'temperature', 'throttl', 'mce', 'machine check'],
+        'updates': ['apt', 'dpkg', 'upgrade', 'update', 'package'],
+        'certificates': ['ssl', 'certificate', 'cert', 'expired', 'pve-ssl'],
+        'logs': ['rsyslog', 'journal', 'log rotation'],
+        'latency': ['ping', 'latency', 'timeout', 'unreachable', 'network'],
+    }
+    
+    # Collect keywords for all degraded categories
+    keywords = set()
+    for cat in categories:
+        cat_lower = cat.lower()
+        if cat_lower in CATEGORY_KEYWORDS:
+            keywords.update(CATEGORY_KEYWORDS[cat_lower])
+    
+    # Extract additional keywords from reason (IPs, hostnames, storage names)
+    if reason:
+        # Find IP addresses
+        ips = re.findall(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', reason)
+        keywords.update(ips)
+        
+        # Find storage/service names (words in quotes or after colon)
+        quoted = re.findall(r"'([^']+)'|\"([^\"]+)\"", reason)
+        for match in quoted:
+            keywords.update(w for w in match if w)
+    
+    if not keywords:
+        return ""
+    
+    try:
+        # Build grep pattern
+        pattern = "|".join(re.escape(k) for k in keywords if k)
+        if not pattern:
+            return ""
+        
+        # Capture recent journal entries matching keywords
+        # Use -b 0 to only include logs from the current boot
+        cmd = (
+            f"journalctl -b 0 --since='10 minutes ago' --no-pager -n 500 2>/dev/null | "
+            f"grep -iE '{pattern}' | tail -n 30"
+        )
+        
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        return ""
+    except Exception:
+        return ""
+
+
+def _health_collector_loop():
+    """Background thread: run full health checks every 5 minutes.
+    Keeps the health cache always fresh and records events/errors in the DB.
+    Also emits notifications when a health category degrades (OK -> WARNING/CRITICAL).
+    
+    Staggered: starts at 55s offset to avoid collision with other collectors."""
+    from health_monitor import health_monitor
+    
+    # Wait 55s after startup (staggered from other collectors: temp=40s, latency=25s)
+    time.sleep(55)
+    
+    # Track previous status per category to detect transitions
+    _prev_statuses = {}
+    # Severity ranking for comparison
+    _SEV_RANK = {'OK': 0, 'INFO': 0, 'UNKNOWN': 1, 'WARNING': 2, 'CRITICAL': 3}
+    # Human-readable category names
+    _CAT_NAMES = {
+        'cpu': 'CPU Usage & Temperature',
+        'memory': 'Memory & Swap',
+        'storage': 'Storage Mounts & Space',
+        'disks': 'Disk I/O & Errors',
+        'network': 'Network Interfaces',
+        'vms': 'VMs & Containers',
+        'services': 'PVE Services',
+        'logs': 'System Logs',
+        'updates': 'System Updates',
+        'security': 'Security',
+    }
+    # Import centralized startup grace management
+    import startup_grace
+    
+    while True:
+        try:
+            # Run full health check (results get cached internally + recorded in DB)
+            result = health_monitor.get_detailed_status()
+            
+            # Update the quick-status cache so the header stays fresh without extra work
+            overall = result.get('overall', 'OK')
+            summary = result.get('summary', 'All systems operational')
+            health_monitor.cached_results['_bg_overall'] = {
+                'status': overall,
+                'summary': summary
+            }
+            # Cache the full detailed result so the modal can return it instantly
+            health_monitor.cached_results['_bg_detailed'] = result
+            health_monitor.last_check_times['_bg_overall'] = time.time()
+            health_monitor.last_check_times['_bg_detailed'] = time.time()
+            
+            # ── Health degradation notifications ──
+            # Compare each category's current status to previous cycle.
+            # Notify when a category DEGRADES (OK->WARNING, WARNING->CRITICAL, etc.)
+            # Include the detailed 'reason' so the user knows exactly what triggered it.
+            # 
+            # IMPORTANT: Some health categories map to specific notification toggles:
+            #   - network + latency issue -> 'network_latency' toggle
+            #   - network + connectivity issue -> 'network_down' toggle
+            # If the specific toggle is disabled, skip that notification.
+            details = result.get('details', {})
+            degraded = []
+            
+            # Map health categories to specific event types for toggle checks
+            _CATEGORY_EVENT_MAP = {
+                # (category, reason_contains) -> event_type to check
+                ('network', 'latency'): 'network_latency',
+                ('network', 'connectivity'): 'network_down',
+                ('network', 'unreachable'): 'network_down',
+            }
+            
+            for cat_key, cat_data in details.items():
+                cur_status = cat_data.get('status', 'OK')
+                prev_status = _prev_statuses.get(cat_key, 'OK')
+                cur_rank = _SEV_RANK.get(cur_status, 0)
+                prev_rank = _SEV_RANK.get(prev_status, 0)
+                
+                if cur_rank > prev_rank and cur_rank >= 2:  # WARNING or CRITICAL
+                    reason = cat_data.get('reason', f'{cat_key} status changed to {cur_status}')
+                    reason_lower = reason.lower()
+                    cat_name = _CAT_NAMES.get(cat_key, cat_key)
+                    
+                    # Check if this specific notification type is enabled
+                    skip_notification = False
+                    for (map_cat, map_keyword), event_type in _CATEGORY_EVENT_MAP.items():
+                        if cat_key == map_cat and map_keyword in reason_lower:
+                            if not notification_manager.is_event_enabled(event_type):
+                                skip_notification = True
+                                break
+                    
+                    # Startup grace period: skip transient issues from categories
+                    # that typically need time to stabilize after boot
+                    if startup_grace.should_suppress_category(cat_key):
+                        skip_notification = True
+                    
+                    if not skip_notification:
+                        degraded.append({
+                            'cat_key': cat_key,  # Original key for journal capture
+                            'category': cat_name,
+                            'status': cur_status,
+                            'reason': reason,
+                        })
+                
+                _prev_statuses[cat_key] = cur_status
+            
+            # Send grouped notification if any categories degraded
+            if degraded and notification_manager._enabled:
+                hostname = result.get('hostname', '')
+                if not hostname:
+                    import socket as _sock
+                    hostname = _sock.gethostname()
+                
+                # Capture journal context for AI enrichment
+                # Extract category keys and reasons for keyword matching
+                cat_keys = [d.get('cat_key', d.get('category', '').lower()) for d in degraded]
+                all_reasons = ' '.join(d.get('reason', '') for d in degraded)
+                journal_context = _capture_health_journal_context(cat_keys, all_reasons)
+                
+                if len(degraded) == 1:
+                    d = degraded[0]
+                    title = f"{hostname}: Health {d['status']} - {d['category']}"
+                    body = d['reason']
+                    severity = d['status']
+                else:
+                    # Multiple categories degraded at once -- group them
+                    max_sev = max(degraded, key=lambda x: _SEV_RANK.get(x['status'], 0))['status']
+                    title = f"{hostname}: {len(degraded)} health checks degraded"
+                    lines = []
+                    for d in degraded:
+                        lines.append(f"  [{d['status']}] {d['category']}: {d['reason']}")
+                    body = '\n'.join(lines)
+                    severity = max_sev
+                
+                try:
+                    notification_manager.send_notification(
+                        event_type='health_degraded',
+                        severity=severity,
+                        title=title,
+                        message=body,
+                        data={
+                            'hostname': hostname,
+                            'count': str(len(degraded)),
+                            '_journal_context': journal_context,  # For AI enrichment
+                        },
+                        source='health_monitor',
+                    )
+                except Exception as e:
+                    print(f"[ProxMenux] Health notification error: {e}")
+        except Exception as e:
+            print(f"[ProxMenux] Health collector error: {e}")
+        
+        time.sleep(300)  # Every 5 minutes
+
+
+def _vital_signs_sampler():
+    """Dedicated thread for rapid CPU, memory & temperature sampling.
+
+    Runs independently of the 5-min health collector loop.
+    - CPU usage:   sampled every 30s  (10 samples in 5 min for sustained detection)
+    - Memory:      sampled every 30s  (10 samples in 5 min for sustained detection)
+    - Temperature: sampled every 15s  (12 samples in 3 min for temporal logic)
+    Uses time.monotonic() to avoid drift.
+
+    Staggered intervals to avoid collision: CPU at 0, Temp at +7s, Mem at +15s.
+    """
+    from health_monitor import health_monitor
+
+    # Wait 15s after startup for sensors to be ready
+    time.sleep(15)
+
+    TEMP_INTERVAL = 15   # seconds (was 10s - reduced frequency by 33%)
+    CPU_INTERVAL  = 30   # seconds
+    MEM_INTERVAL  = 30   # seconds (aligned with CPU for sustained-RAM detection)
+
+    # Stagger: CPU starts immediately, Temp after 7s, Mem after 15s
+    next_cpu  = time.monotonic()
+    next_temp = time.monotonic() + 7
+    next_mem  = time.monotonic() + 15
+
+    print("[ProxMenux] Vital signs sampler started (CPU: 30s, Mem: 30s, Temp: 15s)")
+
+    while True:
+        try:
+            now = time.monotonic()
+
+            if now >= next_temp:
+                health_monitor._sample_cpu_temperature()
+                next_temp = now + TEMP_INTERVAL
+
+            if now >= next_cpu:
+                health_monitor._sample_cpu_usage()
+                next_cpu = now + CPU_INTERVAL
+
+            if now >= next_mem:
+                health_monitor._sample_memory_usage()
+                next_mem = now + MEM_INTERVAL
+
+            # Sleep until the next earliest event (with 0.5s min to avoid busy-loop)
+            sleep_until = min(next_temp, next_cpu, next_mem) - time.monotonic()
+            time.sleep(max(sleep_until, 0.5))
+        except Exception as e:
+            print(f"[ProxMenux] Vital signs sampler error: {e}")
+            time.sleep(10)
+
+
 def get_uptime():
     """Get system uptime in a human-readable format."""
     try:
@@ -356,8 +1150,736 @@ def get_uptime():
         pass
         return "N/A"
 
+# Cache for expensive system info calls (pveversion, apt updates)
+_system_info_cache = {
+    'proxmox_version': None,
+    'proxmox_version_time': 0,
+    'available_updates': 0,
+    'available_updates_time': 0,
+}
+_SYSTEM_INFO_CACHE_TTL = 21600  # 6 hours - update notifications are sent once per 24h
+
+# Cache for pvesh cluster resources (reduces repeated API calls)
+_pvesh_cache = {
+    'cluster_resources_vm': None,
+    'cluster_resources_vm_time': 0,
+    'cluster_resources_storage': None,
+    'cluster_resources_storage_time': 0,
+    'storage_list': None,
+    'storage_list_time': 0,
+}
+_PVESH_CACHE_TTL = 2  # 2 seconds - near real-time, single consistent data source for list + modal
+
+# Cache for sensors output (temperature readings)
+_sensors_cache = {
+    'output': None,
+    'time': 0,
+}
+_SENSORS_CACHE_TTL = 10  # 10 seconds - temperature changes slowly
+
+# Cache for ipmitool sensor output (shared between fans, power supplies, power meter)
+# ipmitool is slow (1-3s per call) and was called twice per /api/hardware hit.
+_ipmi_cache = {
+    'output': None,
+    'time': 0,
+    'unavailable': False,  # set True if ipmitool is missing, avoid retrying
+}
+_IPMI_CACHE_TTL = 10  # 10 seconds
+
+# Cache for `lsusb -v` output. Parsed for the USB devices section and the Coral
+# USB detector. USB plug/unplug events are rare enough that a 60s TTL is safe.
+_lsusb_cache = {
+    'simple': None,        # output of `lsusb` (short form)
+    'simple_time': 0,
+    'verbose': None,       # output of `lsusb -v` (detailed form with speed, driver)
+    'verbose_time': 0,
+    'unavailable': False,  # set True if lsusb is missing
+}
+_LSUSB_CACHE_TTL = 60  # 60 seconds
+
+# Cache for hardware info (lspci, dmidecode, lsblk)
+_hardware_cache = {
+    'lspci': None,
+    'lspci_time': 0,
+    'dmidecode': None,
+    'dmidecode_time': 0,
+    'lsblk': None,
+    'lsblk_time': 0,
+}
+_HARDWARE_CACHE_TTL = 300  # 5 minutes - hardware doesn't change
+
+
+def get_cached_pvesh_cluster_resources_vm():
+    """Get cluster VM resources with 30s cache."""
+    global _pvesh_cache
+    now = time.time()
+    
+    if _pvesh_cache['cluster_resources_vm'] is not None and \
+       now - _pvesh_cache['cluster_resources_vm_time'] < _PVESH_CACHE_TTL:
+        return _pvesh_cache['cluster_resources_vm']
+    
+    try:
+        result = subprocess.run(
+            ['pvesh', 'get', '/cluster/resources', '--type', 'vm', '--output-format', 'json'],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            _pvesh_cache['cluster_resources_vm'] = data
+            _pvesh_cache['cluster_resources_vm_time'] = now
+            return data
+    except Exception:
+        pass
+    return _pvesh_cache['cluster_resources_vm'] or []
+
+
+def get_cached_sensors_output():
+    """Get sensors output with 10s cache."""
+    global _sensors_cache
+    now = time.time()
+    
+    if _sensors_cache['output'] is not None and \
+       now - _sensors_cache['time'] < _SENSORS_CACHE_TTL:
+        return _sensors_cache['output']
+    
+    try:
+        result = subprocess.run(['sensors'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            _sensors_cache['output'] = result.stdout
+            _sensors_cache['time'] = now
+            return result.stdout
+    except Exception:
+        pass
+    return _sensors_cache['output'] or ''
+
+
+def get_cached_lspci():
+    """Get lspci output with 5 minute cache."""
+    global _hardware_cache
+    now = time.time()
+    
+    if _hardware_cache['lspci'] is not None and \
+       now - _hardware_cache['lspci_time'] < _HARDWARE_CACHE_TTL:
+        return _hardware_cache['lspci']
+    
+    try:
+        result = subprocess.run(['lspci'], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            _hardware_cache['lspci'] = result.stdout
+            _hardware_cache['lspci_time'] = now
+            return result.stdout
+    except Exception:
+        pass
+    return _hardware_cache['lspci'] or ''
+
+
+def get_cached_lspci_vmm():
+    """Get lspci -vmm output with 5 minute cache."""
+    global _hardware_cache
+    now = time.time()
+    
+    cache_key = 'lspci_vmm'
+    if cache_key not in _hardware_cache:
+        _hardware_cache[cache_key] = None
+        _hardware_cache[cache_key + '_time'] = 0
+    
+    if _hardware_cache[cache_key] is not None and \
+       now - _hardware_cache[cache_key + '_time'] < _HARDWARE_CACHE_TTL:
+        return _hardware_cache[cache_key]
+    
+    try:
+        result = subprocess.run(['lspci', '-vmm'], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            _hardware_cache[cache_key] = result.stdout
+            _hardware_cache[cache_key + '_time'] = now
+            return result.stdout
+    except Exception:
+        pass
+    return _hardware_cache[cache_key] or ''
+
+
+def get_cached_lspci_k():
+    """Get lspci -k output with 5 minute cache."""
+    global _hardware_cache
+    now = time.time()
+
+    cache_key = 'lspci_k'
+    if cache_key not in _hardware_cache:
+        _hardware_cache[cache_key] = None
+        _hardware_cache[cache_key + '_time'] = 0
+
+    if _hardware_cache[cache_key] is not None and \
+       now - _hardware_cache[cache_key + '_time'] < _HARDWARE_CACHE_TTL:
+        return _hardware_cache[cache_key]
+
+    try:
+        result = subprocess.run(['lspci', '-k'], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            _hardware_cache[cache_key] = result.stdout
+            _hardware_cache[cache_key + '_time'] = now
+            return result.stdout
+    except Exception:
+        pass
+    return _hardware_cache[cache_key] or ''
+
+
+# ============================================================================
+# USB device enumeration (used by both USB section and Coral USB detector)
+# ============================================================================
+
+def get_cached_lsusb():
+    """Get plain `lsusb` output with 60s cache. Lightweight; just IDs + names."""
+    global _lsusb_cache
+    now = time.time()
+
+    if _lsusb_cache['unavailable']:
+        return ''
+
+    if _lsusb_cache['simple'] is not None and \
+       now - _lsusb_cache['simple_time'] < _LSUSB_CACHE_TTL:
+        return _lsusb_cache['simple']
+
+    try:
+        result = subprocess.run(['lsusb'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            _lsusb_cache['simple'] = result.stdout
+            _lsusb_cache['simple_time'] = now
+            return result.stdout
+    except FileNotFoundError:
+        _lsusb_cache['unavailable'] = True
+        return ''
+    except Exception:
+        pass
+    return _lsusb_cache['simple'] or ''
+
+
+def _usb_speed_label(mbps):
+    """Map USB sysfs speed (Mbps) to a human-readable label."""
+    try:
+        m = int(mbps)
+    except (ValueError, TypeError):
+        return ''
+    # These are the standard USB generation speeds.
+    if m >= 20000:
+        return 'USB 3.2 Gen 2x2'
+    if m >= 10000:
+        return 'USB 3.1 Gen 2'
+    if m >= 5000:
+        return 'USB 3.0'
+    if m >= 480:
+        return 'USB 2.0'
+    if m >= 12:
+        return 'USB 1.1'
+    return 'USB 1.0'
+
+
+_USB_CLASS_LABELS = {
+    '00': 'Device Specific',
+    '01': 'Audio',
+    '02': 'Communications',
+    '03': 'HID',
+    '05': 'Physical',
+    '06': 'Imaging',
+    '07': 'Printer',
+    '08': 'Mass Storage',
+    '09': 'Hub',
+    '0a': 'CDC Data',
+    '0b': 'Smart Card',
+    '0d': 'Content Security',
+    '0e': 'Video',
+    '0f': 'Personal Healthcare',
+    '10': 'Audio/Video',
+    '11': 'Billboard',
+    'dc': 'Diagnostic',
+    'e0': 'Wireless Controller',
+    'ef': 'Miscellaneous',
+    'fe': 'Application Specific',
+    'ff': 'Vendor Specific',
+}
+
+# USB vendor IDs of known UPS manufacturers. UPSs communicate via HID (USB
+# class 0x03) using the "Power Device" usage page, so raw class detection
+# labels them as generic "HID" — which is technically correct but useless
+# for the user. When the device class is HID and the vendor matches this
+# set, we relabel as "UPS".
+_USB_UPS_VENDORS = {
+    '0463',  # MGE UPS Systems / Eaton (Ellipse, Pulsar, 5P, 9PX, Protection Station)
+    '051d',  # American Power Conversion (APC) / Schneider (Back-UPS, Smart-UPS)
+    '0764',  # CyberPower Systems
+    '0d9f',  # PowerCom
+    '06da',  # Phoenixtec Power / Liebert (some models)
+    '09ae',  # Tripp Lite
+    '047c',  # Dell (select UPS models)
+    '075d',  # Salicru
+    '10af',  # Liebert / Vertiv
+    '0665',  # Cypress Semi (OEM silicon in several UPS brands)
+}
+
+
+def _read_sysfs(path, default=''):
+    """Read and trim a sysfs attribute file. Returns default on error."""
+    try:
+        with open(path, 'r') as f:
+            return f.read().strip()
+    except Exception:
+        return default
+
+
+def _interface_class_from_usb_device(dev_path):
+    """When bDeviceClass is 00, the device delegates classification to the
+    first interface. Read bInterfaceClass from <dev>/<dev>:1.0/bInterfaceClass.
+    """
+    try:
+        # Sysfs names interfaces as <busnum>-<portpath>:1.0 etc.
+        base = os.path.basename(dev_path)
+        iface_file = os.path.join(dev_path, f'{base}:1.0', 'bInterfaceClass')
+        return _read_sysfs(iface_file, '')
+    except Exception:
+        return ''
+
+
+def _get_usb_driver(dev_path):
+    """Best-effort bound driver name for a USB device.
+
+    USB drivers are usually bound at the *interface* level (:1.0, :1.1...),
+    not the device level. We peek at the first interface.
+    """
+    try:
+        base = os.path.basename(dev_path)
+        for ifnum in ('1.0', '1.1', '1.2'):
+            drv_link = os.path.join(dev_path, f'{base}:{ifnum}', 'driver')
+            if os.path.islink(drv_link):
+                return os.path.basename(os.readlink(drv_link))
+    except Exception:
+        pass
+    return ''
+
+
+def get_usb_devices():
+    """Enumerate physically connected USB peripherals.
+
+    Skips virtual root hubs (vendor 1d6b = Linux Foundation). Each entry is
+    a dict with fields suited to the "USB Devices" section in the hardware UI.
+    """
+    devices = []
+    usb_root = '/sys/bus/usb/devices'
+    if not os.path.isdir(usb_root):
+        return devices
+
+    # Human-readable vendor/product names live in `lsusb` simple output.
+    # Build a quick lookup by "bus:dev".
+    name_map = {}
+    try:
+        for line in get_cached_lsusb().split('\n'):
+            m = re.match(
+                r'Bus\s+(\d+)\s+Device\s+(\d+):\s+ID\s+([0-9a-f]{4}):([0-9a-f]{4})\s+(.*)',
+                line, re.IGNORECASE)
+            if m:
+                bus, dev, _vid, _pid, rest = m.groups()
+                name_map[f'{int(bus):03d}:{int(dev):03d}'] = rest.strip()
+    except Exception:
+        pass
+
+    try:
+        for entry in sorted(os.listdir(usb_root)):
+            dev_path = os.path.join(usb_root, entry)
+            # Interface nodes look like "1-0:1.0" — skip, we only want devices.
+            if ':' in entry:
+                continue
+
+            vendor_id = _read_sysfs(os.path.join(dev_path, 'idVendor'))
+            product_id = _read_sysfs(os.path.join(dev_path, 'idProduct'))
+            if not vendor_id or not product_id:
+                continue
+
+            # Skip virtual root hubs (Linux Foundation hubs).
+            if vendor_id.lower() == '1d6b':
+                continue
+
+            busnum = _read_sysfs(os.path.join(dev_path, 'busnum'), '0')
+            devnum = _read_sysfs(os.path.join(dev_path, 'devnum'), '0')
+            bus_device = f'{int(busnum):03d}:{int(devnum):03d}'
+
+            manufacturer = _read_sysfs(os.path.join(dev_path, 'manufacturer'))
+            product_name = _read_sysfs(os.path.join(dev_path, 'product'))
+
+            # Fall back to lsusb-derived name when sysfs strings are absent.
+            lsusb_name = name_map.get(bus_device, '')
+            display_name = product_name or lsusb_name or f'USB device {vendor_id}:{product_id}'
+            display_vendor = manufacturer or (lsusb_name.split()[0] if lsusb_name else '')
+
+            speed_raw = _read_sysfs(os.path.join(dev_path, 'speed'))
+            speed_label = _usb_speed_label(speed_raw)
+
+            device_class = _read_sysfs(os.path.join(dev_path, 'bDeviceClass'), '00').lower()
+            if device_class == '00':
+                device_class = _interface_class_from_usb_device(dev_path).lower()
+            class_label = _USB_CLASS_LABELS.get(device_class, 'Unknown')
+
+            # Refine HID → UPS for known UPS vendors. USB UPSs advertise class
+            # HID with a Power Device usage page; labeling them "HID" looks wrong.
+            if device_class == '03' and vendor_id.lower() in _USB_UPS_VENDORS:
+                class_label = 'UPS'
+
+            serial = _read_sysfs(os.path.join(dev_path, 'serial'))
+            driver = _get_usb_driver(dev_path)
+
+            devices.append({
+                'bus_device': bus_device,
+                'vendor_id': vendor_id.lower(),
+                'product_id': product_id.lower(),
+                'vendor': display_vendor,
+                'name': display_name,
+                'class_code': device_class,
+                'class_label': class_label,
+                'speed_mbps': int(speed_raw) if speed_raw.isdigit() else 0,
+                'speed_label': speed_label,
+                'serial': serial,
+                'driver': driver,
+            })
+    except Exception:
+        # Never break the hardware payload just because USB enumeration fails.
+        pass
+
+    return devices
+
+
+# ============================================================================
+# Coral TPU (Edge TPU) detection — M.2 / PCIe + USB
+# Google Edge TPU USB IDs:
+#   1a6e:089a  Global Unichip Corp.  (unprogrammed — before runtime loads fw)
+#   18d1:9302  Google Inc.           (programmed   — after runtime talks to it)
+# M.2 / Mini PCIe Coral uses vendor 0x1ac1 (Global Unichip Corp.).
+# ============================================================================
+
+CORAL_USB_IDS = {('1a6e', '089a'), ('18d1', '9302')}
+CORAL_PCI_VENDOR = '0x1ac1'
+
+
+def _coral_kernel_modules_loaded():
+    """Returns (gasket_loaded, apex_loaded) based on /proc/modules."""
+    gasket = apex = False
+    try:
+        with open('/proc/modules', 'r') as f:
+            for line in f:
+                name = line.split(' ', 1)[0]
+                if name == 'gasket':
+                    gasket = True
+                elif name == 'apex':
+                    apex = True
+    except Exception:
+        pass
+    return gasket, apex
+
+
+def _coral_device_nodes():
+    """Find /dev/apex_* device nodes (PCIe Coral creates these)."""
+    try:
+        from glob import glob
+        return sorted(glob('/dev/apex_*'))
+    except Exception:
+        return []
+
+
+def _coral_edgetpu_runtime_version():
+    """Return the installed libedgetpu1 package version, or empty string.
+
+    Checks both -std and -max variants (max enables full clock; std is default).
+    """
+    for pkg in ('libedgetpu1-std', 'libedgetpu1-max'):
+        try:
+            result = subprocess.run(
+                ['dpkg-query', '-W', '-f=${Version}', pkg],
+                capture_output=True, text=True, timeout=3)
+            if result.returncode == 0 and result.stdout.strip():
+                return f'{pkg} {result.stdout.strip()}'
+        except Exception:
+            continue
+    return ''
+
+
+def _coral_pcie_name_from_lspci(slot):
+    """Best-effort human name for a PCIe Coral from cached lspci output."""
+    try:
+        # Match either full slot (0000:0c:00.0) or short form (0c:00.0).
+        short = slot.split(':', 1)[1] if slot.count(':') >= 2 else slot
+        for line in get_cached_lspci().split('\n'):
+            if line.startswith(short):
+                # Format: "0c:00.0 <class>: <vendor> <device>"
+                parts = line.split(':', 2)
+                if len(parts) >= 3:
+                    return parts[2].strip()
+    except Exception:
+        pass
+    return 'Coral Edge TPU'
+
+
+def _coral_pci_form_factor(dev_path):
+    """Heuristic form factor for a Coral PCIe/M.2 device.
+
+    Without a perfectly reliable sysfs indicator we key off the PCIe link
+    width: Coral M.2 modules are always x1. This keeps the label simple and
+    accurate for the common cases without over-promising.
+    """
+    try:
+        width = _read_sysfs(os.path.join(dev_path, 'current_link_width'), '')
+        if width == '1':
+            return 'M.2 / Mini PCIe (x1)'
+    except Exception:
+        pass
+    return 'PCIe'
+
+
+def _coral_pci_speed(dev_path):
+    try:
+        speed = _read_sysfs(os.path.join(dev_path, 'current_link_speed'), '')
+        width = _read_sysfs(os.path.join(dev_path, 'current_link_width'), '')
+        if speed and width:
+            return f'PCIe {speed} x{width}'
+    except Exception:
+        pass
+    return ''
+
+
+def _coral_parse_temp_value(raw):
+    """Interpret a sysfs temperature reading as float °C.
+
+    The apex driver reports millidegrees (e.g. 54050 → 54.0 °C). Hwmon nodes
+    also use millidegrees. Plain integers like "42" are treated as °C.
+    Returns None on unparsable / empty input.
+    """
+    if not raw:
+        return None
+    try:
+        val = int(raw)
+    except (ValueError, TypeError):
+        return None
+    if abs(val) >= 1000:
+        return round(val / 1000.0, 1)
+    return float(val)
+
+
+def _coral_pcie_thermal(pci_dev_path):
+    """Read full thermal picture for a PCIe Coral via the apex driver's sysfs.
+
+    The gasket/apex driver exposes (at least on current feranick / kernel 6.12):
+      temp              current die temperature (millidegrees)
+      trip_point{0..2}_temp  configured alarm thresholds (millidegrees)
+      hw_temp_warn{1,2}      hardware-signalled warning thresholds
+      hw_temp_warn{1,2}_en   whether those hw warnings are enabled
+
+    Returns a dict with the fields our payload needs, or an empty dict when
+    no apex_N entry matches this PCI slot (e.g. drivers not loaded, or a USB
+    Coral where this whole sysfs tree doesn't exist).
+    """
+    result = {'temperature': None, 'temperature_trips': None, 'thermal_warnings': None}
+    try:
+        apex_root = '/sys/class/apex'
+        if not os.path.isdir(apex_root):
+            return result
+
+        target_pci = os.path.basename(pci_dev_path)
+        for apex_name in os.listdir(apex_root):
+            apex_path = os.path.join(apex_root, apex_name)
+            device_link = os.path.join(apex_path, 'device')
+            if not os.path.islink(device_link):
+                continue
+            resolved = os.path.realpath(device_link)
+            if os.path.basename(resolved) != target_pci:
+                continue
+
+            # ── Current temperature (prefer direct attr, fall back to hwmon)
+            candidates = [
+                os.path.join(apex_path, 'temp'),
+                os.path.join(apex_path, 'device', 'temp'),
+            ]
+            hwmon_dir = os.path.join(apex_path, 'device', 'hwmon')
+            if os.path.isdir(hwmon_dir):
+                try:
+                    for hwmon in os.listdir(hwmon_dir):
+                        candidates.append(os.path.join(hwmon_dir, hwmon, 'temp1_input'))
+                except Exception:
+                    pass
+
+            for c in candidates:
+                temp = _coral_parse_temp_value(_read_sysfs(c, ''))
+                if temp is not None:
+                    result['temperature'] = temp
+                    break
+
+            # ── Trip points (alarm thresholds). Typically 3 ascending values:
+            # warn / throttle / critical. Kept ordered as-reported by the driver.
+            trips = []
+            for i in range(3):
+                t = _coral_parse_temp_value(
+                    _read_sysfs(os.path.join(apex_path, f'trip_point{i}_temp'), ''))
+                if t is not None:
+                    trips.append(t)
+            if trips:
+                result['temperature_trips'] = trips
+
+            # ── Hardware warnings (threshold + enabled flag). Surface only the
+            # pairs that are actually configured so the UI can show a badge
+            # when a warning is enabled.
+            warnings = []
+            for i in (1, 2):
+                threshold = _coral_parse_temp_value(
+                    _read_sysfs(os.path.join(apex_path, f'hw_temp_warn{i}'), ''))
+                enabled_raw = _read_sysfs(
+                    os.path.join(apex_path, f'hw_temp_warn{i}_en'), '')
+                enabled = enabled_raw.strip() in ('1', 'true', 'yes')
+                if threshold is not None or enabled_raw:
+                    warnings.append({
+                        'name': f'hw_temp_warn{i}',
+                        'threshold_c': threshold,
+                        'enabled': enabled,
+                    })
+            if warnings:
+                result['thermal_warnings'] = warnings
+
+            return result
+    except Exception:
+        pass
+    return result
+
+
+def get_coral_info():
+    """Detect Coral TPU accelerators (PCIe/M.2 + USB).
+
+    Returns a list of dicts — empty if no Coral is present. The payload is
+    intentionally minimal: Coral exposes no temperature/utilization/power
+    counters, so the UI only needs identity + driver/runtime state.
+    """
+    coral_devices = []
+    gasket_loaded, apex_loaded = _coral_kernel_modules_loaded()
+    device_nodes = _coral_device_nodes()
+    runtime = _coral_edgetpu_runtime_version()
+
+    # ── PCIe / M.2 Coral ────────────────────────────────────────────────
+    try:
+        for dev_path in sorted(glob.glob('/sys/bus/pci/devices/*')):
+            vendor = _read_sysfs(os.path.join(dev_path, 'vendor'))
+            if vendor.lower() != CORAL_PCI_VENDOR:
+                continue
+
+            slot = os.path.basename(dev_path)
+            device_id = _read_sysfs(os.path.join(dev_path, 'device'), '').replace('0x', '')
+            vendor_id = vendor.replace('0x', '')
+
+            driver_name = ''
+            drv_link = os.path.join(dev_path, 'driver')
+            if os.path.islink(drv_link):
+                driver_name = os.path.basename(os.readlink(drv_link))
+
+            # "drivers_ready" for PCIe = apex bound and kernel modules present
+            drivers_ready = (driver_name == 'apex') and apex_loaded
+
+            thermal = _coral_pcie_thermal(dev_path)
+
+            coral_devices.append({
+                'type': 'pcie',
+                'name': _coral_pcie_name_from_lspci(slot),
+                'vendor': 'Global Unichip Corp.',
+                'vendor_id': vendor_id,
+                'device_id': device_id,
+                'slot': slot,
+                'form_factor': _coral_pci_form_factor(dev_path),
+                'interface_speed': _coral_pci_speed(dev_path),
+                'kernel_driver': driver_name or None,
+                'kernel_modules': {
+                    'gasket': gasket_loaded,
+                    'apex': apex_loaded,
+                },
+                'device_nodes': device_nodes,
+                'edgetpu_runtime': runtime,
+                'drivers_ready': drivers_ready,
+                # PCIe/M.2 Coral thermal data from the apex driver (same source
+                # Frigate reads). All null when drivers aren't loaded.
+                'temperature': thermal.get('temperature'),
+                'temperature_trips': thermal.get('temperature_trips'),
+                'thermal_warnings': thermal.get('thermal_warnings'),
+            })
+    except Exception:
+        pass
+
+    # ── USB Coral Accelerator ───────────────────────────────────────────
+    try:
+        for line in get_cached_lsusb().split('\n'):
+            m = re.match(
+                r'Bus\s+(\d+)\s+Device\s+(\d+):\s+ID\s+([0-9a-f]{4}):([0-9a-f]{4})\s+(.*)',
+                line, re.IGNORECASE)
+            if not m:
+                continue
+            bus, dev, vid, pid, rest = m.groups()
+            vid = vid.lower()
+            pid = pid.lower()
+            if (vid, pid) not in CORAL_USB_IDS:
+                continue
+
+            programmed = (vid == '18d1')  # switched-state vendor/product after fw load
+
+            # Best-effort sysfs path for USB speed.
+            bus_device = f'{int(bus):03d}:{int(dev):03d}'
+            usb_speed_label = ''
+            usb_driver = ''
+            try:
+                for usb_dev_dir in glob.glob('/sys/bus/usb/devices/*'):
+                    base = os.path.basename(usb_dev_dir)
+                    if ':' in base:
+                        continue
+                    b = _read_sysfs(os.path.join(usb_dev_dir, 'busnum'), '0')
+                    d = _read_sysfs(os.path.join(usb_dev_dir, 'devnum'), '0')
+                    if f'{int(b):03d}:{int(d):03d}' == bus_device:
+                        usb_speed_label = _usb_speed_label(
+                            _read_sysfs(os.path.join(usb_dev_dir, 'speed'), ''))
+                        usb_driver = _get_usb_driver(usb_dev_dir)
+                        break
+            except Exception:
+                pass
+
+            # "drivers_ready" for USB = edgetpu runtime is installed.
+            # The USB Accelerator does not use a kernel driver; it speaks libusb
+            # straight to userspace via the libedgetpu1 library.
+            drivers_ready = bool(runtime)
+
+            coral_devices.append({
+                'type': 'usb',
+                'name': 'Coral USB Accelerator',
+                'vendor': rest.strip() or 'Google Inc.',
+                'vendor_id': vid,
+                'device_id': pid,
+                'bus_device': bus_device,
+                'form_factor': 'USB Accelerator',
+                'interface_speed': usb_speed_label,
+                'programmed': programmed,
+                'usb_driver': usb_driver or None,
+                'kernel_driver': None,   # USB Coral uses libusb in userspace
+                'kernel_modules': {'gasket': gasket_loaded, 'apex': apex_loaded},
+                'device_nodes': [],       # No /dev/apex_* for USB
+                'edgetpu_runtime': runtime,
+                'drivers_ready': drivers_ready,
+                # USB Coral does not expose temperature, trip points or hardware
+                # warnings via sysfs; those are only readable from within the Edge
+                # TPU runtime through libusb (Frigate and similar get them there).
+                'temperature': None,
+                'temperature_trips': None,
+                'thermal_warnings': None,
+            })
+    except Exception:
+        pass
+
+    return coral_devices
+
+
 def get_proxmox_version():
-    """Get Proxmox version if available."""
+    """Get Proxmox version if available. Cached for 6 hours."""
+    global _system_info_cache
+    
+    now = time.time()
+    if _system_info_cache['proxmox_version'] is not None and \
+       now - _system_info_cache['proxmox_version_time'] < _SYSTEM_INFO_CACHE_TTL:
+        return _system_info_cache['proxmox_version']
+    
     proxmox_version = None
     try:
         result = subprocess.run(['pveversion'], capture_output=True, text=True, timeout=5)
@@ -367,15 +1889,23 @@ def get_proxmox_version():
             if '/' in version_line:
                 proxmox_version = version_line.split('/')[1]
     except FileNotFoundError:
-        # print("Warning: pveversion command not found - Proxmox may not be installed.")
         pass
     except Exception as e:
-        # print(f"Warning: Error getting Proxmox version: {e}")
         pass
+    
+    _system_info_cache['proxmox_version'] = proxmox_version
+    _system_info_cache['proxmox_version_time'] = now
     return proxmox_version
 
 def get_available_updates():
-    """Get the number of available package updates."""
+    """Get the number of available package updates. Cached for 6 hours."""
+    global _system_info_cache
+    
+    now = time.time()
+    if _system_info_cache['available_updates_time'] > 0 and \
+       now - _system_info_cache['available_updates_time'] < _SYSTEM_INFO_CACHE_TTL:
+        return _system_info_cache['available_updates']
+    
     available_updates = 0
     try:
         # Use apt list --upgradable to count available updates
@@ -385,11 +1915,12 @@ def get_available_updates():
             lines = result.stdout.strip().split('\n')
             available_updates = max(0, len(lines) - 1)
     except FileNotFoundError:
-        # print("Warning: apt command not found - cannot check for updates.")
         pass
     except Exception as e:
-        # print(f"Warning: Error checking for updates: {e}")
         pass
+    
+    _system_info_cache['available_updates'] = available_updates
+    _system_info_cache['available_updates_time'] = now
     return available_updates
 
 # AGREGANDO FUNCIÓN PARA PARSEAR PROCESOS DE INTEL_GPU_TOP (SIN -J)
@@ -398,13 +1929,17 @@ def get_intel_gpu_processes_from_text():
     try:
         # print(f"[v0] Executing intel_gpu_top (text mode) to capture processes...", flush=True)
         pass
-        process = subprocess.Popen(
-            ['intel_gpu_top'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
-        )
+        try:
+            process = subprocess.Popen(
+                ['intel_gpu_top'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+        except FileNotFoundError:
+            # intel_gpu_top no está instalado, retornar lista vacía
+            return []
         
         # Wait 2 seconds for intel_gpu_top to collect data
         time.sleep(2)
@@ -528,11 +2063,8 @@ def get_vm_lxc_names():
         # local_node = socket.gethostname()
         local_node = get_proxmox_node_name()
         
-        result = subprocess.run(['pvesh', 'get', '/cluster/resources', '--type', 'vm', '--output-format', 'json'], 
-                              capture_output=True, text=True, timeout=10)
-        
-        if result.returncode == 0:
-            resources = json.loads(result.stdout)
+        resources = get_cached_pvesh_cluster_resources_vm()
+        if resources:
             for resource in resources:
                 node = resource.get('node', '')
                 if node != local_node:
@@ -780,6 +2312,318 @@ def serve_images(filename):
 # Moved helper functions for system info up
 # def get_system_info(): ... (moved up)
 
+def get_disk_connection_type(disk_name):
+    """Detect how a disk is connected: usb, sata, nvme, sas, or unknown.
+    
+    Uses /sys/block/<disk>/device symlink to resolve the bus path.
+    Examples:
+      /sys/.../usb3/...   -> 'usb'
+      /sys/.../ata2/...   -> 'sata'
+      nvme0n1             -> 'nvme'
+      /sys/.../host0/...  -> 'sas' (SAS/SCSI)
+    """
+    try:
+        if disk_name.startswith('nvme'):
+            return 'nvme'
+        
+        device_path = f'/sys/block/{disk_name}/device'
+        if os.path.exists(device_path):
+            real_path = os.path.realpath(device_path)
+            if '/usb' in real_path:
+                return 'usb'
+            if '/ata' in real_path:
+                return 'sata'
+            if '/sas' in real_path:
+                return 'sas'
+        
+        # Fallback: check removable flag
+        removable_path = f'/sys/block/{disk_name}/removable'
+        if os.path.exists(removable_path):
+            with open(removable_path) as f:
+                if f.read().strip() == '1':
+                    return 'usb'
+        
+        return 'internal'
+    except Exception:
+        return 'unknown'
+
+
+def is_disk_removable(disk_name):
+    """Check if a disk is removable (USB sticks, external drives, etc.)."""
+    try:
+        removable_path = f'/sys/block/{disk_name}/removable'
+        if os.path.exists(removable_path):
+            with open(removable_path) as f:
+                return f.read().strip() == '1'
+        return False
+    except Exception:
+        return False
+
+
+def _is_system_mount(mountpoint):
+    """Check if mountpoint is a critical system path (matching bash scripts logic)."""
+    system_mounts = ('/', '/boot', '/boot/efi', '/efi', '/usr', '/var', '/etc', 
+                     '/lib', '/lib64', '/run', '/proc', '/sys')
+    if mountpoint in system_mounts:
+        return True
+    # Also check if it's under these paths
+    for prefix in ('/usr/', '/var/', '/lib/', '/lib64/'):
+        if mountpoint.startswith(prefix):
+            return True
+    return False
+
+
+def _get_zfs_root_pool():
+    """Get the ZFS pool containing the root filesystem, if any (matches bash _get_zfs_root_pool)."""
+    try:
+        result = subprocess.run(['df', '/'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            if len(lines) >= 2:
+                root_fs = lines[1].split()[0]
+                # A ZFS dataset looks like "rpool/ROOT/pve-1" — not /dev/
+                if not root_fs.startswith('/dev/') and '/' in root_fs:
+                    return root_fs.split('/')[0]
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_zfs_entry(entry):
+    """
+    Resolve a ZFS device entry to a base disk name.
+    Handles: /dev/paths, by-id names, short kernel names (matches bash _resolve_zfs_entry).
+    """
+    path = None
+    
+    try:
+        if entry.startswith('/dev/'):
+            path = os.path.realpath(entry)
+        elif os.path.exists(f'/dev/disk/by-id/{entry}'):
+            path = os.path.realpath(f'/dev/disk/by-id/{entry}')
+        elif os.path.exists(f'/dev/{entry}'):
+            path = os.path.realpath(f'/dev/{entry}')
+        
+        if path:
+            # Get parent disk (base disk without partition number)
+            result = subprocess.run(
+                ['lsblk', '-no', 'PKNAME', path],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            # If no parent, path is the base disk itself
+            return os.path.basename(path)
+    except Exception:
+        pass
+    return None
+
+
+def get_system_disks():
+    """
+    Detect which physical disks are used by the system (Proxmox).
+    
+    Returns a dict mapping disk names to their system usage info:
+    {
+        'sda': {'is_system': True, 'usage': ['root', 'boot']},
+        'nvme0n1': {'is_system': True, 'usage': ['zfs:rpool']},
+    }
+    
+    Detects (matching logic from disk-passthrough.sh, format-disk.sh, disk_host.sh):
+    - Root filesystem (/) and critical system mounts (/boot, /usr, /var, etc.)
+    - Boot partition (/boot, /boot/efi)
+    - Active swap partitions
+    - ZFS pools (especially root pool - these disks are critical)
+    - LVM physical volumes (especially 'pve' volume group)
+    - RAID members (mdadm)
+    - Disks with Proxmox partition labels
+    """
+    system_disks = {}
+    
+    def add_usage(disk_name, usage_type):
+        """Helper to add a usage type to a disk."""
+        if not disk_name:
+            return
+        # Normalize disk name (strip partition numbers to get base disk)
+        base_disk = disk_name
+        if disk_name and disk_name[-1].isdigit():
+            if 'nvme' in disk_name or 'mmcblk' in disk_name:
+                # NVMe/eMMC: nvme0n1p1 -> nvme0n1
+                if 'p' in disk_name:
+                    base_disk = disk_name.rsplit('p', 1)[0]
+            else:
+                # SATA/SAS: sda1 -> sda
+                base_disk = disk_name.rstrip('0123456789')
+        
+        if base_disk not in system_disks:
+            system_disks[base_disk] = {'is_system': True, 'usage': []}
+        if usage_type not in system_disks[base_disk]['usage']:
+            system_disks[base_disk]['usage'].append(usage_type)
+    
+    # Get ZFS root pool first (critical - these disks should never be touched)
+    zfs_root_pool = _get_zfs_root_pool()
+    
+    try:
+        # 1. Check mounted filesystems for system-critical mounts
+        with open('/proc/mounts', 'r') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                device, mountpoint = parts[0], parts[1]
+                
+                # Skip non-block devices
+                if not device.startswith('/dev/'):
+                    continue
+                
+                disk_name = device.replace('/dev/', '').replace('mapper/', '')
+                
+                # Identify system mountpoints (expanded from bash _is_system_mount)
+                if _is_system_mount(mountpoint):
+                    if mountpoint == '/':
+                        add_usage(disk_name, 'root')
+                    elif mountpoint.startswith('/boot'):
+                        add_usage(disk_name, 'boot')
+                    else:
+                        add_usage(disk_name, 'system')
+    except Exception:
+        pass
+    
+    try:
+        # 2. Check active swap partitions
+        result = subprocess.run(
+            ['swapon', '--noheadings', '--raw', '--show=NAME'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                device = line.strip()
+                if device.startswith('/dev/'):
+                    disk_name = device.replace('/dev/', '')
+                    add_usage(disk_name, 'swap')
+    except Exception:
+        # Fallback to /proc/swaps
+        try:
+            with open('/proc/swaps', 'r') as f:
+                lines = f.readlines()[1:]  # Skip header
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 1:
+                        device = parts[0]
+                        if device.startswith('/dev/'):
+                            disk_name = device.replace('/dev/', '').replace('mapper/', '')
+                            add_usage(disk_name, 'swap')
+        except Exception:
+            pass
+    
+    try:
+        # 3. Check ZFS pools using zpool list -v -H (matches bash _build_pool_disks)
+        result = subprocess.run(
+            ['zpool', 'list', '-v', '-H'],
+            capture_output=True, text=True, timeout=8
+        )
+        if result.returncode == 0:
+            current_pool = None
+            for line in result.stdout.split('\n'):
+                if not line.strip():
+                    continue
+                parts = line.split()
+                if not parts:
+                    continue
+                
+                # First column is pool name or device
+                entry = parts[0]
+                
+                # Skip metadata entries
+                if entry in ('-', 'mirror', 'raidz', 'raidz1', 'raidz2', 'raidz3', 'spare', 'log', 'cache'):
+                    continue
+                
+                # Check if this is a pool name (pools have no leading whitespace)
+                if not line.startswith('\t') and not line.startswith(' '):
+                    current_pool = entry
+                    continue
+                
+                # This is a device entry - resolve it
+                base_disk = _resolve_zfs_entry(entry)
+                if base_disk:
+                    pool_label = current_pool or 'unknown'
+                    # Mark root pool specially
+                    if zfs_root_pool and pool_label == zfs_root_pool:
+                        add_usage(base_disk, f'zfs:{pool_label} (root)')
+                    else:
+                        add_usage(base_disk, f'zfs:{pool_label}')
+    except Exception:
+        pass
+    
+    try:
+        # 4. Check LVM physical volumes
+        result = subprocess.run(
+            ['pvs', '--noheadings', '-o', 'pv_name,vg_name'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        pv_device = parts[0]
+                        vg_name = parts[1]
+                        if pv_device.startswith('/dev/'):
+                            # Resolve to real path
+                            try:
+                                real_path = os.path.realpath(pv_device)
+                                disk_name = os.path.basename(real_path)
+                            except Exception:
+                                disk_name = pv_device.replace('/dev/', '')
+                            
+                            # Proxmox typically uses 'pve' volume group
+                            if 'pve' in vg_name.lower():
+                                add_usage(disk_name, f'lvm:{vg_name} (pve)')
+                            else:
+                                add_usage(disk_name, f'lvm:{vg_name}')
+    except Exception:
+        pass
+    
+    try:
+        # 5. Check active RAID arrays
+        if os.path.exists('/proc/mdstat'):
+            with open('/proc/mdstat', 'r') as f:
+                content = f.read()
+                if 'active' in content:
+                    # Parse mdstat for active arrays
+                    for line in content.split('\n'):
+                        if 'active raid' in line:
+                            # Extract device names from line like "md0 : active raid1 sda1[0] sdb1[1]"
+                            parts = line.split()
+                            for part in parts:
+                                if '[' in part:
+                                    dev = part.split('[')[0]
+                                    add_usage(dev, 'raid')
+    except Exception:
+        pass
+    
+    try:
+        # 6. Check for disks with Proxmox/system partition labels
+        result = subprocess.run(
+            ['lsblk', '-o', 'NAME,PARTLABEL', '-n', '-l'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split(None, 1)
+                if len(parts) >= 2:
+                    disk_name = parts[0]
+                    partlabel = parts[1].lower() if len(parts) > 1 else ''
+                    # Proxmox-specific and system partition labels
+                    system_labels = ['pve', 'proxmox', 'bios', 'esp', 'efi', 'boot', 'grub']
+                    if any(label in partlabel for label in system_labels):
+                        add_usage(disk_name, 'system-partition')
+    except Exception:
+        pass
+    
+    return system_disks
+
+
 def get_storage_info():
     """Get storage and disk information"""
     try:
@@ -798,6 +2642,9 @@ def get_storage_info():
         physical_disks = {}
         total_disk_size_bytes = 0
         
+        # Get system disk information (disks used by Proxmox)
+        system_disks = get_system_disks()
+        
         try:
             # List all block devices
             result = subprocess.run(['lsblk', '-b', '-d', '-n', '-o', 'NAME,SIZE,TYPE'], 
@@ -808,9 +2655,12 @@ def get_storage_info():
                     if len(parts) >= 3 and parts[2] == 'disk':
                         disk_name = parts[0]
                         
+                        # Skip virtual/RAM-based block devices
                         if disk_name.startswith('zd'):
-                            # print(f"[v0] Skipping ZFS zvol device: {disk_name}")
-                            pass
+                            # ZFS zvol devices
+                            continue
+                        if disk_name.startswith('zram'):
+                            # zram compressed RAM devices (used by log2ram, etc.)
                             continue
                         
                         disk_size_bytes = int(parts[1])
@@ -833,6 +2683,14 @@ def get_storage_info():
                         else:
                             size_str = f"{disk_size_gb:.1f}G"
                         
+                        conn_type = get_disk_connection_type(disk_name)
+                        removable = is_disk_removable(disk_name)
+                        
+                        # Check if this disk is used by the system
+                        sys_info = system_disks.get(disk_name, {})
+                        is_system_disk = sys_info.get('is_system', False)
+                        system_usage = sys_info.get('usage', [])
+                        
                         physical_disks[disk_name] = {
                             'name': disk_name,
                             'size': disk_size_kb,  # In KB for formatMemory() in Storage Summary
@@ -847,27 +2705,140 @@ def get_storage_info():
                             'reallocated_sectors': smart_data.get('reallocated_sectors', 0),
                             'pending_sectors': smart_data.get('pending_sectors', 0),
                             'crc_errors': smart_data.get('crc_errors', 0),
-                            'rotation_rate': smart_data.get('rotation_rate', 0),  # Added
-                            'power_cycles': smart_data.get('power_cycles', 0),   # Added
-                            'percentage_used': smart_data.get('percentage_used'), # Added
-                            'media_wearout_indicator': smart_data.get('media_wearout_indicator'), # Added
-                            'wear_leveling_count': smart_data.get('wear_leveling_count'), # Added
-                            'total_lbas_written': smart_data.get('total_lbas_written'), # Added
-                            'ssd_life_left': smart_data.get('ssd_life_left') # Added
+                            'rotation_rate': smart_data.get('rotation_rate', 0),
+                            'power_cycles': smart_data.get('power_cycles', 0),
+                            'percentage_used': smart_data.get('percentage_used'),
+                            'media_wearout_indicator': smart_data.get('media_wearout_indicator'),
+                            'wear_leveling_count': smart_data.get('wear_leveling_count'),
+                            'total_lbas_written': smart_data.get('total_lbas_written'),
+                            'ssd_life_left': smart_data.get('ssd_life_left'),
+                            'connection_type': conn_type,
+                            'removable': removable,
+                            'is_system_disk': is_system_disk,
+                            'system_usage': system_usage,
                         }
                         
-                        storage_data['disk_count'] += 1
-                        health = smart_data.get('health', 'unknown').lower()
-                        if health == 'healthy':
-                            storage_data['healthy_disks'] += 1
-                        elif health == 'warning':
-                            storage_data['warning_disks'] += 1
-                        elif health in ['critical', 'failed']:
-                            storage_data['critical_disks'] += 1
-                            
         except Exception as e:
-            # print(f"Error getting disk list: {e}")
             pass
+        
+        # Enrich physical disks with active I/O errors from health_persistence.
+        # This is the single source of truth -- health_monitor detects ATA/SCSI/IO
+        # errors via dmesg, records them in health_persistence, and we read them here.
+        try:
+            active_disk_errors = health_persistence.get_active_errors(category='disks')
+            for err in active_disk_errors:
+                details = err.get('details', {})
+                if isinstance(details, str):
+                    try:
+                        details = json.loads(details)
+                    except (json.JSONDecodeError, TypeError):
+                        details = {}
+                
+                err_device = details.get('disk', '')
+                # Prefer the pre-resolved block device name (e.g. 'sdh' instead of 'ata8')
+                block_device = details.get('block_device', '')
+                err_serial = details.get('serial', '')
+                error_count = details.get('error_count', 0)
+                sample = details.get('sample', '')
+                severity = err.get('severity', 'WARNING')
+                
+                # Match error to physical disk.
+                # Priority: block_device > serial > err_device > ATA resolution
+                matched_disk = None
+                
+                # 1. Direct match via pre-resolved block_device
+                if block_device and block_device in physical_disks:
+                    matched_disk = block_device
+                
+                # 2. Match by serial (most reliable across reboots/device renaming)
+                if not matched_disk and err_serial:
+                    for dk, dinfo in physical_disks.items():
+                        if dinfo.get('serial', '').lower() == err_serial.lower():
+                            matched_disk = dk
+                            break
+                
+                # 3. Direct match via err_device
+                if not matched_disk and err_device in physical_disks:
+                    matched_disk = err_device
+                
+                # 4. Partial match
+                if not matched_disk:
+                    for dk in physical_disks:
+                        if dk == err_device or err_device.startswith(dk):
+                            matched_disk = dk
+                            break
+                
+                # 5. ATA name resolution as last resort: 'ata8' -> 'sdh' via /sys
+                if not matched_disk and err_device.startswith('ata'):
+                    # Method A: Use /sys/class/ata_port to find the block device
+                    try:
+                        ata_path = f'/sys/class/ata_port/{err_device}'
+                        if os.path.exists(ata_path):
+                            device_path = os.path.realpath(ata_path)
+                            for root, dirs, files in os.walk(os.path.dirname(device_path)):
+                                if 'block' in dirs:
+                                    devs = os.listdir(os.path.join(root, 'block'))
+                                    for bd in devs:
+                                        if bd in physical_disks:
+                                            matched_disk = bd
+                                            break
+                                if matched_disk:
+                                    break
+                    except (OSError, IOError):
+                        pass
+                    # Method B: Walk /sys/block/sd* and check if ataX in device path
+                    if not matched_disk:
+                        try:
+                            for sd in os.listdir('/sys/block'):
+                                if not sd.startswith('sd'):
+                                    continue
+                                dev_link = f'/sys/block/{sd}/device'
+                                if os.path.islink(dev_link):
+                                    real_p = os.path.realpath(dev_link)
+                                    if f'/{err_device}/' in real_p:
+                                        if sd in physical_disks:
+                                            matched_disk = sd
+                                            break
+                        except (OSError, IOError):
+                            pass
+                    # Method C: Check error details for display name hint
+                    if not matched_disk:
+                        display = details.get('display', '')
+                        if display.startswith('/dev/'):
+                            dev_hint = display.replace('/dev/', '')
+                            if dev_hint in physical_disks:
+                                matched_disk = dev_hint
+                
+                if matched_disk:
+                    physical_disks[matched_disk]['io_errors'] = {
+                        'count': error_count,
+                        'severity': severity,
+                        'sample': sample,
+                        'reason': err.get('reason', ''),
+                        'error_type': details.get('error_type', 'io'),
+                    }
+                    # Override health status if I/O errors are more severe
+                    current_health = physical_disks[matched_disk].get('health', 'unknown').lower()
+                    if severity == 'CRITICAL' and current_health != 'critical':
+                        physical_disks[matched_disk]['health'] = 'critical'
+                    elif severity == 'WARNING' and current_health in ('healthy', 'unknown'):
+                        physical_disks[matched_disk]['health'] = 'warning'
+                # If err_device doesn't match any physical disk, the error still
+                # lives in the health monitor (Disk I/O & System Logs sections).
+                # We don't create virtual disks -- Physical Disks shows real hardware only.
+        except Exception:
+            pass
+        
+        # Count disk health states AFTER I/O error enrichment
+        for disk_name, disk_info in physical_disks.items():
+            storage_data['disk_count'] += 1
+            health = disk_info.get('health', 'unknown').lower()
+            if health == 'healthy':
+                storage_data['healthy_disks'] += 1
+            elif health == 'warning':
+                storage_data['warning_disks'] += 1
+            elif health in ['critical', 'failed']:
+                storage_data['critical_disks'] += 1
         
         storage_data['total'] = round(total_disk_size_bytes / (1024**4), 1)
         
@@ -985,6 +2956,39 @@ def get_storage_info():
         
         except Exception as e:
             # print(f"Error getting partition info: {e}")
+            pass
+        
+        # ── Register disks in observation system + enrich with observation counts ──
+        try:
+            active_dev_names = list(physical_disks.keys())
+            
+            # Register disks FIRST so that old ATA-named entries get
+            # consolidated into block device names via serial matching.
+            for disk_name, disk_info in physical_disks.items():
+                health_persistence.register_disk(
+                    device_name=disk_name,
+                    serial=disk_info.get('serial', ''),
+                    model=disk_info.get('model', ''),
+                    size_bytes=disk_info.get('size_bytes'),
+                )
+            
+            # Fetch observation counts AFTER registration so consolidated
+            # entries are already merged (ata8 -> sdh).
+            obs_counts = health_persistence.get_disks_observation_counts()
+            
+            for disk_name, disk_info in physical_disks.items():
+                # Attach observation count: try serial match first, then device name
+                serial = disk_info.get('serial', '')
+                count = obs_counts.get(f'serial:{serial}', 0) if serial else 0
+                if count == 0:
+                    count = obs_counts.get(disk_name, 0)
+                disk_info['observations_count'] = count
+            
+            # Mark disks no longer present as removed
+            health_persistence.mark_removed_disks(active_dev_names)
+            # Auto-dismiss stale observations (> 30 days old)
+            health_persistence.cleanup_stale_observations()
+        except Exception:
             pass
         
         storage_data['disks'] = list(physical_disks.values())
@@ -1245,7 +3249,8 @@ def get_smart_data(disk_name):
     
     try:
         commands_to_try = [
-            ['smartctl', '-a', '-j', f'/dev/{disk_name}'],  # JSON output (preferred)
+            ['smartctl', '-a', '-j', f'/dev/{disk_name}'],  # JSON auto-detect (preferred)
+            ['smartctl', '-a', '-j', '-d', 'scsi', f'/dev/{disk_name}'],  # JSON SCSI/SAS (early for SAS disks)
             ['smartctl', '-a', '-d', 'ata', f'/dev/{disk_name}'],  # JSON with ATA device type
             ['smartctl', '-a', '-d', 'sat', f'/dev/{disk_name}'],  # JSON with SAT device type
             ['smartctl', '-a', f'/dev/{disk_name}'],  # Text output (fallback)
@@ -1254,7 +3259,6 @@ def get_smart_data(disk_name):
             ['smartctl', '-i', '-H', '-A', f'/dev/{disk_name}'],  # Info + Health + Attributes
             ['smartctl', '-i', '-H', '-A', '-d', 'ata', f'/dev/{disk_name}'],  # With ATA
             ['smartctl', '-i', '-H', '-A', '-d', 'sat', f'/dev/{disk_name}'],  # With SAT
-            ['smartctl', '-a', '-j', '-d', 'scsi', f'/dev/{disk_name}'],  # JSON with SCSI device type
             ['smartctl', '-a', '-j', '-d', 'sat,12', f'/dev/{disk_name}'],  # SAT with 12-byte commands
             ['smartctl', '-a', '-j', '-d', 'sat,16', f'/dev/{disk_name}'],  # SAT with 16-byte commands
             ['smartctl', '-a', '-d', 'sat,12', f'/dev/{disk_name}'],  # Text SAT with 12-byte commands
@@ -1343,8 +3347,38 @@ def get_smart_data(disk_name):
                                     smart_data['total_lbas_written'] = round(total_gb, 2)
 
                             
+                            # Parse SCSI/SAS SMART data (no ATA attribute IDs)
+                            device_protocol = data.get('device', {}).get('protocol', '')
+                            if device_protocol == 'SCSI' or 'scsi_error_counter_log' in data:
+                                # Temperature
+                                if 'temperature' in data and 'current' in data['temperature']:
+                                    smart_data['temperature'] = data['temperature']['current']
+                                # Power-on hours
+                                if 'power_on_time' in data:
+                                    smart_data['power_on_hours'] = data['power_on_time'].get('hours', 0)
+                                # Power cycles from start-stop counter
+                                scsi_ssc = data.get('scsi_start_stop_cycle_counter', {})
+                                if 'accumulated_start_stop_cycles' in scsi_ssc:
+                                    smart_data['power_cycles'] = scsi_ssc['accumulated_start_stop_cycles']
+                                # Grown defect list (equivalent to reallocated sectors)
+                                gdl = data.get('scsi_grown_defect_list', 0)
+                                if isinstance(gdl, dict):
+                                    gdl = gdl.get('count', 0)
+                                smart_data['reallocated_sectors'] = gdl
+                                # Read/write errors from error counter log
+                                ecl = data.get('scsi_error_counter_log', {})
+                                read_errors = ecl.get('read', {}).get('errors_corrected_by_eccfast', 0) + \
+                                              ecl.get('read', {}).get('errors_corrected_by_eccdelayed', 0) + \
+                                              ecl.get('read', {}).get('total_errors_corrected', 0)
+                                write_errors = ecl.get('write', {}).get('total_errors_corrected', 0)
+                                # Uncorrected = potential data loss
+                                uncorrected_read = ecl.get('read', {}).get('total_uncorrected_errors', 0)
+                                uncorrected_write = ecl.get('write', {}).get('total_uncorrected_errors', 0)
+                                smart_data['pending_sectors'] = uncorrected_read + uncorrected_write
+                                # CRC errors not applicable for SAS, keep at 0
+
                             # Parse ATA SMART attributes
-                            if 'ata_smart_attributes' in data and 'table' in data['ata_smart_attributes']:
+                            elif 'ata_smart_attributes' in data and 'table' in data['ata_smart_attributes']:
 
                                 for attr in data['ata_smart_attributes']['table']:
                                     attr_id = attr.get('id')
@@ -1352,7 +3386,19 @@ def get_smart_data(disk_name):
                                     normalized_value = attr.get('value', 0)  # Normalized value (0-100)
                                     
                                     if attr_id == 9:  # Power_On_Hours
-                                        smart_data['power_on_hours'] = raw_value
+                                        # Some drives encode extra data in high bytes, causing absurd values
+                                        # Max reasonable value: ~1,000,000 hours = 114 years continuous use
+                                        poh = raw_value
+                                        if poh > 1000000:
+                                            # Try extracting lower 24 bits (common encoding)
+                                            poh = raw_value & 0xFFFFFF
+                                            if poh > 1000000:
+                                                # Still absurd, try lower 16 bits
+                                                poh = raw_value & 0xFFFF
+                                                if poh > 1000000:
+                                                    # Give up, set to 0 (frontend shows N/A)
+                                                    poh = 0
+                                        smart_data['power_on_hours'] = poh
 
                                     elif attr_id == 12:  # Power_Cycle_Count
                                         smart_data['power_cycles'] = raw_value
@@ -1374,57 +3420,48 @@ def get_smart_data(disk_name):
                                     elif attr_id == 199:  # UDMA_CRC_Error_Count
                                         smart_data['crc_errors'] = raw_value
 
-                                    elif attr_id == '230': 
-                                        try:
-                                            wear_used = None
-                                            rv = str(raw_value).strip()
+                                    # --- SSD/NVMe wear & lifetime — NAME-based detection ---
+                                    # Same SMART ID means different things on different manufacturers.
+                                    # Always check attr name to avoid cross-manufacturer misinterpretation.
+                                    elif attr_id in (177, 202, 230, 231, 233, 241):
+                                        attr_name = attr.get('name', '').lower()
 
-                                            if rv.startswith("0x") and len(rv) >= 8:
-                                                # 0x001c0014... -> '001c' -> 0x001c = 28
-                                                wear_hex = rv[4:8]
-                                                wear_used = int(wear_hex, 16)
-                                            else:
-                                                wear_used = int(rv)
+                                        # --- Wear / Life indicators ---
+                                        if attr_id == 230 and ('wearout' in attr_name or 'media' in attr_name):
+                                            # WD/SanDisk Media_Wearout_Indicator: value = endurance used %
+                                            smart_data['media_wearout_indicator'] = normalized_value
+                                            smart_data['ssd_life_left'] = max(0, 100 - normalized_value)
 
-                                            if wear_used is None or wear_used < 0 or wear_used > 100:
-                                                wear_used = max(0, min(100, 100 - int(normalized_value)))
+                                        elif attr_id == 233 and ('wearout' in attr_name or 'media' in attr_name):
+                                            # Intel/Samsung Media_Wearout_Indicator: value = life remaining %
+                                            # Skip if already set by ID 230 (prevents overwrite)
+                                            if smart_data.get('media_wearout_indicator') is None:
+                                                smart_data['media_wearout_indicator'] = 100 - normalized_value
 
-                                            smart_data['media_wearout_indicator'] = wear_used                   
-                                            smart_data['ssd_life_left'] = max(0, 100 - wear_used)              
+                                        elif attr_id == 177 and ('wear' in attr_name or 'leveling' in attr_name):
+                                            # Samsung/Crucial Wear_Leveling_Count: value = life remaining %
+                                            smart_data['wear_leveling_count'] = 100 - normalized_value
 
-                                        except Exception as e:
-                                            # print(f"[v0] Error parsing Media_Wearout_Indicator (ID 230): {e}")
-                                            pass
-                                    elif attr_id == '233':  # Media_Wearout_Indicator (Intel/Samsung SSD)
-                                        # Valor normalizado: 100 = nuevo, 0 = gastado
-                                        # Invertimos para mostrar desgaste: 0% = nuevo, 100% = gastado
-                                        smart_data['media_wearout_indicator'] = 100 - normalized_value
-                                        # print(f"[v0] Media Wearout Indicator (ID 233): {smart_data['media_wearout_indicator']}% used")
-                                        pass
-                                    elif attr_id == '177':  # Wear_Leveling_Count
-                                        # Valor normalizado: 100 = nuevo, 0 = gastado
-                                        smart_data['wear_leveling_count'] = 100 - normalized_value
-                                        # print(f"[v0] Wear Leveling Count (ID 177): {smart_data['wear_leveling_count']}% used")
-                                        pass
-                                    elif attr_id == '202':  # Percentage_Lifetime_Remain (algunos fabricantes)
-                                        # Valor normalizado: 100 = nuevo, 0 = gastado
-                                        smart_data['ssd_life_left'] = normalized_value
-                                        # print(f"[v0] SSD Life Left (ID 202): {smart_data['ssd_life_left']}%")
-                                        pass
-                                    elif attr_id == '231':  # SSD_Life_Left (algunos fabricantes)
-                                        smart_data['ssd_life_left'] = normalized_value
-                                        # print(f"[v0] SSD Life Left (ID 231): {smart_data['ssd_life_left']}%")
-                                        pass
-                                    elif attr_id == '241':  # Total_LBAs_Written
-                                        # Convertir a GB (raw_value es en sectores de 512 bytes)
-                                        try:
-                                            raw_int = int(raw_value.replace(',', ''))
-                                            total_gb = (raw_int * 512) / (1024 * 1024 * 1024)
-                                            smart_data['total_lbas_written'] = round(total_gb, 2)
-                                            # print(f"[v0] Total LBAs Written (ID 241): {smart_data['total_lbas_written']} GB")
-                                            pass
-                                        except ValueError:
-                                            pass
+                                        elif attr_id == 202 and ('lifetime' in attr_name or 'life' in attr_name):
+                                            # Micron/Crucial Percent_Lifetime_Remain: value = life remaining %
+                                            smart_data['ssd_life_left'] = normalized_value
+
+                                        elif attr_id == 231 and ('life' in attr_name):
+                                            # Kingston/Phison SSD_Life_Left: value = life remaining %
+                                            smart_data['ssd_life_left'] = normalized_value
+
+                                        # --- Data written ---
+                                        elif attr_id == 241:
+                                            if 'gib' in attr_name or '_gb' in attr_name or 'writes_g' in attr_name:
+                                                # WD/Kingston: raw value already in GiB
+                                                smart_data['total_lbas_written'] = round(raw_value, 2)
+                                            elif 'lba' in attr_name or 'written' in attr_name:
+                                                # Seagate/Standard: raw value in LBA sectors (512 bytes)
+                                                try:
+                                                    total_gb = (raw_value * 512) / (1024 * 1024 * 1024)
+                                                    smart_data['total_lbas_written'] = round(total_gb, 2)
+                                                except (ValueError, TypeError):
+                                                    pass
                             
                             # If we got good data, break out of the loop
                             if smart_data['model'] != 'Unknown' and smart_data['serial'] != 'Unknown':
@@ -1563,63 +3600,40 @@ def get_smart_data(disk_name):
                                             smart_data['crc_errors'] = int(raw_value)
                                             # print(f"[v0] CRC Errors: {smart_data['crc_errors']}")
                                             pass
-                                        elif attr_id == '230': 
-                                            try:
-                                                wear_used = None
-                                                raw_str = str(raw_value).strip()
+                                        # --- SSD wear & data written (text path) — NAME-based ---
+                                        elif attr_id in ('177', '202', '230', '231', '233', '241'):
+                                            a_name = parts[1].lower() if len(parts) > 1 else ''
+                                            nv = int(parts[3]) if len(parts) > 3 else 100
 
-                                                if raw_str.startswith("0x") and len(raw_str) >= 8:
-      
-                                                    wear_hex = raw_str[4:8]
-                                                    wear_used = int(wear_hex, 16)
-                                                else:
-                                                    wear_used = int(raw_str)
+                                            if attr_id == '230' and ('wearout' in a_name or 'media' in a_name):
+                                                # WD/SanDisk: value = endurance used %
+                                                smart_data['media_wearout_indicator'] = nv
+                                                smart_data['ssd_life_left'] = max(0, 100 - nv)
 
-                                                if wear_used is None or wear_used < 0 or wear_used > 100:
-                                                    normalized_value = int(parts[3]) if len(parts) > 3 else 100
-                                                    wear_used = max(0, min(100, 100 - normalized_value))
+                                            elif attr_id == '233' and ('wearout' in a_name or 'media' in a_name):
+                                                # Intel/Samsung: value = life remaining %
+                                                if smart_data.get('media_wearout_indicator') is None:
+                                                    smart_data['media_wearout_indicator'] = 100 - nv
 
-                                                smart_data['media_wearout_indicator'] = wear_used
-                                                smart_data['ssd_life_left'] = max(0, 100 - wear_used)
-                                                # print(f"[v0] Media Wearout Indicator (ID 230): {wear_used}% used, {smart_data['ssd_life_left']}% life left")
-                                                pass
-                                            except Exception as e:
-                                                # print(f"[v0] Error parsing Media_Wearout_Indicator (ID 230): {e}")
-                                                pass
-                                        elif attr_id == '233':  # Media_Wearout_Indicator (Intel/Samsung SSD)
-                                            # Valor normalizado: 100 = nuevo, 0 = gastado
-                                            # Invertimos para mostrar desgaste: 0% = nuevo, 100% = gastado
-                                            normalized_value = int(parts[3]) if len(parts) > 3 else 100
-                                            smart_data['media_wearout_indicator'] = 100 - normalized_value
-                                            # print(f"[v0] Media Wearout Indicator (ID 233): {smart_data['media_wearout_indicator']}% used")
-                                            pass
-                                        elif attr_id == '177':  # Wear_Leveling_Count
-                                            # Valor normalizado: 100 = nuevo, 0 = gastado
-                                            normalized_value = int(parts[3]) if len(parts) > 3 else 100
-                                            smart_data['wear_leveling_count'] = 100 - normalized_value
-                                            # print(f"[v0] Wear Leveling Count (ID 177): {smart_data['wear_leveling_count']}% used")
-                                            pass
-                                        elif attr_id == '202':  # Percentage_Lifetime_Remain (algunos fabricantes)
-                                            # Valor normalizado: 100 = nuevo, 0 = gastado
-                                            normalized_value = int(parts[3]) if len(parts) > 3 else 100
-                                            smart_data['ssd_life_left'] = normalized_value
-                                            # print(f"[v0] SSD Life Left (ID 202): {smart_data['ssd_life_left']}%")
-                                            pass
-                                        elif attr_id == '231':  # SSD_Life_Left (algunos fabricantes)
-                                            normalized_value = int(parts[3]) if len(parts) > 3 else 100
-                                            smart_data['ssd_life_left'] = normalized_value
-                                            # print(f"[v0] SSD Life Left (ID 231): {smart_data['ssd_life_left']}%")
-                                            pass
-                                        elif attr_id == '241':  # Total_LBAs_Written
-                                            # Convertir a GB (raw_value es en sectores de 512 bytes)
-                                            try:
-                                                raw_int = int(raw_value.replace(',', ''))
-                                                total_gb = (raw_int * 512) / (1024 * 1024 * 1024)
-                                                smart_data['total_lbas_written'] = round(total_gb, 2)
-                                                # print(f"[v0] Total LBAs Written (ID 241): {smart_data['total_lbas_written']} GB")
-                                                pass
-                                            except ValueError:
-                                                pass
+                                            elif attr_id == '177' and ('wear' in a_name or 'leveling' in a_name):
+                                                smart_data['wear_leveling_count'] = 100 - nv
+
+                                            elif attr_id == '202' and ('lifetime' in a_name or 'life' in a_name):
+                                                smart_data['ssd_life_left'] = nv
+
+                                            elif attr_id == '231' and 'life' in a_name:
+                                                smart_data['ssd_life_left'] = nv
+
+                                            elif attr_id == '241':
+                                                try:
+                                                    raw_int = int(raw_value.replace(',', ''))
+                                                    if 'gib' in a_name or '_gb' in a_name or 'writes_g' in a_name:
+                                                        smart_data['total_lbas_written'] = round(raw_int, 2)
+                                                    elif 'lba' in a_name or 'written' in a_name:
+                                                        total_gb = (raw_int * 512) / (1024 * 1024 * 1024)
+                                                        smart_data['total_lbas_written'] = round(total_gb, 2)
+                                                except ValueError:
+                                                    pass
                                             
                                     except (ValueError, IndexError) as e:
                                         # print(f"[v0] Error parsing attribute line '{line}': {e}")
@@ -1677,15 +3691,29 @@ def get_smart_data(disk_name):
             pass
         
         # Temperature-based health (only if we have a valid temperature)
+        # Thresholds differ by disk type to avoid false warnings
         if smart_data['health'] == 'healthy' and smart_data['temperature'] > 0:
-            if smart_data['temperature'] >= 70:
-                smart_data['health'] = 'critical'
-                # print(f"[v0] Health: CRITICAL (temperature {smart_data['temperature']}°C)")
-                pass
-            elif smart_data['temperature'] >= 60:
-                smart_data['health'] = 'warning'
-                # print(f"[v0] Health: WARNING (temperature {smart_data['temperature']}°C)")
-                pass
+            temp = smart_data['temperature']
+            
+            # Determine disk type for temperature thresholds
+            if disk_name.startswith('nvme'):
+                # NVMe: warning >80°C, critical >85°C (NVMe runs hotter)
+                if temp > 85:
+                    smart_data['health'] = 'critical'
+                elif temp > 80:
+                    smart_data['health'] = 'warning'
+            elif smart_data['rotation_rate'] == 0:
+                # SSD (non-NVMe): warning >70°C, critical >75°C
+                if temp > 75:
+                    smart_data['health'] = 'critical'
+                elif temp > 70:
+                    smart_data['health'] = 'warning'
+            else:
+                # HDD: warning >60°C, critical >65°C
+                if temp > 65:
+                    smart_data['health'] = 'critical'
+                elif temp > 60:
+                    smart_data['health'] = 'warning'
 
         # CHANGE: Use -1 to indicate HDD with unknown RPM instead of inventing 7200 RPM
         # Fallback: Check kernel's rotational flag if smartctl didn't provide rotation_rate
@@ -1803,6 +3831,24 @@ def get_proxmox_storage():
         for unavailable_storage in unavailable_storages:
             if unavailable_storage['name'] not in existing_storage_names:
                 storage_list.append(unavailable_storage)
+        
+        # Get storage exclusions to mark excluded storages
+        try:
+            excluded_health = health_persistence.get_excluded_storage_names('health')
+            remote_types = health_persistence.REMOTE_STORAGE_TYPES
+            
+            for storage in storage_list:
+                storage_name = storage.get('name', '')
+                storage_type = storage.get('type', '').lower()
+                
+                # Mark if this is a remote storage type
+                storage['is_remote'] = storage_type in remote_types
+                
+                # Mark if excluded from health monitoring
+                storage['excluded'] = storage_name in excluded_health
+        except Exception:
+            # If exclusion check fails, continue without it
+            pass
 
         return {'storage': storage_list}
         
@@ -1847,8 +3893,10 @@ def api_storage_summary():
                 if len(parts) >= 3 and parts[2] == 'disk':
                     disk_name = parts[0]
                     
-                    # Skip ZFS zvol devices
+                    # Skip virtual/RAM-based block devices
                     if disk_name.startswith('zd'):
+                        continue
+                    if disk_name.startswith('zram'):
                         continue
                     
                     disk_size_bytes = int(parts[1])
@@ -1896,7 +3944,28 @@ def api_storage_summary():
         return jsonify(storage_data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-# END OF CHANGE FOR /api/storage/summary
+    # END OF CHANGE FOR /api/storage/summary
+
+@app.route('/api/storage/observations', methods=['GET'])
+@require_auth
+def api_storage_observations():
+    """Get disk observations (permanent error history) for a specific disk or all disks."""
+    try:
+        device = request.args.get('device', '')
+        serial = request.args.get('serial', '')
+        
+        # Strip /dev/ prefix if present
+        if device.startswith('/dev/'):
+            device = device[5:]
+        
+        observations = health_persistence.get_disk_observations(
+            device_name=device or None,
+            serial=serial or None
+        )
+        
+        return jsonify({'observations': observations})
+    except Exception as e:
+        return jsonify({'observations': [], 'error': str(e)}), 500
 
 def get_interface_type(interface_name):
     """Detect the type of network interface"""
@@ -2284,20 +4353,14 @@ def get_proxmox_vms():
         try:
             # local_node = socket.gethostname()
             local_node = get_proxmox_node_name()
-
             # print(f"[v0] Local node detected: {local_node}")
-            pass
-            
-            result = subprocess.run(['pvesh', 'get', '/cluster/resources', '--type', 'vm', '--output-format', 'json'], 
-                                  capture_output=True, text=True, timeout=10)
-            
-            if result.returncode == 0:
-                resources = json.loads(result.stdout)
+        
+            resources = get_cached_pvesh_cluster_resources_vm()
+            if resources:
                 for resource in resources:
                     node = resource.get('node', '')
                     if node != local_node:
                         # print(f"[v0] Skipping VM {resource.get('vmid')} from remote node: {node}")
-                        pass
                         continue
                     
                     vm_data = {
@@ -2318,38 +4381,57 @@ def get_proxmox_vms():
                     }
                     all_vms.append(vm_data)
 
-                
-
                 return all_vms
             else:
-                # print(f"[v0] pvesh command failed: {result.stderr}")
-                pass
-                return {
-                    'error': 'pvesh command not available or failed',
-                    'vms': []
-                }
+                # Return empty array instead of error object - frontend expects array
+                return []
         except Exception as e:
             # print(f"[v0] Error getting VM/LXC info: {e}")
             pass
-            return {
-                'error': 'Unable to access VM information: {str(e)}',
-                'vms': []
-            }
+            # Return empty array instead of error object - frontend expects array
+            return []
     except Exception as e:
         # print(f"Error getting VM info: {e}")
         pass
-        return {
-            'error': f'Unable to access VM information: {str(e)}',
-            'vms': []
-        }
+        # Return empty array instead of error object - frontend expects array
+        return []
 
-def get_ipmi_fans():
-    """Get fan information from IPMI"""
-    fans = []
+def get_cached_ipmi_sensors():
+    """Get ipmitool sensor output with 10s cache. Shared between fans/power parsers.
+
+    Returns empty string if ipmitool is unavailable (cached to avoid repeated FileNotFoundError).
+    """
+    global _ipmi_cache
+    now = time.time()
+
+    if _ipmi_cache['unavailable']:
+        return ''
+
+    if _ipmi_cache['output'] is not None and \
+       now - _ipmi_cache['time'] < _IPMI_CACHE_TTL:
+        return _ipmi_cache['output']
+
     try:
         result = subprocess.run(['ipmitool', 'sensor'], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
-            for line in result.stdout.split('\n'):
+            _ipmi_cache['output'] = result.stdout
+            _ipmi_cache['time'] = now
+            return result.stdout
+    except FileNotFoundError:
+        _ipmi_cache['unavailable'] = True
+        return ''
+    except Exception:
+        pass
+    return _ipmi_cache['output'] or ''
+
+
+def get_ipmi_fans():
+    """Get fan information from IPMI (uses cached sensor output)."""
+    fans = []
+    try:
+        output = get_cached_ipmi_sensors()
+        if output:
+            for line in output.split('\n'):
                 if 'fan' in line.lower() and '|' in line:
                     parts = [p.strip() for p in line.split('|')]
                     if len(parts) >= 3:
@@ -2385,14 +4467,14 @@ def get_ipmi_fans():
     return fans
 
 def get_ipmi_power():
-    """Get power supply information from IPMI"""
+    """Get power supply information from IPMI (uses cached sensor output)."""
     power_supplies = []
     power_meter = None
-    
+
     try:
-        result = subprocess.run(['ipmitool', 'sensor'], capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
+        output = get_cached_ipmi_sensors()
+        if output:
+            for line in output.split('\n'):
                 if ('power supply' in line.lower() or 'power meter' in line.lower()) and '|' in line:
                     parts = [p.strip() for p in line.split('|')]
                     if len(parts) >= 3:
@@ -2608,7 +4690,6 @@ def identify_temperature_sensor(sensor_name, adapter, chip_name=None):
         core_num = re.search(r'(\d+)', sensor_name)
         return f"CPU Core {core_num.group(1)}" if core_num else "CPU Core"
 
-    # <CHANGE> DDR5 Memory temperature sensors (SPD5118)
     if "spd5118" in chip_lower or ("smbus" in adapter_lower and "temp1" in sensor_lower):
         # Try to identify which DIMM slot
         # Example: spd5118-i2c-0-50 -> i2c bus 0, address 0x50 (DIMM A1)
@@ -2678,7 +4759,7 @@ def identify_fan(sensor_name, adapter, chip_name=None):
     """Identify what a fan sensor corresponds to, using hardware_monitor for GPU detection"""
     sensor_lower = sensor_name.lower()
     adapter_lower = adapter.lower() if adapter else ""
-    chip_lower = chip_name.lower() if chip_name else ""  # <CHANGE> Add chip name
+    chip_lower = chip_name.lower() if chip_name else ""  # Add chip name
 
     # GPU fans - Check both adapter and chip name for GPU drivers
     if "pci adapter" in adapter_lower or "pci adapter" in chip_lower or any(gpu_driver in adapter_lower + chip_lower for gpu_driver in ["nouveau", "amdgpu", "radeon", "i915"]):
@@ -2726,7 +4807,112 @@ def identify_fan(sensor_name, adapter, chip_name=None):
         return sensor_name
     
     # Default: return original name
-    return sensor_name   
+    return sensor_name
+
+
+def _parse_sensor_fans(sensors_output):
+    """Parse fan entries from `sensors` output. Extracted for reuse between
+    get_hardware_info (static full payload) and get_hardware_live_info (live endpoint)."""
+    fans = []
+    if not sensors_output:
+        return fans
+    current_adapter = None
+    current_chip = None
+    for line in sensors_output.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        if not ':' in line and not line.startswith(' ') and not line.startswith('Adapter'):
+            current_chip = line
+            continue
+        if line.startswith('Adapter:'):
+            current_adapter = line.replace('Adapter:', '').strip()
+            continue
+        if ':' in line and not line.startswith(' '):
+            parts = line.split(':', 1)
+            sensor_name = parts[0].strip()
+            value_part = parts[1].strip()
+            if 'RPM' in value_part:
+                rpm_match = re.search(r'([\d.]+)\s*RPM', value_part)
+                if rpm_match:
+                    fan_speed = int(float(rpm_match.group(1)))
+                    identified_name = identify_fan(sensor_name, current_adapter, current_chip)
+                    fans.append({
+                        'name': identified_name,
+                        'original_name': sensor_name,
+                        'speed': fan_speed,
+                        'unit': 'RPM',
+                        'adapter': current_adapter
+                    })
+    return fans
+
+
+def get_hardware_live_info():
+    """Build only the live/dynamic hardware fields for /api/hardware/live.
+
+    Skips all the heavy static collection (lscpu, dmidecode, lsblk, smartctl, lspci...).
+    Uses cached sensors + cached ipmitool output to stay cheap under 5s polling.
+    """
+    result = {
+        'temperatures': [],
+        'fans': [],
+        'power_meter': None,
+        'power_supplies': [],
+        'ups': None,
+        'coral_tpus': [],
+        'usb_devices': [],
+    }
+
+    try:
+        temp_info = get_temperature_info()
+        result['temperatures'] = temp_info.get('temperatures', [])
+        result['power_meter'] = temp_info.get('power_meter')
+    except Exception:
+        pass
+
+    try:
+        sensor_fans = _parse_sensor_fans(get_cached_sensors_output())
+    except Exception:
+        sensor_fans = []
+
+    try:
+        ipmi_fans = get_ipmi_fans()
+    except Exception:
+        ipmi_fans = []
+
+    result['fans'] = sensor_fans + ipmi_fans
+
+    try:
+        ipmi_power = get_ipmi_power()
+        if ipmi_power:
+            result['power_supplies'] = ipmi_power.get('power_supplies', [])
+            # Fallback: if sensors didn't provide a power_meter, use IPMI's
+            if result['power_meter'] is None and ipmi_power.get('power_meter'):
+                result['power_meter'] = ipmi_power['power_meter']
+    except Exception:
+        pass
+
+    try:
+        ups_info = get_ups_info()
+        if ups_info:
+            result['ups'] = ups_info
+    except Exception:
+        pass
+
+    # Coral TPU and USB devices are cheap (sysfs reads + cached lsusb) and we
+    # want them live so the "Install Drivers" button disappears as soon as the
+    # user finishes running install_coral.sh without needing a reload.
+    try:
+        result['coral_tpus'] = get_coral_info()
+    except Exception:
+        pass
+
+    try:
+        result['usb_devices'] = get_usb_devices()
+    except Exception:
+        pass
+
+    return result
 
 
 def get_temperature_info():
@@ -2735,13 +4921,13 @@ def get_temperature_info():
     power_meter = None
     
     try:
-        result = subprocess.run(['sensors'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
+        sensors_output = get_cached_sensors_output()
+        if sensors_output:
             current_adapter = None
             current_chip = None
             current_sensor = None
             
-            for line in result.stdout.split('\n'):
+            for line in sensors_output.split('\n'):
                 line = line.strip()
                 if not line:
                     continue
@@ -3965,14 +6151,219 @@ def get_network_hardware_info(pci_slot):
     
     return net_info
 
+def _get_sriov_info(slot):
+    """Return SR-IOV role for a PCI slot via sysfs.
+
+    Reads /sys/bus/pci/devices/<BDF>/ for:
+      - physfn symlink    → slot is a Virtual Function; link target is its PF
+      - sriov_numvfs      → active VF count if slot is a Physical Function
+      - sriov_totalvfs    → maximum VFs this PF can spawn
+
+    Returns a dict ready to merge into the GPU object, or {} on any error.
+    The 'role' key uses the same vocabulary as _pci_sriov_role in the
+    bash helpers (pci_passthrough_helpers.sh): vf | pf-active | pf-idle | none.
+    """
+    try:
+        bdf = slot if slot.startswith('0000:') else f'0000:{slot}'
+        base = f'/sys/bus/pci/devices/{bdf}'
+        if not os.path.isdir(base):
+            return {}
+
+        physfn = os.path.join(base, 'physfn')
+        if os.path.islink(physfn):
+            parent = os.path.basename(os.path.realpath(physfn))
+            return {
+                'sriov_role': 'vf',
+                'sriov_physfn': parent,
+            }
+
+        totalvfs_path = os.path.join(base, 'sriov_totalvfs')
+        if not os.path.isfile(totalvfs_path):
+            return {'sriov_role': 'none'}
+
+        try:
+            totalvfs = int((open(totalvfs_path).read() or '0').strip() or 0)
+        except (ValueError, OSError):
+            totalvfs = 0
+        if totalvfs <= 0:
+            return {'sriov_role': 'none'}
+
+        try:
+            numvfs = int((open(os.path.join(base, 'sriov_numvfs')).read() or '0').strip() or 0)
+        except (ValueError, OSError):
+            numvfs = 0
+
+        return {
+            'sriov_role': 'pf-active' if numvfs > 0 else 'pf-idle',
+            'sriov_vf_count': numvfs,
+            'sriov_totalvfs': totalvfs,
+        }
+    except Exception:
+        return {}
+
+
+def _sriov_list_vfs_of_pf(pf_bdf):
+    """Return sorted list of VF BDFs that belong to a Physical Function.
+    Reads /sys/bus/pci/devices/<PF>/virtfn<N> symlinks (one per VF).
+    """
+    try:
+        pf_full = pf_bdf if pf_bdf.startswith('0000:') else f'0000:{pf_bdf}'
+        base = f'/sys/bus/pci/devices/{pf_full}'
+        if not os.path.isdir(base):
+            return []
+        # virtfn links are numbered (virtfn0, virtfn1, ...) and point to the VF.
+        entries = sorted(glob.glob(f'{base}/virtfn*'),
+                         key=lambda p: int(re.search(r'virtfn(\d+)', p).group(1))
+                         if re.search(r'virtfn(\d+)', p) else 0)
+        return [os.path.basename(os.path.realpath(p)) for p in entries]
+    except Exception:
+        return []
+
+
+def _sriov_pci_driver(bdf):
+    """Return the current driver bound to a PCI BDF, '' if unbound."""
+    try:
+        link = f'/sys/bus/pci/devices/{bdf}/driver'
+        if os.path.islink(link):
+            return os.path.basename(os.path.realpath(link))
+    except Exception:
+        pass
+    return ''
+
+
+def _sriov_pci_render_node(bdf):
+    """If the device exposes a DRM render node, return '/dev/dri/renderDX'.
+    LXC containers consume GPUs through these nodes, so this lets us
+    cross-reference an LXC's `dev<N>: /dev/dri/renderD<N>` config line
+    back to a specific VF.
+    """
+    try:
+        drm_dir = f'/sys/bus/pci/devices/{bdf}/drm'
+        if not os.path.isdir(drm_dir):
+            return ''
+        for name in sorted(os.listdir(drm_dir)):
+            if name.startswith('renderD'):
+                return f'/dev/dri/{name}'
+    except Exception:
+        pass
+    return ''
+
+
+def _sriov_guest_running(guest_type, gid):
+    """Best-effort status check. Returns True if running, False otherwise."""
+    try:
+        cmd = ['qm' if guest_type == 'vm' else 'pct', 'status', str(gid)]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+        return 'running' in (r.stdout or '').lower()
+    except Exception:
+        return False
+
+
+def _sriov_find_guest_consumer(bdf):
+    """Find the VM or LXC that consumes a given VF (or PF) on the host.
+
+    VMs: scan /etc/pve/qemu-server/*.conf for a `hostpci<N>: ` line that
+         references the BDF (short or full form, possibly alongside other
+         ids separated by ';' and trailing options after ',').
+    LXCs: resolve the BDF to its DRM render node (if any) and scan
+         /etc/pve/lxc/*.conf for `dev<N>:` or `lxc.mount.entry:` lines that
+         reference that node.
+
+    Returns {type, id, name, running} or None.
+    """
+    short_bdf = bdf[5:] if bdf.startswith('0000:') else bdf
+    full_bdf = bdf if bdf.startswith('0000:') else f'0000:{bdf}'
+
+    # ── VM scan ──
+    try:
+        for conf in sorted(glob.glob('/etc/pve/qemu-server/*.conf')):
+            try:
+                with open(conf, 'r') as f:
+                    text = f.read()
+            except OSError:
+                continue
+            if re.search(
+                rf'^hostpci\d+:\s*[^\n]*(?:0000:)?{re.escape(short_bdf)}(?:[,;\s]|$)',
+                text, re.MULTILINE,
+            ):
+                vmid = os.path.basename(conf)[:-5]  # strip '.conf'
+                nm = re.search(r'^name:\s*(\S+)', text, re.MULTILINE)
+                name = nm.group(1) if nm else ''
+                return {
+                    'type': 'vm',
+                    'id': vmid,
+                    'name': name,
+                    'running': _sriov_guest_running('vm', vmid),
+                }
+    except Exception:
+        pass
+
+    # ── LXC scan (via render node) ──
+    render_node = _sriov_pci_render_node(full_bdf)
+    if render_node:
+        try:
+            for conf in sorted(glob.glob('/etc/pve/lxc/*.conf')):
+                try:
+                    with open(conf, 'r') as f:
+                        text = f.read()
+                except OSError:
+                    continue
+                if re.search(
+                    rf'^(?:dev\d+|lxc\.mount\.entry):\s*[^\n]*{re.escape(render_node)}(?:[,;\s]|$)',
+                    text, re.MULTILINE,
+                ):
+                    ctid = os.path.basename(conf)[:-5]
+                    nm = re.search(r'^hostname:\s*(\S+)', text, re.MULTILINE)
+                    name = nm.group(1) if nm else ''
+                    return {
+                        'type': 'lxc',
+                        'id': ctid,
+                        'name': name,
+                        'running': _sriov_guest_running('lxc', ctid),
+                    }
+        except Exception:
+            pass
+
+    return None
+
+
+def _sriov_enrich_detail(gpu):
+    """On-demand enrichment for the GPU detail modal.
+
+    For a PF with active VFs, populates gpu['sriov_vfs'] with per-VF driver
+    and consumer info. For a VF, populates gpu['sriov_consumer'] with the
+    guest (if any) currently referencing it. Heavier than _get_sriov_info()
+    because it scans guest configs, so it is NOT called from the hardware
+    snapshot path — only from the realtime endpoint.
+    """
+    role = gpu.get('sriov_role')
+    slot = gpu.get('slot', '')
+    if not slot:
+        return
+    full_bdf = slot if slot.startswith('0000:') else f'0000:{slot}'
+
+    if role == 'pf-active':
+        vf_list = []
+        for vf_bdf in _sriov_list_vfs_of_pf(full_bdf):
+            vf_list.append({
+                'bdf': vf_bdf,
+                'driver': _sriov_pci_driver(vf_bdf) or '',
+                'render_node': _sriov_pci_render_node(vf_bdf) or '',
+                'consumer': _sriov_find_guest_consumer(vf_bdf),
+            })
+        gpu['sriov_vfs'] = vf_list
+    elif role == 'vf':
+        gpu['sriov_consumer'] = _sriov_find_guest_consumer(full_bdf)
+
+
 def get_gpu_info():
     """Detect and return information about GPUs in the system"""
     gpus = []
     
     try:
-        result = subprocess.run(['lspci'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
+        lspci_output = get_cached_lspci()
+        if lspci_output:
+            for line in lspci_output.split('\n'):
                 # Match VGA, 3D, Display controllers
                 if any(keyword in line for keyword in ['VGA compatible controller', '3D controller', 'Display controller']):
 
@@ -4010,7 +6401,11 @@ def get_gpu_info():
                             gpu['pci_class'] = pci_info.get('class', '')
                             gpu['pci_driver'] = pci_info.get('driver', '')
                             gpu['pci_kernel_module'] = pci_info.get('kernel_module', '')
-                        
+
+                        sriov_fields = _get_sriov_info(slot)
+                        if sriov_fields:
+                            gpu.update(sriov_fields)
+
                         # detailed_info = get_detailed_gpu_info(gpu) # Removed this call here
                         # gpu.update(detailed_info)             # It will be called later in api_gpu_realtime
                         
@@ -4023,11 +6418,11 @@ def get_gpu_info():
         pass
     
     try:
-        result = subprocess.run(['sensors'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
+        sensors_output = get_cached_sensors_output()
+        if sensors_output:
             current_adapter = None
             
-            for line in result.stdout.split('\n'):
+            for line in sensors_output.split('\n'):
                 line = line.strip()
                 if not line:
                     continue
@@ -4238,8 +6633,10 @@ def get_hardware_info():
                             current_module['size'] = 0 # Default to 0 if no size or explicitly 'No Module Installed'
                     elif line.startswith('Type:'):
                         current_module['type'] = line.split(':', 1)[1].strip()
+                    elif line.startswith('Configured Memory Speed:'):
+                        current_module['configured_speed'] = line.split(':', 1)[1].strip()
                     elif line.startswith('Speed:'):
-                        current_module['speed'] = line.split(':', 1)[1].strip()
+                        current_module['max_speed'] = line.split(':', 1)[1].strip()
                     elif line.startswith('Manufacturer:'):
                         current_module['manufacturer'] = line.split(':', 1)[1].strip()
                     elif line.startswith('Serial Number:'):
@@ -4436,9 +6833,9 @@ def get_hardware_info():
                             })
             
             # Always check lspci for all GPUs (integrated and discrete)
-            result = subprocess.run(['lspci'], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                for line in result.stdout.split('\n'):
+            lspci_output = get_cached_lspci()
+            if lspci_output:
+                for line in lspci_output.split('\n'):
                     # Match VGA, 3D, Display controllers
                     if any(keyword in line for keyword in ['VGA compatible controller', '3D controller', 'Display controller']):
                         parts = line.split(':', 2)
@@ -4490,10 +6887,10 @@ def get_hardware_info():
             # print("[v0] Getting PCI devices with driver information...")
             pass
             # First get basic device info with lspci -vmm
-            result = subprocess.run(['lspci', '-vmm'], capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
+            lspci_vmm_output = get_cached_lspci_vmm()
+            if lspci_vmm_output:
                 current_device = {}
-                for line in result.stdout.split('\n'):
+                for line in lspci_vmm_output.split('\n'):
                     line = line.strip()
                     
                     if not line:
@@ -4513,8 +6910,8 @@ def get_hardware_info():
                             if any(keyword in device_class for keyword in ['VGA', 'Display', '3D']):
                                 device_type = 'Graphics Card'
                                 include_device = True
-                            # Storage controllers
-                            elif any(keyword in device_class for keyword in ['SATA', 'RAID', 'Mass storage', 'Non-Volatile memory']):
+                            # Storage controllers (including SCSI/SAS HBA cards like LSI 9400-16i)
+                            elif any(keyword in device_class for keyword in ['SATA', 'RAID', 'Mass storage', 'Non-Volatile memory', 'SCSI', 'Serial Attached SCSI', 'SAS']):
                                 device_type = 'Storage Controller'
                                 include_device = True
                             # Network controllers
@@ -4550,6 +6947,10 @@ def get_hardware_info():
                                     'device': device_name,
                                     'class': device_class
                                 }
+                                # Add subsystem device name if available (e.g., "HBA 9400-16i" for SAS controllers)
+                                sdevice = current_device.get('SDevice', '')
+                                if sdevice:
+                                    pci_device['sdevice'] = sdevice
                                 if network_subtype:
                                     pci_device['network_subtype'] = network_subtype
                                 hardware_data['pci_devices'].append(pci_device)
@@ -4560,13 +6961,13 @@ def get_hardware_info():
                         current_device[key.strip()] = value.strip()
             
             # Now get driver information with lspci -k
-            result_k = subprocess.run(['lspci', '-k'], capture_output=True, text=True, timeout=10)
-            if result_k.returncode == 0:
+            lspci_k_output = get_cached_lspci_k()
+            if lspci_k_output:
                 current_slot = None
                 current_driver = None
                 current_module = None
                 
-                for line in result_k.stdout.split('\n'):
+                for line in lspci_k_output.split('\n'):
                     # Match PCI slot line (e.g., "00:1f.2 SATA controller: ...")
                     if line and not line.startswith('\t'):
                         parts = line.split(' ', 1)
@@ -4615,65 +7016,13 @@ def get_hardware_info():
                                 'high': entry.high if entry.high else 0,
                                 'critical': entry.critical if entry.critical else 0
                             })
-                    
-                    # print(f"[v0] Temperature sensors: {len(hardware_data['sensors']['temperatures'])} found")
-                    pass
-            
-            try:
-                result = subprocess.run(['sensors'], capture_output=True, text=True, timeout=5)
-                if result.returncode == 0:
-                    current_adapter = None
-                    current_chip = None  # <CHANGE> Add chip name tracking
-                    fans = []
-                    
-                    for line in result.stdout.split('\n'):
-                        line = line.strip()
-                        if not line:
-                            continue
-                        
-                        # <CHANGE> Detect chip name (e.g., "nouveau-pci-0200")
-                        # Chip names don't have ":" and are not indented
-                        if not ':' in line and not line.startswith(' ') and not line.startswith('Adapter'):
-                            current_chip = line
-                            continue
-                        
-                        # Detect adapter line
-                        if line.startswith('Adapter:'):
-                            current_adapter = line.replace('Adapter:', '').strip()
-                            continue
-                        
-                        # Parse fan sensors
-                        if ':' in line and not line.startswith(' '):
-                            parts = line.split(':', 1)
-                            sensor_name = parts[0].strip()
-                            value_part = parts[1].strip()
-                            
-                            # Look for fan sensors (RPM)
-                            if 'RPM' in value_part:
-                                rpm_match = re.search(r'([\d.]+)\s*RPM', value_part)
-                                if rpm_match:
-                                    fan_speed = int(float(rpm_match.group(1)))
-                                    
-                                    identified_name = identify_fan(sensor_name, current_adapter, current_chip)
-                                    
-                                    fans.append({
-                                        'name': identified_name,
-                                        'original_name': sensor_name,
-                                        'speed': fan_speed,
-                                        'unit': 'RPM',
-                                        'adapter': current_adapter
-                                    })
-                                    # print(f"[v0] Fan sensor: {identified_name} ({sensor_name}) = {fan_speed} RPM")
-                                    pass
-                    
-                    hardware_data['sensors']['fans'] = fans
-                    # print(f"[v0] Found {len(fans)} fan sensor(s)")
-                    pass
-            except Exception as e:
-                # print(f"[v0] Error getting fan info: {e}")
-                pass
         except Exception as e:
-            # print(f"[v0] Error getting psutil sensors: {e}")
+            # print(f"[v0] Error getting temperature sensors: {e}")
+            pass
+        
+        try:
+            hardware_data['sensors']['fans'] = _parse_sensor_fans(get_cached_sensors_output())
+        except Exception:
             pass
         
         # Power Supply / UPS
@@ -4728,7 +7077,7 @@ def get_hardware_info():
             hardware_data['ups'] = ups_info
         
         hardware_data['gpus'] = get_gpu_info()
-        
+
         # Enrich PCI devices with GPU info where applicable
         for pci_device in hardware_data['pci_devices']:
             if pci_device.get('type') == 'Graphics Card':
@@ -4736,7 +7085,16 @@ def get_hardware_info():
                     if pci_device.get('slot') == gpu.get('slot'):
                         pci_device['gpu_info'] = gpu # Add the detected GPU info directly
                         break
-        
+
+        # Coral TPU (Edge TPU) — dedicated section in the Hardware UI.
+        # Empty list when no Coral is connected; the frontend skips the section.
+        hardware_data['coral_tpus'] = get_coral_info()
+
+        # USB peripherals currently plugged into the host. Lists non-hub
+        # devices (Coral USB accelerators, UPSs, keyboards/mice, pendrives,
+        # serial adapters, etc.). Empty list on headless servers.
+        hardware_data['usb_devices'] = get_usb_devices()
+
         return hardware_data
         
     except Exception as e:
@@ -4752,7 +7110,9 @@ def get_hardware_info():
 def api_system():
     """Get system information including CPU, memory, and temperature"""
     try:
-        cpu_usage = psutil.cpu_percent(interval=0.5)
+        # Non-blocking: returns %CPU since the last psutil call (sampler or prior API hit).
+        # The background vital-signs sampler keeps psutil's internal state primed.
+        cpu_usage = psutil.cpu_percent(interval=0)
         
         memory = psutil.virtual_memory()
         memory_used_gb = memory.used / (1024 ** 3)
@@ -4782,12 +7142,16 @@ def api_system():
         # Get available updates
         available_updates = get_available_updates()
         
+        # Get temperature sparkline (last 1h) for overview mini chart
+        temp_sparkline = get_temperature_sparkline(60)
+
         return jsonify({
             'cpu_usage': round(cpu_usage, 1),
             'memory_usage': round(memory_usage_percent, 1),
             'memory_total': round(memory_total_gb, 1),
             'memory_used': round(memory_used_gb, 1),
             'temperature': temp,
+            'temperature_sparkline': temp_sparkline,
             'uptime': uptime,
             'load_average': list(load_avg),
             'hostname': socket.gethostname(),
@@ -4805,6 +7169,58 @@ def api_system():
         pass
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/temperature/history', methods=['GET'])
+@require_auth
+def api_temperature_history():
+    """Get temperature history for charts. Timeframe: hour, day, week, month"""
+    try:
+        timeframe = request.args.get('timeframe', 'hour')
+        if timeframe not in ('hour', 'day', 'week', 'month'):
+            timeframe = 'hour'
+        result = get_temperature_history(timeframe)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'data': [], 'stats': {'min': 0, 'max': 0, 'avg': 0, 'current': 0}}), 500
+
+
+@app.route('/api/network/latency/history', methods=['GET'])
+@require_auth
+def api_latency_history():
+    """Get latency history for charts. 
+    
+    Query params:
+        target: gateway (default), cloudflare, google
+        timeframe: hour, 6hour, day, 3day, week
+    """
+    try:
+        target = request.args.get('target', 'gateway')
+        if target not in ('gateway', 'cloudflare', 'google'):
+            target = 'gateway'
+        timeframe = request.args.get('timeframe', 'hour')
+        if timeframe not in ('hour', '6hour', 'day', '3day', 'week'):
+            timeframe = 'hour'
+        result = get_latency_history(target, timeframe)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'data': [], 'stats': {'min': 0, 'max': 0, 'avg': 0, 'current': 0}, 'target': 'gateway'}), 500
+
+
+@app.route('/api/network/latency/current', methods=['GET'])
+@require_auth
+def api_latency_current():
+    """Get current latency measurement for a target.
+    
+    Query params:
+        target: gateway (default), cloudflare, google, or custom IP
+    """
+    try:
+        target = request.args.get('target', 'gateway')
+        result = get_current_latency(target)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'target': target, 'latency_avg': None, 'status': 'error'}), 500
+
+
 @app.route('/api/storage', methods=['GET'])
 @require_auth
 def api_storage():
@@ -4816,6 +7232,1424 @@ def api_storage():
 def api_proxmox_storage():
     """Get Proxmox storage information"""
     return jsonify(get_proxmox_storage())
+
+
+# ─── SMART Disk Testing API ───────────────────────────────────────────────────
+
+SMART_DIR = '/usr/local/share/proxmenux/smart'
+SMART_CONFIG_DIR = '/usr/local/share/proxmenux/smart/config'
+DEFAULT_SMART_RETENTION = 10  # Keep last 10 JSON files per disk by default
+
+def _is_nvme(disk_name):
+    """Check if disk is NVMe (supports names like nvme0n1, nvme0n1p1)."""
+    return 'nvme' in disk_name
+
+def _get_smart_disk_dir(disk_name):
+    """Get directory path for a disk's SMART JSON files."""
+    return os.path.join(SMART_DIR, disk_name)
+
+def _get_smart_json_path(disk_name, test_type='short'):
+    """Get path to a new SMART JSON file for a disk with timestamp."""
+    disk_dir = _get_smart_disk_dir(disk_name)
+    os.makedirs(disk_dir, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+    return os.path.join(disk_dir, f"{timestamp}_{test_type}.json")
+
+def _get_latest_smart_json(disk_name):
+    """Get the most recent SMART JSON file for a disk."""
+    disk_dir = _get_smart_disk_dir(disk_name)
+    if not os.path.exists(disk_dir):
+        return None
+    
+    json_files = sorted(
+        [f for f in os.listdir(disk_dir) if f.endswith('.json')],
+        reverse=True  # Most recent first (timestamp-based naming)
+    )
+    
+    if json_files:
+        return os.path.join(disk_dir, json_files[0])
+    return None
+
+def _get_smart_history(disk_name, limit=None):
+    """Get list of all SMART JSON files for a disk, sorted by date (newest first)."""
+    disk_dir = _get_smart_disk_dir(disk_name)
+    if not os.path.exists(disk_dir):
+        return []
+    
+    json_files = sorted(
+        [f for f in os.listdir(disk_dir) if f.endswith('.json')],
+        reverse=True
+    )
+    
+    if limit:
+        json_files = json_files[:limit]
+    
+    result = []
+    for filename in json_files:
+        # Parse timestamp and test type from filename: 2026-04-13T10-30-00_short.json
+        parts = filename.replace('.json', '').split('_')
+        if len(parts) >= 2:
+            timestamp_str = parts[0]
+            test_type = parts[1]
+            try:
+                # Convert back to readable format
+                dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H-%M-%S')
+                result.append({
+                    'filename': filename,
+                    'path': os.path.join(disk_dir, filename),
+                    'timestamp': dt.isoformat(),
+                    'test_type': test_type,
+                    'date_readable': dt.strftime('%Y-%m-%d %H:%M:%S')
+                })
+            except ValueError:
+                # Filename doesn't match expected format, skip
+                pass
+    
+    return result
+
+def _cleanup_old_smart_jsons(disk_name, retention=None):
+    """Remove old SMART JSON files, keeping only the most recent ones."""
+    if retention is None:
+        retention = DEFAULT_SMART_RETENTION
+    
+    if retention <= 0:  # 0 or negative means keep all
+        return 0
+    
+    disk_dir = _get_smart_disk_dir(disk_name)
+    if not os.path.exists(disk_dir):
+        return 0
+    
+    json_files = sorted(
+        [f for f in os.listdir(disk_dir) if f.endswith('.json')],
+        reverse=True  # Most recent first
+    )
+    
+    removed = 0
+    # Keep first 'retention' files, delete the rest
+    for old_file in json_files[retention:]:
+        try:
+            os.remove(os.path.join(disk_dir, old_file))
+            removed += 1
+        except Exception:
+            pass
+    
+    return removed
+
+def _ensure_smart_tools(install_if_missing=False):
+    """Check if SMART tools are installed and optionally install them."""
+    has_smartctl = shutil.which('smartctl') is not None
+    has_nvme = shutil.which('nvme') is not None
+    
+    installed = {'smartctl': False, 'nvme': False}
+    install_errors = []
+    
+    if install_if_missing and (not has_smartctl or not has_nvme):
+        # Run apt-get update first
+        try:
+            subprocess.run(
+                ['apt-get', 'update'],
+                capture_output=True, text=True, timeout=60
+            )
+        except Exception:
+            pass
+        
+        if not has_smartctl:
+            try:
+                # Install smartmontools
+                proc = subprocess.run(
+                    ['apt-get', 'install', '-y', 'smartmontools'],
+                    capture_output=True, text=True, timeout=120
+                )
+                if proc.returncode == 0:
+                    has_smartctl = shutil.which('smartctl') is not None
+                    installed['smartctl'] = has_smartctl
+                else:
+                    install_errors.append(f"smartmontools: {proc.stderr.strip()}")
+            except Exception as e:
+                install_errors.append(f"smartmontools: {str(e)}")
+        
+        if not has_nvme:
+            try:
+                # Install nvme-cli
+                proc = subprocess.run(
+                    ['apt-get', 'install', '-y', 'nvme-cli'],
+                    capture_output=True, text=True, timeout=120
+                )
+                if proc.returncode == 0:
+                    has_nvme = shutil.which('nvme') is not None
+                    installed['nvme'] = has_nvme
+                else:
+                    install_errors.append(f"nvme-cli: {proc.stderr.strip()}")
+            except Exception as e:
+                install_errors.append(f"nvme-cli: {str(e)}")
+    
+    return {
+        'smartctl': has_smartctl, 
+        'nvme': has_nvme,
+        'just_installed': installed,
+        'install_errors': install_errors
+    }
+
+def _parse_smart_attributes(output_lines):
+    """Parse SMART attributes from smartctl output."""
+    attributes = []
+    in_attrs = False
+    for line in output_lines:
+        if 'ID#' in line and 'ATTRIBUTE_NAME' in line:
+            in_attrs = True
+            continue
+        if in_attrs:
+            if not line.strip():
+                break
+            parts = line.split()
+            if len(parts) >= 10 and parts[0].isdigit():
+                attr_id = int(parts[0])
+                attr_name = parts[1]
+                value = int(parts[3]) if parts[3].isdigit() else 0
+                worst = int(parts[4]) if parts[4].isdigit() else 0
+                threshold = int(parts[5]) if parts[5].isdigit() else 0
+                raw_value = parts[9] if len(parts) > 9 else ''
+                
+                # Determine status
+                status = 'ok'
+                if threshold > 0 and value <= threshold:
+                    status = 'critical'
+                elif threshold > 0 and value <= threshold + 10:
+                    status = 'warning'
+                
+                attributes.append({
+                    'id': attr_id,
+                    'name': attr_name,
+                    'value': value,
+                    'worst': worst,
+                    'threshold': threshold,
+                    'raw_value': raw_value,
+                    'status': status
+                })
+    return attributes
+
+@app.route('/api/storage/smart/<disk_name>', methods=['GET'])
+@require_auth
+def api_smart_status(disk_name):
+    """Get SMART status and data for a specific disk."""
+    try:
+        # Validate disk name (security)
+        if not re.match(r'^[a-zA-Z0-9]+$', disk_name):
+            return jsonify({'error': 'Invalid disk name'}), 400
+        
+        device = f'/dev/{disk_name}'
+        if not os.path.exists(device):
+            return jsonify({'error': 'Device not found'}), 404
+        
+        tools = _ensure_smart_tools()
+        result = {
+            'status': 'idle',
+            'tools_installed': tools
+        }
+        
+        # Check if tools are available
+        is_nvme = _is_nvme(disk_name)
+        if is_nvme and not tools['nvme']:
+            result['error'] = 'nvme-cli not installed'
+            return jsonify(result)
+        if not is_nvme and not tools['smartctl']:
+            result['error'] = 'smartmontools not installed'
+            return jsonify(result)
+        
+        # Check for existing JSON file (from previous test) - get most recent
+        json_path = _get_latest_smart_json(disk_name)
+        if json_path and os.path.exists(json_path):
+            try:
+                with open(json_path, 'r') as f:
+                    saved_data = json.load(f)
+                    result['saved_data'] = saved_data
+                    result['saved_timestamp'] = os.path.getmtime(json_path)
+                    result['saved_path'] = json_path
+                    # Get test history
+                    result['test_history'] = _get_smart_history(disk_name, limit=10)
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        # Get device identity via smartctl (works for both NVMe and SATA)
+        _sctl_identity = {}
+        try:
+            _sctl_proc = subprocess.run(
+                ['smartctl', '-a', '--json=c', device],
+                capture_output=True, text=True, timeout=15
+            )
+            _sctl_data = json.loads(_sctl_proc.stdout)
+            _sctl_identity = {
+                'model': _sctl_data.get('model_name', ''),
+                'serial': _sctl_data.get('serial_number', ''),
+                'firmware': _sctl_data.get('firmware_version', ''),
+                'nvme_version': _sctl_data.get('nvme_version', {}).get('string', ''),
+                'capacity_bytes': _sctl_data.get('user_capacity', {}).get('bytes', 0),
+                'smart_passed': _sctl_data.get('smart_status', {}).get('passed'),
+                'smartctl_messages': [m.get('string', '') for m in _sctl_data.get('smartctl', {}).get('messages', [])],
+            }
+        except Exception:
+            pass
+
+        # Get current SMART status
+        if is_nvme:
+            # NVMe: Check for running test and get self-test log using JSON format
+            try:
+                proc = subprocess.run(
+                    ['nvme', 'self-test-log', device, '-o', 'json'],
+                    capture_output=True, text=True, timeout=10
+                )
+                if proc.returncode == 0:
+                    try:
+                        selftest_data = json.loads(proc.stdout)
+                        # Check if test is in progress
+                        # "Current Device Self-Test Operation": 0=none, 1=short, 2=extended
+                        current_op = selftest_data.get('Current Device Self-Test Operation', 0)
+                        if current_op > 0:
+                            result['status'] = 'running'
+                            result['test_type'] = 'short' if current_op == 1 else 'long'
+                            # Get completion percentage
+                            completion = selftest_data.get('Current Device Self-Test Completion', 0)
+                            result['progress'] = completion
+                        
+                        # Parse last test result from self-test log
+                        valid_reports = selftest_data.get('List of Valid Reports', [])
+                        if valid_reports:
+                            # Find most recent completed test (result != 15 which means not run)
+                            for report in valid_reports:
+                                test_result = report.get('Self test result', 15)
+                                if test_result != 15:  # 15 = entry not used
+                                    test_code = report.get('Self test code', 0)
+                                    test_type = 'short' if test_code == 1 else 'long' if test_code == 2 else 'unknown'
+                                    # 0 = completed without error, other values = error
+                                    test_status = 'passed' if test_result == 0 else 'failed'
+                                    result['last_test'] = {
+                                        'type': test_type,
+                                        'status': test_status,
+                                        'timestamp': 'Completed without error' if test_result == 0 else f'Failed (code {test_result})',
+                                        'lifetime_hours': report.get('Power on hours')
+                                    }
+                                    break
+                    except json.JSONDecodeError:
+                        # Fallback to text parsing if JSON fails
+                        output = proc.stdout
+                        # Check Current operation field
+                        op_match = re.search(r'Current operation\s*:\s*(0x[0-9a-fA-F]+|\d+)', output)
+                        if op_match:
+                            op_val = int(op_match.group(1), 0)
+                            if op_val > 0:
+                                result['status'] = 'running'
+                                result['test_type'] = 'short' if op_val == 1 else 'long'
+                                # Try to extract progress percentage
+                                prog_match = re.search(r'Current Completion\s*:\s*(\d+)%', output)
+                                if prog_match:
+                                    result['progress'] = int(prog_match.group(1))
+            except subprocess.TimeoutExpired:
+                pass
+            except Exception:
+                pass
+
+            # NVMe always supports progress reporting via nvme self-test-log
+            result['supports_progress_reporting'] = True
+            result['supports_self_test'] = True
+
+            # Get smart-log data (JSON format)
+            try:
+                proc = subprocess.run(
+                    ['nvme', 'smart-log', '-o', 'json', device],
+                    capture_output=True, text=True, timeout=10
+                )
+                if proc.returncode == 0:
+                    try:
+                        nvme_data = json.loads(proc.stdout)
+                    except json.JSONDecodeError:
+                        nvme_data = {}
+
+                    # Normalise temperature: nvme-cli reports in Kelvin when > 200
+                    raw_temp = nvme_data.get('temperature', 0)
+                    temp_celsius = raw_temp - 273 if raw_temp > 200 else raw_temp
+
+                    # Check health: critical_warning == 0 and media_errors == 0 is ideal
+                    crit_warn = nvme_data.get('critical_warning', 0)
+                    media_err = nvme_data.get('media_errors', 0)
+                    if crit_warn != 0 or media_err != 0:
+                        result['smart_status'] = 'warning' if crit_warn != 0 else 'passed'
+                    else:
+                        result['smart_status'] = 'passed'
+                    # Override with smartctl smart_status if available
+                    if _sctl_identity.get('smart_passed') is True:
+                        result['smart_status'] = 'passed'
+                    elif _sctl_identity.get('smart_passed') is False:
+                        result['smart_status'] = 'failed'
+
+                    # Convert NVMe data to attributes format for UI compatibility
+                    nvme_attrs = []
+                    nvme_field_map = [
+                        ('critical_warning',                    'Critical Warning',         lambda v: 'OK' if v == 0 else f'0x{v:02X}'),
+                        ('temperature',                         'Temperature',              lambda v: f"{v - 273 if v > 200 else v}°C"),
+                        ('avail_spare',                         'Available Spare',          lambda v: f"{v}%"),
+                        ('spare_thresh',                        'Available Spare Threshold',lambda v: f"{v}%"),
+                        ('percent_used',                        'Percentage Used',          lambda v: f"{v}%"),
+                        ('endurance_grp_critical_warning_summary', 'Endurance Group Warning', lambda v: 'OK' if v == 0 else f'0x{v:02X}'),
+                        ('data_units_read',                     'Data Units Read',          lambda v: f"{v:,}"),
+                        ('data_units_written',                  'Data Units Written',       lambda v: f"{v:,}"),
+                        ('host_read_commands',                  'Host Read Commands',       lambda v: f"{v:,}"),
+                        ('host_write_commands',                 'Host Write Commands',      lambda v: f"{v:,}"),
+                        ('controller_busy_time',                'Controller Busy Time',     lambda v: f"{v:,} min"),
+                        ('power_cycles',                        'Power Cycles',             lambda v: f"{v:,}"),
+                        ('power_on_hours',                      'Power On Hours',           lambda v: f"{v:,}"),
+                        ('unsafe_shutdowns',                    'Unsafe Shutdowns',         lambda v: f"{v:,}"),
+                        ('media_errors',                        'Media Errors',             lambda v: f"{v:,}"),
+                        ('num_err_log_entries',                 'Error Log Entries',        lambda v: f"{v:,}"),
+                        ('warning_temp_time',                   'Warning Temp Time',        lambda v: f"{v:,} min"),
+                        ('critical_comp_time',                  'Critical Temp Time',       lambda v: f"{v:,} min"),
+                    ]
+
+                    for i, (field, name, formatter) in enumerate(nvme_field_map, start=1):
+                        if field in nvme_data:
+                            raw_val = nvme_data[field]
+                            if field == 'critical_warning':
+                                status = 'ok' if raw_val == 0 else 'critical'
+                            elif field == 'media_errors':
+                                status = 'ok' if raw_val == 0 else 'critical'
+                            elif field == 'percent_used':
+                                status = 'ok' if raw_val < 90 else 'warning' if raw_val < 100 else 'critical'
+                            elif field == 'avail_spare':
+                                thresh = nvme_data.get('spare_thresh', 10)
+                                status = 'ok' if raw_val > thresh else 'warning'
+                            elif field == 'unsafe_shutdowns':
+                                status = 'ok' if raw_val < 100 else 'warning'
+                            elif field in ('warning_temp_time', 'critical_comp_time'):
+                                status = 'ok' if raw_val == 0 else 'warning'
+                            elif field == 'endurance_grp_critical_warning_summary':
+                                status = 'ok' if raw_val == 0 else 'warning'
+                            else:
+                                status = 'ok'
+
+                            nvme_attrs.append({
+                                'id': i,
+                                'name': name,
+                                'value': formatter(raw_val),
+                                'worst': '-',
+                                'threshold': '-',
+                                'raw_value': str(raw_val),
+                                'status': status
+                            })
+
+                    # Temperature sensors array (composite + hotspot)
+                    temp_sensors = nvme_data.get('temperature_sensors', [])
+                    temp_sensors_celsius = []
+                    for s in temp_sensors:
+                        if s is not None:
+                            temp_sensors_celsius.append(s - 273 if s > 200 else s)
+                        else:
+                            temp_sensors_celsius.append(None)
+
+                    result['smart_data'] = {
+                        'device': disk_name,
+                        'model': _sctl_identity.get('model', 'Unknown'),
+                        'serial': _sctl_identity.get('serial', 'Unknown'),
+                        'firmware': _sctl_identity.get('firmware', 'Unknown'),
+                        'nvme_version': _sctl_identity.get('nvme_version', ''),
+                        'smart_status': result.get('smart_status', 'unknown'),
+                        'temperature': temp_celsius,
+                        'temperature_sensors': temp_sensors_celsius,
+                        'power_on_hours': nvme_data.get('power_on_hours', 0),
+                        'power_cycles': nvme_data.get('power_cycles', 0),
+                        'supports_progress_reporting': True,
+                        'attributes': nvme_attrs,
+                        'nvme_raw': {
+                            'critical_warning':                     nvme_data.get('critical_warning', 0),
+                            'temperature':                          temp_celsius,
+                            'avail_spare':                          nvme_data.get('avail_spare', 100),
+                            'spare_thresh':                         nvme_data.get('spare_thresh', 10),
+                            'percent_used':                         nvme_data.get('percent_used', 0),
+                            'endurance_grp_critical_warning_summary': nvme_data.get('endurance_grp_critical_warning_summary', 0),
+                            'data_units_read':                      nvme_data.get('data_units_read', 0),
+                            'data_units_written':                   nvme_data.get('data_units_written', 0),
+                            'host_read_commands':                   nvme_data.get('host_read_commands', 0),
+                            'host_write_commands':                  nvme_data.get('host_write_commands', 0),
+                            'controller_busy_time':                 nvme_data.get('controller_busy_time', 0),
+                            'power_cycles':                         nvme_data.get('power_cycles', 0),
+                            'power_on_hours':                       nvme_data.get('power_on_hours', 0),
+                            'unsafe_shutdowns':                     nvme_data.get('unsafe_shutdowns', 0),
+                            'media_errors':                         nvme_data.get('media_errors', 0),
+                            'num_err_log_entries':                  nvme_data.get('num_err_log_entries', 0),
+                            'warning_temp_time':                    nvme_data.get('warning_temp_time', 0),
+                            'critical_comp_time':                   nvme_data.get('critical_comp_time', 0),
+                            'temperature_sensors':                  temp_sensors_celsius,
+                        }
+                    }
+
+                    # Update last_test with power_on_hours if available
+                    if 'last_test' in result and nvme_data.get('power_on_hours'):
+                        result['last_test']['lifetime_hours'] = nvme_data['power_on_hours']
+                else:
+                    result['nvme_error'] = proc.stderr.strip() or 'Failed to read SMART data'
+            except subprocess.TimeoutExpired:
+                result['nvme_error'] = 'Command timeout'
+            except Exception as e:
+                result['nvme_error'] = str(e)
+        else:
+            # SATA/SAS/SSD: Single JSON call gives all data at once
+            proc = subprocess.run(
+                ['smartctl', '-a', '--json=c', device],
+                capture_output=True, text=True, timeout=30
+            )
+            # Parse JSON regardless of exit code — smartctl uses bit-flags for non-fatal conditions
+            data = {}
+            try:
+                data = json.loads(proc.stdout)
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+            # --- Detect device protocol (ATA vs SCSI/SAS) ---
+            device_protocol = data.get('device', {}).get('protocol', '')
+            is_scsi = device_protocol == 'SCSI' or 'scsi_error_counter_log' in data or 'scsi_grown_defect_list' in data
+
+            ata_data = data.get('ata_smart_data', {})
+            capabilities = ata_data.get('capabilities', {})
+
+            # --- Detect test in progress ---
+            if is_scsi:
+                # SCSI: check background self-test status
+                scsi_selftest_status = data.get('scsi_self_test', {}).get('status', {})
+                scsi_st_value = scsi_selftest_status.get('value', 0)
+                # value 15 = in progress on SCSI
+                if scsi_st_value == 15:
+                    result['status'] = 'running'
+                    remaining_pct = scsi_selftest_status.get('remaining_percent')
+                    if remaining_pct is not None:
+                        result['progress'] = 100 - remaining_pct
+            else:
+                self_test_block = ata_data.get('self_test', {})
+                st_status = self_test_block.get('status', {})
+                st_value = st_status.get('value', 0)
+                remaining_pct = st_status.get('remaining_percent')
+                # smartctl status value 241 (0xF1) = self-test in progress
+                if st_value == 241 or (remaining_pct is not None and 0 < remaining_pct <= 100):
+                    result['status'] = 'running'
+                    if remaining_pct is not None:
+                        result['progress'] = 100 - remaining_pct
+
+            # Fallback text detection in case JSON misses it
+            if result['status'] != 'running':
+                try:
+                    cproc = subprocess.run(['smartctl', '-c', device], capture_output=True, text=True, timeout=10)
+                    if 'Self-test routine in progress' in cproc.stdout or '% of test remaining' in cproc.stdout:
+                        result['status'] = 'running'
+                        match = re.search(r'(\d+)% of test remaining', cproc.stdout)
+                        if match:
+                            result['progress'] = 100 - int(match.group(1))
+                except Exception:
+                    pass
+
+            # --- Progress reporting capability ---
+            if is_scsi:
+                # SAS drives generally support self-test progress via SCSI log pages
+                result['supports_progress_reporting'] = True
+                result['supports_self_test'] = True
+            else:
+                has_self_test_block = 'self_test' in ata_data
+                supports_self_test = capabilities.get('self_tests_supported', False) or has_self_test_block
+                result['supports_progress_reporting'] = has_self_test_block
+                result['supports_self_test'] = supports_self_test
+
+            # --- SMART health status ---
+            if data.get('smart_status', {}).get('passed') is True:
+                result['smart_status'] = 'passed'
+            elif data.get('smart_status', {}).get('passed') is False:
+                result['smart_status'] = 'failed'
+            else:
+                result['smart_status'] = 'unknown'
+
+            # --- Device identity fields ---
+            model_family = data.get('model_family', '')
+            form_factor = data.get('form_factor', {}).get('name', '')
+            physical_block_size = data.get('physical_block_size', 512)
+            trim_supported = data.get('trim', {}).get('supported', False)
+            sata_version = data.get('sata_version', {}).get('string', '')
+            interface_speed = data.get('interface_speed', {}).get('current', {}).get('string', '')
+            # SAS-specific: scsi_transport_protocol and logical_block_size
+            scsi_transport = data.get('scsi_transport_protocol', {}).get('name', '')
+            scsi_product = data.get('scsi_product', '')
+            scsi_vendor = data.get('scsi_vendor', '')
+            scsi_revision = data.get('scsi_revision', '')
+            logical_block_size = data.get('logical_block_size', 512)
+
+            # --- Self-test polling times ---
+            if is_scsi:
+                polling_short = None
+                polling_extended = None
+            else:
+                self_test_block = ata_data.get('self_test', {})
+                polling_short = self_test_block.get('polling_minutes', {}).get('short')
+                polling_extended = self_test_block.get('polling_minutes', {}).get('extended')
+
+            # --- Error log count ---
+            if is_scsi:
+                # For SCSI, sum uncorrected errors across read/write/verify
+                ecl = data.get('scsi_error_counter_log', {})
+                error_log_count = (
+                    ecl.get('read', {}).get('total_uncorrected_errors', 0) +
+                    ecl.get('write', {}).get('total_uncorrected_errors', 0) +
+                    ecl.get('verify', {}).get('total_uncorrected_errors', 0)
+                )
+            else:
+                error_log_count = data.get('ata_smart_error_log', {}).get('summary', {}).get('count', 0)
+
+            # --- Self-test history ---
+            self_test_history = []
+            if is_scsi:
+                # SCSI self-test log format
+                scsi_st_table = data.get('scsi_self_test_log', {}).get('table', [])
+                for entry in scsi_st_table:
+                    code = entry.get('code', {})
+                    type_str = code.get('string', 'Unknown')
+                    t_norm = 'short' if 'Short' in type_str or 'short' in type_str else 'long' if ('Extended' in type_str or 'Long' in type_str or 'long' in type_str) else 'other'
+                    result_val = entry.get('result', {}).get('value', 0)
+                    passed_flag = result_val == 0  # 0 = completed without error
+                    result_str = entry.get('result', {}).get('string', '')
+                    self_test_history.append({
+                        'type': t_norm,
+                        'type_str': type_str,
+                        'status': 'passed' if passed_flag else 'failed',
+                        'status_str': result_str,
+                        'lifetime_hours': entry.get('power_on_time', {}).get('hours'),
+                    })
+            else:
+                st_table = data.get('ata_smart_self_test_log', {}).get('standard', {}).get('table', [])
+                for entry in st_table:
+                    type_str = entry.get('type', {}).get('string', 'Unknown')
+                    t_norm = 'short' if 'Short' in type_str else 'long' if ('Extended' in type_str or 'Long' in type_str) else 'other'
+                    st_entry = entry.get('status', {})
+                    # Never default to True — if 'passed' field is missing, determine from status string
+                    if 'passed' in st_entry:
+                        passed_flag = st_entry['passed']
+                    else:
+                        status_string = st_entry.get('string', '').lower()
+                        passed_flag = 'without error' in status_string or 'completed' in status_string
+                    self_test_history.append({
+                        'type': t_norm,
+                        'type_str': type_str,
+                        'status': 'passed' if passed_flag else 'failed',
+                        'status_str': st_entry.get('string', ''),
+                        'lifetime_hours': entry.get('lifetime_hours'),
+                    })
+
+            if self_test_history:
+                result['last_test'] = {
+                    'type': self_test_history[0]['type'],
+                    'status': self_test_history[0]['status'],
+                    'timestamp': self_test_history[0]['status_str'] or 'Completed',
+                    'lifetime_hours': self_test_history[0]['lifetime_hours']
+                }
+
+            # --- Parse SMART attributes ---
+            attrs = []
+
+            if is_scsi:
+                # SCSI/SAS: Build virtual attributes from SCSI log pages
+                # These disks don't have ATA attribute IDs — we synthesize a table
+                ecl = data.get('scsi_error_counter_log', {})
+                attr_idx = 1
+
+                # Grown Defect List (equivalent to Reallocated Sectors)
+                gdl = data.get('scsi_grown_defect_list', 0)
+                if isinstance(gdl, dict):
+                    gdl = gdl.get('count', 0)
+                gdl_status = 'ok' if gdl == 0 else ('warning' if gdl < 50 else 'critical')
+                attrs.append({
+                    'id': attr_idx, 'name': 'Grown Defect List',
+                    'value': '-', 'worst': '-', 'threshold': '-',
+                    'raw_value': str(gdl), 'status': gdl_status
+                })
+                attr_idx += 1
+
+                # Read Error Counters
+                read_log = ecl.get('read', {})
+                read_corrected_fast = read_log.get('errors_corrected_by_eccfast', 0)
+                read_corrected_delayed = read_log.get('errors_corrected_by_eccdelayed', 0)
+                read_total_corrected = read_log.get('total_errors_corrected', 0)
+                read_uncorrected = read_log.get('total_uncorrected_errors', 0)
+                read_processed = read_log.get('gigabytes_processed', 0)
+
+                attrs.append({
+                    'id': attr_idx, 'name': 'Read Errors Corrected',
+                    'value': '-', 'worst': '-', 'threshold': '-',
+                    'raw_value': f'{read_total_corrected:,}', 'status': 'ok'
+                })
+                attr_idx += 1
+
+                if read_corrected_fast or read_corrected_delayed:
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Read ECC Fast',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{read_corrected_fast:,}', 'status': 'ok'
+                    })
+                    attr_idx += 1
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Read ECC Delayed',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{read_corrected_delayed:,}',
+                        'status': 'ok' if read_corrected_delayed == 0 else 'warning'
+                    })
+                    attr_idx += 1
+
+                read_unc_status = 'ok' if read_uncorrected == 0 else 'critical'
+                attrs.append({
+                    'id': attr_idx, 'name': 'Read Uncorrected Errors',
+                    'value': '-', 'worst': '-', 'threshold': '-',
+                    'raw_value': str(read_uncorrected), 'status': read_unc_status
+                })
+                attr_idx += 1
+
+                if read_processed:
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Read Data Processed',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{read_processed:,.2f} GB', 'status': 'ok'
+                    })
+                    attr_idx += 1
+
+                # Write Error Counters
+                write_log = ecl.get('write', {})
+                write_total_corrected = write_log.get('total_errors_corrected', 0)
+                write_uncorrected = write_log.get('total_uncorrected_errors', 0)
+                write_processed = write_log.get('gigabytes_processed', 0)
+
+                attrs.append({
+                    'id': attr_idx, 'name': 'Write Errors Corrected',
+                    'value': '-', 'worst': '-', 'threshold': '-',
+                    'raw_value': f'{write_total_corrected:,}', 'status': 'ok'
+                })
+                attr_idx += 1
+
+                write_unc_status = 'ok' if write_uncorrected == 0 else 'critical'
+                attrs.append({
+                    'id': attr_idx, 'name': 'Write Uncorrected Errors',
+                    'value': '-', 'worst': '-', 'threshold': '-',
+                    'raw_value': str(write_uncorrected), 'status': write_unc_status
+                })
+                attr_idx += 1
+
+                if write_processed:
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Write Data Processed',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{write_processed:,.2f} GB', 'status': 'ok'
+                    })
+                    attr_idx += 1
+
+                # Verify Error Counters (background verify operations)
+                verify_log = ecl.get('verify', {})
+                if verify_log:
+                    verify_total_corrected = verify_log.get('total_errors_corrected', 0)
+                    verify_uncorrected = verify_log.get('total_uncorrected_errors', 0)
+
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Verify Errors Corrected',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{verify_total_corrected:,}', 'status': 'ok'
+                    })
+                    attr_idx += 1
+
+                    verify_unc_status = 'ok' if verify_uncorrected == 0 else 'critical'
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Verify Uncorrected Errors',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': str(verify_uncorrected), 'status': verify_unc_status
+                    })
+                    attr_idx += 1
+
+                # Non-medium errors (controller/bus errors, not media-related)
+                non_medium = data.get('scsi_error_counter_log', {}).get('non_medium_error', {}).get('count')
+                if non_medium is not None:
+                    nm_status = 'ok' if non_medium < 100 else 'warning'
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Non-Medium Errors',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{non_medium:,}', 'status': nm_status
+                    })
+                    attr_idx += 1
+
+                # Temperature
+                temp_val = data.get('temperature', {}).get('current', 0)
+                if temp_val > 0:
+                    temp_status = 'ok' if temp_val <= 55 else ('warning' if temp_val <= 65 else 'critical')
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Temperature',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{temp_val}°C', 'status': temp_status
+                    })
+                    attr_idx += 1
+
+                # Power-On Hours
+                poh_val = data.get('power_on_time', {}).get('hours', 0)
+                if poh_val > 0:
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Power On Hours',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{poh_val:,}', 'status': 'ok'
+                    })
+                    attr_idx += 1
+
+                # Start-Stop Cycle Counter
+                scsi_ssc = data.get('scsi_start_stop_cycle_counter', {})
+                acc_cycles = scsi_ssc.get('accumulated_start_stop_cycles')
+                spec_cycles = scsi_ssc.get('specified_cycle_count_over_device_lifetime')
+                if acc_cycles is not None:
+                    cycle_status = 'ok'
+                    if spec_cycles and spec_cycles > 0:
+                        usage_ratio = acc_cycles / spec_cycles
+                        cycle_status = 'ok' if usage_ratio < 0.8 else ('warning' if usage_ratio < 0.95 else 'critical')
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Start-Stop Cycles',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{acc_cycles:,}' + (f' / {spec_cycles:,}' if spec_cycles else ''),
+                        'status': cycle_status
+                    })
+                    attr_idx += 1
+
+                # Load-Unload Cycle Counter (for SAS HDDs)
+                acc_load = scsi_ssc.get('accumulated_load_unload_cycles')
+                spec_load = scsi_ssc.get('specified_load_unload_count_over_device_lifetime')
+                if acc_load is not None:
+                    load_status = 'ok'
+                    if spec_load and spec_load > 0:
+                        load_ratio = acc_load / spec_load
+                        load_status = 'ok' if load_ratio < 0.8 else ('warning' if load_ratio < 0.95 else 'critical')
+                    attrs.append({
+                        'id': attr_idx, 'name': 'Load-Unload Cycles',
+                        'value': '-', 'worst': '-', 'threshold': '-',
+                        'raw_value': f'{acc_load:,}' + (f' / {spec_load:,}' if spec_load else ''),
+                        'status': load_status
+                    })
+                    attr_idx += 1
+
+                # Background scan results
+                bg_scan = data.get('scsi_background_scan_results', {})
+                if bg_scan:
+                    bg_status_val = bg_scan.get('status', {}).get('value', 0)
+                    bg_scan_progress = bg_scan.get('status', {}).get('string', '')
+                    scan_errors = bg_scan.get('number_of_background_medium_scans_performed', 0)
+                    bg_media_errors = bg_scan.get('number_of_background_scans_performed', 0)
+
+                    if 'scan_errors' in bg_scan or bg_status_val > 0:
+                        attrs.append({
+                            'id': attr_idx, 'name': 'Background Scan Status',
+                            'value': '-', 'worst': '-', 'threshold': '-',
+                            'raw_value': bg_scan_progress or 'OK',
+                            'status': 'ok' if bg_status_val == 0 else 'warning'
+                        })
+                        attr_idx += 1
+
+                # SAS PHY log (link errors)
+                sas_phy = data.get('sas_phy_event_counter_log', [])
+                if sas_phy:
+                    for phy_entry in sas_phy[:1]:  # First PHY only
+                        events = phy_entry.get('phy_event_counters', [])
+                        for ev in events:
+                            ev_name = ev.get('name', '')
+                            ev_value = ev.get('value', 0)
+                            if ev_value > 0 and ('error' in ev_name.lower() or 'invalid' in ev_name.lower()):
+                                attrs.append({
+                                    'id': attr_idx, 'name': ev_name[:40],
+                                    'value': '-', 'worst': '-', 'threshold': '-',
+                                    'raw_value': f'{ev_value:,}',
+                                    'status': 'warning' if ev_value < 100 else 'critical'
+                                })
+                                attr_idx += 1
+
+            else:
+                # ATA: Parse SMART attributes from JSON
+                ata_attrs = data.get('ata_smart_attributes', {}).get('table', [])
+                for attr in ata_attrs:
+                    attr_id = attr.get('id')
+                    name = attr.get('name', '')
+                    value = attr.get('value', 0)
+                    worst = attr.get('worst', 0)
+                    thresh = attr.get('thresh', 0)
+                    raw_obj = attr.get('raw', {})
+                    raw_value = raw_obj.get('string', str(raw_obj.get('value', 0)))
+                    flags = attr.get('flags', {})
+                    prefailure = flags.get('prefailure', False)
+                    when_failed = attr.get('when_failed', '')
+
+                    if when_failed == 'now':
+                        status = 'critical'
+                    elif prefailure and thresh > 0 and value <= thresh:
+                        status = 'critical'
+                    elif prefailure and thresh > 0:
+                        # Proportional margin: smaller when thresh is close to 100
+                        # thresh=97 → margin 2, thresh=50 → margin 10, thresh=10 → margin 10
+                        warn_margin = min(10, max(2, (100 - thresh) // 3))
+                        status = 'warning' if value <= thresh + warn_margin else 'ok'
+                    else:
+                        status = 'ok'
+
+                    attrs.append({
+                        'id': attr_id,
+                        'name': name,
+                        'value': value,
+                        'worst': worst,
+                        'threshold': thresh,
+                        'raw_value': raw_value,
+                        'status': status,
+                        'prefailure': prefailure,
+                        'flags': flags.get('string', '').strip()
+                    })
+
+                # Fallback: if JSON gave no attributes, try text parser
+                if not attrs:
+                    try:
+                        aproc = subprocess.run(['smartctl', '-A', device], capture_output=True, text=True, timeout=10)
+                        if aproc.returncode == 0:
+                            attrs = _parse_smart_attributes(aproc.stdout.split('\n'))
+                    except Exception:
+                        pass
+
+            # --- Build enriched smart_data ---
+            temp = data.get('temperature', {}).get('current', 0)
+            poh = data.get('power_on_time', {}).get('hours', 0)
+            cycles = data.get('power_cycle_count', 0)
+            if cycles == 0 and is_scsi:
+                cycles = data.get('scsi_start_stop_cycle_counter', {}).get('accumulated_start_stop_cycles', 0)
+
+            result['smart_data'] = {
+                'device': disk_name,
+                'model': data.get('model_name', '') or (f'{scsi_vendor} {scsi_product}'.strip() if is_scsi else 'Unknown'),
+                'model_family': model_family,
+                'serial': data.get('serial_number', 'Unknown'),
+                'firmware': data.get('firmware_version', '') or scsi_revision or 'Unknown',
+                'smart_status': result.get('smart_status', 'unknown'),
+                'temperature': temp,
+                'power_on_hours': poh,
+                'power_cycles': cycles,
+                'rotation_rate': data.get('rotation_rate', 0),
+                'form_factor': form_factor,
+                'physical_block_size': physical_block_size,
+                'trim_supported': trim_supported,
+                'sata_version': sata_version if not is_scsi else '',
+                'interface_speed': interface_speed or (scsi_transport if is_scsi else ''),
+                'polling_minutes_short': polling_short,
+                'polling_minutes_extended': polling_extended,
+                'supports_progress_reporting': result.get('supports_progress_reporting', False),
+                'error_log_count': error_log_count,
+                'self_test_history': self_test_history,
+                'attributes': attrs,
+                'is_sas': is_scsi,
+                'logical_block_size': logical_block_size if is_scsi else None,
+            }
+        
+        return jsonify(result)
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Command timeout'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/<disk_name>/history', methods=['GET'])
+@require_auth
+def api_smart_history(disk_name):
+    """Get SMART test history for a disk."""
+    try:
+        # Validate disk name (security)
+        if not re.match(r'^[a-zA-Z0-9]+$', disk_name):
+            return jsonify({'error': 'Invalid disk name'}), 400
+        
+        limit = request.args.get('limit', 20, type=int)
+        history = _get_smart_history(disk_name, limit=limit)
+        
+        return jsonify({
+            'disk': disk_name,
+            'history': history,
+            'total': len(history)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/<disk_name>/history/<filename>', methods=['GET'])
+@require_auth
+def api_smart_history_download(disk_name, filename):
+    """Download a specific SMART test JSON file."""
+    try:
+        if not re.match(r'^[a-zA-Z0-9]+$', disk_name):
+            return jsonify({'error': 'Invalid disk name'}), 400
+        if not re.match(r'^[\w\-\.]+\.json$', filename):
+            return jsonify({'error': 'Invalid filename'}), 400
+        disk_dir = _get_smart_disk_dir(disk_name)
+        filepath = os.path.join(disk_dir, filename)
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+        if not os.path.realpath(filepath).startswith(os.path.realpath(disk_dir)):
+            return jsonify({'error': 'Invalid path'}), 403
+        return send_file(filepath, as_attachment=True, download_name=f'{disk_name}_{filename}')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/<disk_name>/history/<filename>', methods=['DELETE'])
+@require_auth
+def api_smart_history_delete(disk_name, filename):
+    """Delete a specific SMART test JSON file."""
+    try:
+        if not re.match(r'^[a-zA-Z0-9]+$', disk_name):
+            return jsonify({'error': 'Invalid disk name'}), 400
+        if not re.match(r'^[\w\-\.]+\.json$', filename):
+            return jsonify({'error': 'Invalid filename'}), 400
+        disk_dir = _get_smart_disk_dir(disk_name)
+        filepath = os.path.join(disk_dir, filename)
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+        # Ensure path stays within smart directory (prevent traversal)
+        if not os.path.realpath(filepath).startswith(os.path.realpath(disk_dir)):
+            return jsonify({'error': 'Invalid path'}), 403
+        os.remove(filepath)
+        return jsonify({'success': True, 'deleted': filename})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/<disk_name>/latest', methods=['GET'])
+@require_auth
+def api_smart_latest(disk_name):
+    """Get the most recent SMART JSON data for a disk."""
+    try:
+        # Validate disk name (security)
+        if not re.match(r'^[a-zA-Z0-9]+$', disk_name):
+            return jsonify({'error': 'Invalid disk name'}), 400
+        
+        json_path = _get_latest_smart_json(disk_name)
+        if not json_path or not os.path.exists(json_path):
+            return jsonify({
+                'disk': disk_name,
+                'has_data': False,
+                'message': 'No SMART test data available. Run a SMART test first.'
+            })
+        
+        with open(json_path, 'r') as f:
+            smart_data = json.load(f)
+        
+        # Extract timestamp from filename
+        filename = os.path.basename(json_path)
+        parts = filename.replace('.json', '').split('_')
+        timestamp = None
+        test_type = 'unknown'
+        if len(parts) >= 2:
+            try:
+                dt = datetime.strptime(parts[0], '%Y-%m-%dT%H-%M-%S')
+                timestamp = dt.isoformat()
+                test_type = parts[1]
+            except ValueError:
+                pass
+        
+        return jsonify({
+            'disk': disk_name,
+            'has_data': True,
+            'data': smart_data,
+            'timestamp': timestamp,
+            'test_type': test_type,
+            'path': json_path
+        })
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Invalid JSON data in saved file'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/<disk_name>/test', methods=['POST'])
+@require_auth
+def api_smart_run_test(disk_name):
+    """Start a SMART self-test on a disk."""
+    try:
+        # Validate disk name (security)
+        if not re.match(r'^[a-zA-Z0-9]+$', disk_name):
+            return jsonify({'error': 'Invalid disk name'}), 400
+        
+        device = f'/dev/{disk_name}'
+        if not os.path.exists(device):
+            return jsonify({'error': 'Device not found'}), 404
+        
+        data = request.get_json() or {}
+        test_type = data.get('test_type', 'short')
+        
+        if test_type not in ('short', 'long'):
+            return jsonify({'error': 'Invalid test type. Use "short" or "long"'}), 400
+        
+        is_nvme = _is_nvme(disk_name)
+        
+        # Check tools and auto-install if missing
+        tools = _ensure_smart_tools(install_if_missing=True)
+        
+        # Ensure SMART directory exists and get path for new JSON file
+        os.makedirs(SMART_DIR, exist_ok=True)
+        json_path = _get_smart_json_path(disk_name, test_type)
+        
+        # Cleanup old JSON files based on retention policy
+        _cleanup_old_smart_jsons(disk_name)
+        
+        if is_nvme:
+            if not tools['nvme']:
+                return jsonify({'error': 'nvme-cli not installed. Please run: apt-get install nvme-cli'}), 400
+            
+            # NVMe: self-test-code 1=short, 2=long
+            code = 1 if test_type == 'short' else 2
+            
+            # First check if device is accessible
+            check_proc = subprocess.run(
+                ['nvme', 'id-ctrl', device],
+                capture_output=True, text=True, timeout=10
+            )
+            if check_proc.returncode != 0:
+                return jsonify({'error': f'Cannot access NVMe device: {check_proc.stderr.strip() or "Device not responding"}'}), 500
+            
+            # Check if device supports self-test by looking at OACS field
+            # OACS bit 4 (0x10) indicates Device Self-test support
+            oacs_output = check_proc.stdout
+            supports_selftest = True  # Assume supported by default
+            for line in oacs_output.split('\n'):
+                if 'oacs' in line.lower():
+                    try:
+                        # Parse OACS value (usually in hex)
+                        oacs_val = int(line.split(':')[-1].strip(), 0)
+                        if not (oacs_val & 0x10):
+                            supports_selftest = False
+                    except (ValueError, IndexError):
+                        pass
+                    break
+            
+            if not supports_selftest:
+                return jsonify({'error': 'This NVMe device does not support self-test (OACS bit 4 not set)'}), 400
+            
+            proc = subprocess.run(
+                ['nvme', 'device-self-test', device, f'--self-test-code={code}'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if proc.returncode != 0:
+                error_msg = proc.stderr.strip() or proc.stdout.strip() or 'Unknown error'
+                # Test already in progress - return success so frontend shows progress
+                if 'in progress' in error_msg.lower() or '0x211d' in error_msg.lower():
+                    return jsonify({
+                        'success': True,
+                        'message': 'Test started successfully',
+                        'test_type': test_type
+                    }), 200
+                # Some NVMe devices don't support self-test
+                if 'not support' in error_msg.lower() or 'invalid' in error_msg.lower():
+                    return jsonify({'error': f'This NVMe device does not support self-test: {error_msg}'}), 400
+                # Check for permission errors
+                if 'permission' in error_msg.lower() or 'operation not permitted' in error_msg.lower():
+                    return jsonify({'error': f'Permission denied. Run as root: {error_msg}'}), 403
+                return jsonify({'error': f'Failed to start test: {error_msg}'}), 500
+            
+            # Start background monitor to save JSON when test completes
+            # Check 'Current Device Self-Test Operation' field - if > 0, test is running
+            sleep_interval = 10 if test_type == 'short' else 60
+            subprocess.Popen(
+                f'''
+                sleep 5
+                while true; do
+                    op=$(nvme self-test-log {device} -o json 2>/dev/null | grep -o '"Current Device Self-Test Operation":[0-9]*' | grep -o '[0-9]*$')
+                    [ -z "$op" ] || [ "$op" -eq 0 ] && break
+                    sleep {sleep_interval}
+                done
+                # Save complete data: smartctl gives device info + health + self-test log in one JSON
+                smartctl -a --json=c {device} > {json_path} 2>/dev/null
+                # Fallback to nvme smart-log if smartctl fails
+                [ ! -s {json_path} ] && nvme smart-log -o json {device} > {json_path} 2>/dev/null
+                ''',
+                shell=True, start_new_session=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        else:
+            if not tools['smartctl']:
+                return jsonify({'error': 'smartmontools not installed. Please run: apt-get install smartmontools'}), 400
+            
+            test_flag = '-t short' if test_type == 'short' else '-t long'
+            proc = subprocess.run(
+                ['smartctl'] + test_flag.split() + [device],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if proc.returncode not in (0, 4):  # 4 = test started successfully
+                return jsonify({'error': f'Failed to start test: {proc.stderr}'}), 500
+            
+            # Start background monitor to save JSON when test completes
+            sleep_interval = 10 if test_type == 'short' else 60
+            subprocess.Popen(
+                f'''
+                sleep 5
+                while smartctl -c {device} 2>/dev/null | grep -qiE 'Self-test routine in progress|[1-9][0-9]?% of test remaining'; do
+                    sleep {sleep_interval}
+                done
+                smartctl -a --json=c {device} > {json_path} 2>/dev/null
+                ''',
+                shell=True, start_new_session=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        
+        return jsonify({
+            'success': True,
+            'test_type': test_type,
+            'device': device,
+            'message': f'{test_type.capitalize()} test started on {device}'
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Command timeout'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─── SMART Schedule API ───────────────────────────────────────────────────────
+
+SMART_SCHEDULE_FILE = os.path.join(SMART_CONFIG_DIR, 'smart-schedule.json')
+SMART_CRON_FILE = '/etc/cron.d/proxmenux-smart'
+
+def _load_smart_schedules():
+    """Load SMART test schedules from config file."""
+    os.makedirs(SMART_CONFIG_DIR, exist_ok=True)
+    if os.path.exists(SMART_SCHEDULE_FILE):
+        try:
+            with open(SMART_SCHEDULE_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {'enabled': True, 'schedules': []}
+
+def _save_smart_schedules(config):
+    """Save SMART test schedules to config file."""
+    os.makedirs(SMART_CONFIG_DIR, exist_ok=True)
+    with open(SMART_SCHEDULE_FILE, 'w') as f:
+        json.dump(config, f, indent=2)
+
+def _update_smart_cron():
+    """Update cron file based on current schedules."""
+    config = _load_smart_schedules()
+    
+    if not config.get('enabled') or not config.get('schedules'):
+        # Remove cron file if disabled or no schedules
+        if os.path.exists(SMART_CRON_FILE):
+            os.remove(SMART_CRON_FILE)
+        return
+    
+    cron_lines = [
+        '# ProxMenux SMART Scheduled Tests',
+        '# Auto-generated - do not edit manually',
+        'SHELL=/bin/bash',
+        'PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin',
+        ''
+    ]
+    
+    for schedule in config['schedules']:
+        if not schedule.get('active', True):
+            continue
+        
+        schedule_id = schedule.get('id', 'unknown')
+        hour = schedule.get('hour', 3)
+        minute = schedule.get('minute', 0)
+        frequency = schedule.get('frequency', 'weekly')
+        
+        # Build cron time specification
+        if frequency == 'daily':
+            cron_time = f'{minute} {hour} * * *'
+        elif frequency == 'weekly':
+            dow = schedule.get('day_of_week', 0)  # 0=Sunday
+            cron_time = f'{minute} {hour} * * {dow}'
+        elif frequency == 'monthly':
+            dom = schedule.get('day_of_month', 1)
+            cron_time = f'{minute} {hour} {dom} * *'
+        else:
+            continue
+        
+        # Build command
+        disks = schedule.get('disks', ['all'])
+        test_type = schedule.get('test_type', 'short')
+        retention = schedule.get('retention', 10)
+        
+        cmd = f'/usr/local/share/proxmenux/scripts/smart-scheduled-test.sh --schedule-id {schedule_id} --test-type {test_type} --retention {retention}'
+        if disks != ['all']:
+            cmd += f" --disks '{','.join(disks)}'"
+        
+        cron_lines.append(f'{cron_time} root {cmd} >> /var/log/proxmenux/smart-schedule.log 2>&1')
+    
+    cron_lines.append('')  # Empty line at end
+    
+    with open(SMART_CRON_FILE, 'w') as f:
+        f.write('\n'.join(cron_lines))
+    
+    # Set proper permissions
+    os.chmod(SMART_CRON_FILE, 0o644)
+
+
+@app.route('/api/storage/smart/schedules', methods=['GET'])
+@require_auth
+def api_smart_schedules_list():
+    """Get all SMART test schedules."""
+    config = _load_smart_schedules()
+    return jsonify(config)
+
+
+@app.route('/api/storage/smart/schedules', methods=['POST'])
+@require_auth
+def api_smart_schedules_create():
+    """Create or update a SMART test schedule."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        config = _load_smart_schedules()
+        
+        # Generate ID if not provided
+        schedule_id = data.get('id') or f"schedule-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        data['id'] = schedule_id
+        
+        # Set defaults
+        data.setdefault('active', True)
+        data.setdefault('test_type', 'short')
+        data.setdefault('frequency', 'weekly')
+        data.setdefault('hour', 3)
+        data.setdefault('minute', 0)
+        data.setdefault('day_of_week', 0)
+        data.setdefault('day_of_month', 1)
+        data.setdefault('disks', ['all'])
+        data.setdefault('retention', 10)
+        data.setdefault('notify_on_complete', True)
+        data.setdefault('notify_only_on_failure', False)
+        
+        # Update existing or add new
+        existing_idx = next((i for i, s in enumerate(config['schedules']) if s['id'] == schedule_id), None)
+        if existing_idx is not None:
+            config['schedules'][existing_idx] = data
+        else:
+            config['schedules'].append(data)
+        
+        _save_smart_schedules(config)
+        _update_smart_cron()
+        
+        return jsonify({
+            'success': True,
+            'schedule': data,
+            'message': 'Schedule saved successfully'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/schedules/<schedule_id>', methods=['DELETE'])
+@require_auth
+def api_smart_schedules_delete(schedule_id):
+    """Delete a SMART test schedule."""
+    try:
+        config = _load_smart_schedules()
+        
+        original_len = len(config['schedules'])
+        config['schedules'] = [s for s in config['schedules'] if s['id'] != schedule_id]
+        
+        if len(config['schedules']) == original_len:
+            return jsonify({'error': 'Schedule not found'}), 404
+        
+        _save_smart_schedules(config)
+        _update_smart_cron()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Schedule deleted successfully'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/schedules/toggle', methods=['POST'])
+@require_auth
+def api_smart_schedules_toggle():
+    """Enable or disable all SMART test schedules."""
+    try:
+        data = request.get_json() or {}
+        enabled = data.get('enabled', True)
+        
+        config = _load_smart_schedules()
+        config['enabled'] = enabled
+        
+        _save_smart_schedules(config)
+        _update_smart_cron()
+        
+        return jsonify({
+            'success': True,
+            'enabled': enabled,
+            'message': f'SMART schedules {"enabled" if enabled else "disabled"}'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/storage/smart/tools', methods=['GET'])
+@require_auth
+def api_smart_tools_status():
+    """Check if SMART tools are installed."""
+    tools = _ensure_smart_tools()
+    return jsonify(tools)
+
+
+@app.route('/api/storage/smart/tools/install', methods=['POST'])
+@require_auth
+def api_smart_tools_install():
+    """Install SMART tools (smartmontools and nvme-cli)."""
+    try:
+        data = request.get_json() or {}
+        install_all = data.get('install_all', False)
+        packages = data.get('packages', ['smartmontools', 'nvme-cli'] if install_all else [])
+        
+        if not packages and install_all:
+            packages = ['smartmontools', 'nvme-cli']
+        
+        if not packages:
+            return jsonify({'error': 'No packages specified'}), 400
+        
+        # Run apt-get update first
+        update_proc = subprocess.run(
+            ['apt-get', 'update'],
+            capture_output=True, text=True, timeout=60
+        )
+        
+        results = {}
+        all_success = True
+        for pkg in packages:
+            if pkg not in ('smartmontools', 'nvme-cli'):
+                results[pkg] = {'success': False, 'error': 'Invalid package name'}
+                all_success = False
+                continue
+            
+            # Install package
+            proc = subprocess.run(
+                ['apt-get', 'install', '-y', pkg],
+                capture_output=True, text=True, timeout=120
+            )
+            success = proc.returncode == 0
+            results[pkg] = {
+                'success': success,
+                'output': proc.stdout if success else proc.stderr
+            }
+            if not success:
+                all_success = False
+        
+        # Check what's now installed
+        tools = _ensure_smart_tools()
+        
+        return jsonify({
+            'success': all_success,
+            'results': results,
+            'tools': tools
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Installation timeout'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ─── END SMART API ────────────────────────────────────────────────────────────
+
 
 @app.route('/api/network', methods=['GET'])
 @require_auth
@@ -4929,6 +8763,8 @@ def api_network_interface_metrics(interface_name):
         
         rrd_data = []
         
+        rrd_error = None
+        
         if interface_type == 'vm_lxc':
             # For VM/LXC interfaces, get data from the VM/LXC RRD
             vmid, vm_type = extract_vmid_from_interface(interface_name)
@@ -4939,19 +8775,20 @@ def api_network_interface_metrics(interface_name):
                                            capture_output=True, text=True, timeout=10)
                 
                 if rrd_result.returncode == 0:
-                    all_data = json.loads(rrd_result.stdout)
-                    # Filter to only network-related fields
-                    for point in all_data:
-                        filtered_point = {'time': point.get('time')}
-                        # Add network fields if they exist
-                        for key in ['netin', 'netout']:
-                            if key in point:
-                                filtered_point[key] = point[key]
-                        rrd_data.append(filtered_point)
-
+                    try:
+                        all_data = json.loads(rrd_result.stdout)
+                        # Filter to only network-related fields
+                        for point in all_data:
+                            filtered_point = {'time': point.get('time')}
+                            # Add network fields if they exist
+                            for key in ['netin', 'netout']:
+                                if key in point:
+                                    filtered_point[key] = point[key]
+                            rrd_data.append(filtered_point)
+                    except json.JSONDecodeError:
+                        rrd_error = f'RRD data for {vm_type.upper()} {vmid} is empty or corrupted'
                 else:
-                    # print(f"[v0] ERROR: Failed to get RRD data for VM/LXC")
-                    pass
+                    rrd_error = f'Failed to get RRD data: {rrd_result.stderr}'
         else:
             # For physical/bridge interfaces, get data from node RRD
 
@@ -4960,26 +8797,36 @@ def api_network_interface_metrics(interface_name):
                                        capture_output=True, text=True, timeout=10)
             
             if rrd_result.returncode == 0:
-                all_data = json.loads(rrd_result.stdout)
-                # Filter to only network-related fields for this interface
-                for point in all_data:
-                    filtered_point = {'time': point.get('time')}
-                    # Add network fields if they exist
-                    for key in ['netin', 'netout']:
-                        if key in point:
-                            filtered_point[key] = point[key]
-                    rrd_data.append(filtered_point)
-
+                try:
+                    all_data = json.loads(rrd_result.stdout)
+                    # Filter to only network-related fields for this interface
+                    for point in all_data:
+                        filtered_point = {'time': point.get('time')}
+                        # Add network fields if they exist
+                        for key in ['netin', 'netout']:
+                            if key in point:
+                                filtered_point[key] = point[key]
+                        rrd_data.append(filtered_point)
+                except json.JSONDecodeError:
+                    rrd_error = 'Node RRD data is empty or corrupted'
             else:
-                # print(f"[v0] ERROR: Failed to get RRD data for node")
-                pass
+                rrd_error = f'Failed to get RRD data: {rrd_result.stderr}'
         
 
+        # If there was an RRD error and no data collected, return error with details
+        if rrd_error and not rrd_data:
+            return jsonify({
+                'error': 'RRD data not available',
+                'details': rrd_error,
+                'suggestion': 'The RRD database may be empty or corrupted. Try: systemctl restart rrdcached'
+            }), 503
+        
         return jsonify({
             'interface': interface_name,
             'type': interface_type,
             'timeframe': timeframe,
-            'data': rrd_data
+            'data': rrd_data,
+            'warning': rrd_error if rrd_error else None  # Include warning if there was an error but some data exists
         })
             
     except Exception as e:
@@ -4991,6 +8838,7 @@ def api_network_interface_metrics(interface_name):
 def api_vms():
     """Get virtual machine information"""
     return jsonify(get_proxmox_vms())
+
 
 @app.route('/api/vms/<int:vmid>/metrics', methods=['GET'])
 @require_auth
@@ -5053,9 +8901,22 @@ def api_vm_metrics(vmid):
                 'data': rrd_data
             })
         else:
-
+            # Check if RRD file is empty or corrupted
+            stderr_lower = rrd_result.stderr.lower() if rrd_result.stderr else ''
+            if 'rrd' in stderr_lower or 'no such file' in stderr_lower or 'empty' in stderr_lower:
+                return jsonify({
+                    'error': 'RRD data not available',
+                    'details': f'The RRD database for {vm_type.upper()} {vmid} may be empty or corrupted.',
+                    'suggestion': 'Try restarting rrdcached: systemctl restart rrdcached'
+                }), 503
             return jsonify({'error': f'Failed to get RRD data: {rrd_result.stderr}'}), 500
-            
+    
+    except json.JSONDecodeError:
+        return jsonify({
+            'error': 'RRD data not available',
+            'details': f'Unable to parse metrics data for VM/LXC {vmid}.',
+            'suggestion': 'Try restarting rrdcached: systemctl restart rrdcached'
+        }), 503
     except Exception as e:
 
         return jsonify({'error': str(e)}), 500
@@ -5118,8 +8979,23 @@ def api_node_metrics():
                 'data': rrd_data
             })
         else:
+            # Check if RRD file is empty or corrupted
+            stderr_lower = rrd_result.stderr.lower() if rrd_result.stderr else ''
+            if 'rrd' in stderr_lower or 'no such file' in stderr_lower or 'empty' in stderr_lower:
+                return jsonify({
+                    'error': 'RRD data not available',
+                    'details': 'The RRD database file may be empty or corrupted. This can happen if rrdcached was not running properly after Proxmox installation.',
+                    'suggestion': 'Try restarting rrdcached: systemctl restart rrdcached'
+                }), 503  # Service Unavailable - more appropriate than 500
             return jsonify({'error': f'Failed to get RRD data: {rrd_result.stderr}'}), 500
             
+    except json.JSONDecodeError:
+        # pvesh returned invalid JSON - likely empty RRD
+        return jsonify({
+            'error': 'RRD data not available',
+            'details': 'Unable to parse metrics data. The RRD database may be empty or corrupted.',
+            'suggestion': 'Try restarting rrdcached: systemctl restart rrdcached'
+        }), 503
     except Exception as e:
 
         return jsonify({'error': str(e)}), 500
@@ -5137,12 +9013,12 @@ def api_logs():
         if since_days:
             try:
                 days = int(since_days)
+                # Cap at 90 days to prevent excessive queries
+                days = min(days, 90)
+                # No -n limit when using --since: the time range already bounds the query.
+                # A hard -n 10000 was masking differences between date ranges on busy servers.
                 cmd = ['journalctl', '--since', f'{days} days ago', '--output', 'json', '--no-pager']
-                # print(f"[API] Filtering logs since {days} days ago (no limit)")
-                pass
             except ValueError:
-                # print(f"[API] Invalid since_days value: {since_days}")
-                pass
                 cmd = ['journalctl', '-n', limit, '--output', 'json', '--no-pager']
         else:
             cmd = ['journalctl', '-n', limit, '--output', 'json', '--no-pager']
@@ -5151,34 +9027,43 @@ def api_logs():
         if priority:
             cmd.extend(['-p', priority])
         
-        # Add service filter if specified
-        if service:
-            cmd.extend(['-u', service])
+        # Add service filter by SYSLOG_IDENTIFIER (not -u which filters by systemd unit)
+        # We filter after fetching since journalctl doesn't have a direct SYSLOG_IDENTIFIER flag
+        service_filter = service
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        # Longer timeout for date-range queries which may return many entries
+        query_timeout = 120 if since_days else 30
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=query_timeout)
 
         if result.returncode == 0:
             logs = []
+            priority_map = {
+                '0': 'emergency', '1': 'alert', '2': 'critical', '3': 'error',
+                '4': 'warning', '5': 'notice', '6': 'info', '7': 'debug'
+            }
             for line in result.stdout.strip().split('\n'):
                 if line:
                     try:
                         log_entry = json.loads(line)
-                        # Convert timestamp from microseconds to readable format
                         timestamp_us = int(log_entry.get('__REALTIME_TIMESTAMP', '0'))
                         timestamp = datetime.fromtimestamp(timestamp_us / 1000000).strftime('%Y-%m-%d %H:%M:%S')
                         
-                        # Map priority to level name
-                        priority_map = {
-                            '0': 'emergency', '1': 'alert', '2': 'critical', '3': 'error',
-                            '4': 'warning', '5': 'notice', '6': 'info', '7': 'debug'
-                        }
                         priority_num = str(log_entry.get('PRIORITY', '6'))
                         level = priority_map.get(priority_num, 'info')
+                        
+                        syslog_id = log_entry.get('SYSLOG_IDENTIFIER', '')
+                        systemd_unit = log_entry.get('_SYSTEMD_UNIT', '')
+                        service_name = syslog_id or systemd_unit or 'system'
+                        
+                        if service_filter and service_name != service_filter:
+                            continue
                         
                         logs.append({
                             'timestamp': timestamp,
                             'level': level,
-                            'service': log_entry.get('_SYSTEMD_UNIT', log_entry.get('SYSLOG_IDENTIFIER', 'system')),
+                            'service': service_name,
+                            'unit': systemd_unit,
                             'message': log_entry.get('MESSAGE', ''),
                             'source': 'journal',
                             'pid': log_entry.get('_PID', ''),
@@ -5186,6 +9071,7 @@ def api_logs():
                         })
                     except (json.JSONDecodeError, ValueError):
                         continue
+            
             return jsonify({'logs': logs, 'total': len(logs)})
         else:
             return jsonify({
@@ -5194,8 +9080,6 @@ def api_logs():
                 'total': 0
             })
     except Exception as e:
-        # print(f"Error getting logs: {e}")
-        pass
         return jsonify({
             'error': f'Unable to access system logs: {str(e)}',
             'logs': [],
@@ -5214,8 +9098,7 @@ def api_logs_download():
         since_days = request.args.get('since_days', None)
         
         if since_days:
-            days = int(since_days)
-
+            days = min(int(since_days), 90)
             cmd = ['journalctl', '--since', f'{days} days ago', '--no-pager']
         else:
             cmd = ['journalctl', '--since', f'{hours} hours ago', '--no-pager']
@@ -5233,16 +9116,19 @@ def api_logs_download():
         if level != 'all':
             cmd.extend(['-p', level])
         
-        # Apply service filter
+        # Apply service filter using SYSLOG_IDENTIFIER grep
+        # Note: We use --grep to match the service name in the log output
+        # since journalctl doesn't have a direct SYSLOG_IDENTIFIER filter flag
         if service != 'all':
-            cmd.extend(['-u', service])
+            cmd.extend(['--grep', service])
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         
         if result.returncode == 0:
             import tempfile
+            time_desc = f"{since_days} days" if since_days else f"{hours}h"
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
-                f.write(f"ProxMenux Log ({log_type}, since {since_days if since_days else f'{hours}h'}) - Generated: {datetime.now().isoformat()}\n")
+                f.write(f"ProxMenux Log ({log_type}, since {time_desc}) - Generated: {datetime.now().isoformat()}\n")
                 f.write("=" * 80 + "\n\n")
                 f.write(result.stdout)
                 temp_path = f.name
@@ -5257,8 +9143,6 @@ def api_logs_download():
             return jsonify({'error': 'Failed to generate log file'}), 500
             
     except Exception as e:
-        # print(f"Error downloading logs: {e}")
-        pass
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/notifications', methods=['GET'])
@@ -5308,7 +9192,7 @@ def api_notifications():
                             notifications.append({
                                 'timestamp': timestamp,
                                 'type': notif_type,
-                                'service': log_entry.get('_SYSTEMD_UNIT', 'proxmox'),
+                                'service': log_entry.get('SYSLOG_IDENTIFIER', log_entry.get('_SYSTEMD_UNIT', 'proxmox')),
                                 'message': message,
                                 'source': 'journal'
                             })
@@ -5370,8 +9254,6 @@ def api_notifications():
         })
         
     except Exception as e:
-        # print(f"Error getting notifications: {e}")
-        pass
         return jsonify({
             'error': str(e),
             'notifications': [],
@@ -5415,7 +9297,7 @@ def api_notifications_download():
         if result.returncode == 0:
             import tempfile
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
-                f.write(f"ProxMenux Log ({log_type}, since {since_days if since_days else f'{hours}h'}) - Generated: {datetime.now().isoformat()}\n")
+                f.write(f"ProxMenux Notification Log (around {timestamp}) - Generated: {datetime.now().isoformat()}\n")
                 f.write("=" * 80 + "\n\n")
                 f.write(result.stdout)
                 temp_path = f.name
@@ -5430,8 +9312,6 @@ def api_notifications_download():
             return jsonify({'error': 'Failed to generate log file'}), 500
             
     except Exception as e:
-        # print(f"Error downloading logs: {e}")
-        pass
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/backups', methods=['GET'])
@@ -5522,6 +9402,253 @@ def api_backups():
             'backups': [],
             'total': 0
         })
+
+@app.route('/api/backup-storages', methods=['GET'])
+@require_auth
+def api_backup_storages():
+    """Get list of storages available for backups"""
+    try:
+        storages = []
+        
+        # Get current node name
+        node_result = subprocess.run(['hostname'], capture_output=True, text=True, timeout=5)
+        node = node_result.stdout.strip() if node_result.returncode == 0 else 'localhost'
+        
+        # Get all storages
+        result = subprocess.run(['pvesh', 'get', '/storage', '--output-format', 'json'],
+                              capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            all_storages = json.loads(result.stdout)
+            
+            for storage in all_storages:
+                storage_id = storage.get('storage', '')
+                content = storage.get('content', '')
+                storage_type = storage.get('type', '')
+                
+                # Only include storages that support backup content
+                if 'backup' in content or storage_type == 'pbs':
+                    # Get storage status for space info - use correct path with node
+                    try:
+                        status_result = subprocess.run(
+                            ['pvesh', 'get', f'/nodes/{node}/storage/{storage_id}/status', '--output-format', 'json'],
+                            capture_output=True, text=True, timeout=10
+                        )
+                        
+                        total = 0
+                        used = 0
+                        avail = 0
+                        
+                        if status_result.returncode == 0:
+                            status = json.loads(status_result.stdout)
+                            total = status.get('total', 0)
+                            used = status.get('used', 0)
+                            avail = status.get('avail', 0)
+                        
+                        storages.append({
+                            'storage': storage_id,
+                            'type': storage_type,
+                            'content': content,
+                            'total': total,
+                            'used': used,
+                            'avail': avail,
+                            'total_human': format_bytes(total),
+                            'used_human': format_bytes(used),
+                            'avail_human': format_bytes(avail)
+                        })
+                    except:
+                        storages.append({
+                            'storage': storage_id,
+                            'type': storage_type,
+                            'content': content,
+                            'total': 0,
+                            'used': 0,
+                            'avail': 0
+                        })
+        
+        return jsonify({'storages': storages})
+        
+    except Exception as e:
+        return jsonify({'error': str(e), 'storages': []})
+
+@app.route('/api/vms/<int:vmid>/backup', methods=['POST'])
+@require_auth
+def api_create_backup(vmid):
+    """Create a backup for a VM or LXC container using Proxmox API"""
+    try:
+        data = request.get_json() or {}
+        storage = data.get('storage', 'local')
+        mode = data.get('mode', 'snapshot')  # snapshot, suspend, stop
+        compress = data.get('compress', 'zstd')  # none, lzo, gzip, zstd
+        protected = data.get('protected', False)  # True/False
+        notification = data.get('notification', 'auto')  # always, failure, never, auto
+        notes = data.get('notes', '')  # Backup notes/description
+        pbs_change_detection = data.get('pbs_change_detection', None)  # default, legacy, data (for PBS + LXC)
+        
+        # Get node and VM type for this VM
+        node = None
+        vm_type = None
+        vm_name = None
+        
+        # Try to find VM in cluster resources
+        try:
+            vms = get_cached_pvesh_cluster_resources_vm()
+            if vms:
+                for vm in vms:
+                    if vm.get('vmid') == vmid:
+                        node = vm.get('node')
+                        vm_type = vm.get('type')  # 'qemu' or 'lxc'
+                        vm_name = vm.get('name', '')
+                        break
+        except:
+            pass
+        
+        if not node:
+            return jsonify({'error': 'VM not found'}), 404
+        
+        # Process notes template variables
+        if notes:
+            notes = notes.replace('{{guestname}}', vm_name or '')
+            notes = notes.replace('{{vmid}}', str(vmid))
+            notes = notes.replace('{{node}}', node or '')
+        
+        # Check if storage is PBS (Proxmox Backup Server)
+        is_pbs = False
+        try:
+            storage_result = subprocess.run(
+                ['pvesh', 'get', f'/storage/{storage}', '--output-format', 'json'],
+                capture_output=True, text=True, timeout=10
+            )
+            if storage_result.returncode == 0:
+                storage_info = json.loads(storage_result.stdout)
+                is_pbs = storage_info.get('type') == 'pbs'
+        except:
+            pass
+        
+        # Build pvesh command: pvesh create /nodes/<NODE>/vzdump --vmid <ID> --storage <STORAGE> --mode <MODE> [--compress <COMPRESS>]
+        cmd = [
+            'pvesh', 'create', f'/nodes/{node}/vzdump',
+            '--vmid', str(vmid),
+            '--storage', storage,
+            '--mode', mode
+        ]
+        
+        # Only add --compress for non-PBS storage (PBS handles compression/deduplication internally)
+        if not is_pbs:
+            cmd.extend(['--compress', compress])
+        
+        # Add protected flag if enabled (use 1 for true)
+        if protected:
+            cmd.extend(['--protected', '1'])
+        
+        # Add notes if provided
+        if notes:
+            cmd.extend(['--notes-template', notes])
+        
+        # Add PBS change detection mode (only for LXC with PBS storage)
+        if pbs_change_detection and pbs_change_detection != 'default' and vm_type == 'lxc':
+            cmd.extend(['--pbs-change-detection-mode', pbs_change_detection])
+        
+        # Execute pvesh command - this creates a task in Proxmox
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or 'Unknown error'
+            return jsonify({
+                'success': False,
+                'error': f'Backup failed: {error_msg}',
+                'command': ' '.join(cmd)
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'message': f'Backup task started for {vm_type.upper()} {vmid}',
+            'storage': storage,
+            'mode': mode,
+            'compress': compress,
+            'protected': protected,
+            'notes': notes,
+            'task': result.stdout.strip() if result.stdout else None
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vms/<int:vmid>/backups', methods=['GET'])
+@require_auth
+def api_vm_backups(vmid):
+    """Get list of backups for a specific VM/LXC"""
+    try:
+        backups = []
+        
+        # Get current node name
+        node_result = subprocess.run(['hostname'], capture_output=True, text=True, timeout=5)
+        node = node_result.stdout.strip() if node_result.returncode == 0 else 'localhost'
+        
+        # Get list of storage locations
+        result = subprocess.run(['pvesh', 'get', '/storage', '--output-format', 'json'],
+                              capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            storages = json.loads(result.stdout)
+            
+            for storage in storages:
+                storage_id = storage.get('storage')
+                storage_type = storage.get('type')
+                content = storage.get('content', '')
+                
+                # Only check storages that can contain backups
+                if 'backup' in content or storage_type == 'pbs':
+                    try:
+                        # Use --vmid filter to get only backups for this VM
+                        content_result = subprocess.run(
+                            ['pvesh', 'get', f'/nodes/{node}/storage/{storage_id}/content', 
+                             '--vmid', str(vmid), '--output-format', 'json'],
+                            capture_output=True, text=True, timeout=30
+                        )
+                        
+                        if content_result.returncode == 0:
+                            contents = json.loads(content_result.stdout)
+                            
+                            for item in contents:
+                                if item.get('content') == 'backup':
+                                    # Get backup type from subtype field (PBS) or parse volid (local)
+                                    backup_type = item.get('subtype', '')
+                                    if not backup_type:
+                                        volid = item.get('volid', '')
+                                        if 'vzdump-qemu-' in volid:
+                                            backup_type = 'qemu'
+                                        elif 'vzdump-lxc-' in volid:
+                                            backup_type = 'lxc'
+                                    
+                                    size = item.get('size', 0)
+                                    ctime = item.get('ctime', 0)
+                                    notes = item.get('notes', '')
+                                    
+                                    backups.append({
+                                        'volid': item.get('volid', ''),
+                                        'storage': storage_id,
+                                        'type': backup_type,
+                                        'size': size,
+                                        'size_human': format_bytes(size),
+                                        'timestamp': ctime,
+                                        'date': datetime.fromtimestamp(ctime).strftime('%Y-%m-%d %H:%M') if ctime else '',
+                                        'notes': notes
+                                    })
+                    except Exception as e:
+                        continue
+        
+        # Sort by timestamp (newest first)
+        backups.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+        return jsonify({
+            'backups': backups,
+            'vmid': vmid,
+            'total': len(backups)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e), 'backups': [], 'total': 0})
 
 @app.route('/api/events', methods=['GET'])
 @require_auth
@@ -5705,8 +9832,23 @@ def api_health():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'version': '1.0.2'
+        'version': '1.2.0'
     })
+
+@app.route('/api/health/acknowledge', methods=['POST'])
+@require_auth
+def api_health_acknowledge():
+    """Acknowledge/dismiss a health error by error_key."""
+    try:
+        data = request.get_json()
+        error_key = data.get('error_key', '')
+        if not error_key:
+            return jsonify({'error': 'error_key is required'}), 400
+        
+        result = health_persistence.acknowledge_error(error_key)
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/prometheus', methods=['GET'])
 @require_auth
@@ -5716,9 +9858,10 @@ def api_prometheus():
         metrics = []
         timestamp = int(datetime.now().timestamp() * 1000)
         node = socket.gethostname()
-        
-        # Get system data
-        cpu_usage = psutil.cpu_percent(interval=0.5)
+
+        # Non-blocking: returns %CPU since the last psutil call (sampler keeps state primed).
+        # Avoids 500ms worker block on each Prometheus scrape.
+        cpu_usage = psutil.cpu_percent(interval=0)
         memory = psutil.virtual_memory()
         load_avg = os.getloadavg()
         uptime_seconds = time.time() - psutil.boot_time()
@@ -5971,7 +10114,7 @@ def api_info():
     """Root endpoint with API information"""
     return jsonify({
         'name': 'ProxMenux Monitor API',
-        'version': '1.0.2',
+        'version': '1.2.0',
         'endpoints': [
             '/api/system',
             '/api/system-info',
@@ -6018,7 +10161,9 @@ def api_hardware():
             'power_supplies': hardware_info.get('ipmi_power', {}).get('power_supplies', []),
             'power_meter': hardware_info.get('power_meter'),
             'ups': hardware_info.get('ups') if hardware_info.get('ups') else None,
-            'gpus': hardware_info.get('gpus', [])
+            'gpus': hardware_info.get('gpus', []),
+            'coral_tpus': hardware_info.get('coral_tpus', []),
+            'usb_devices': hardware_info.get('usb_devices', []),
         }
         
 
@@ -6030,6 +10175,23 @@ def api_hardware():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/hardware/live', methods=['GET'])
+@require_auth
+def api_hardware_live():
+    """Lightweight endpoint: only dynamic hardware fields (temps, fans, power, UPS).
+
+    Designed for the active Hardware page to poll every 3-5s without re-running the
+    expensive static collectors (lscpu, dmidecode, lsblk, smartctl). ipmitool output
+    is cached internally (10s) so repeated polls don't hammer the BMC.
+    """
+    try:
+        return jsonify(get_hardware_live_info())
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/gpu/<slot>/realtime', methods=['GET'])
 @require_auth
@@ -6057,7 +10219,12 @@ def api_gpu_realtime(slot):
         pass
         detailed_info = get_detailed_gpu_info(gpu)
         gpu.update(detailed_info)
-        
+
+        # SR-IOV detail is only relevant when the modal is actually open,
+        # so we build it on demand here (not in get_gpu_info) to avoid
+        # scanning every guest config on the hardware snapshot path.
+        _sriov_enrich_detail(gpu)
+
         # Extract only the monitoring-related fields
         realtime_data = {
             'has_monitoring_tool': gpu.get('has_monitoring_tool', False),
@@ -6082,9 +10249,17 @@ def api_gpu_realtime(slot):
             # Added for NVIDIA/AMD specific engine info if available
             'engine_encoder': gpu.get('engine_encoder'),
             'engine_decoder': gpu.get('engine_decoder'),
-            'driver_version': gpu.get('driver_version') # Added driver_version
+            'driver_version': gpu.get('driver_version'), # Added driver_version
+            # SR-IOV modal detail (populated only when the GPU is an SR-IOV
+            # Physical Function with active VFs, or a Virtual Function).
+            'sriov_role': gpu.get('sriov_role'),
+            'sriov_physfn': gpu.get('sriov_physfn'),
+            'sriov_vf_count': gpu.get('sriov_vf_count'),
+            'sriov_totalvfs': gpu.get('sriov_totalvfs'),
+            'sriov_vfs': gpu.get('sriov_vfs'),
+            'sriov_consumer': gpu.get('sriov_consumer'),
         }
-        
+
         return jsonify(realtime_data)
     except Exception as e:
         # print(f"[v0] Error getting real-time GPU data: {e}")
@@ -6198,11 +10373,9 @@ def api_vm_logs(vmid):
     """Download real logs for a specific VM/LXC (not task history)"""
     try:
         # Get VM type and node
-        result = subprocess.run(['pvesh', 'get', '/cluster/resources', '--type', 'vm', '--output-format', 'json'], 
-                              capture_output=True, text=True, timeout=10)
+        resources = get_cached_pvesh_cluster_resources_vm()
         
-        if result.returncode == 0:
-            resources = json.loads(result.stdout)
+        if resources:
             vm_info = None
             for resource in resources:
                 if resource.get('vmid') == vmid:
@@ -6254,11 +10427,9 @@ def api_vm_control(vmid):
             return jsonify({'error': 'Invalid action'}), 400
         
         # Get VM type and node
-        result = subprocess.run(['pvesh', 'get', '/cluster/resources', '--type', 'vm', '--output-format', 'json'], 
-                              capture_output=True, text=True, timeout=10)
+        resources = get_cached_pvesh_cluster_resources_vm()
         
-        if result.returncode == 0:
-            resources = json.loads(result.stdout)
+        if resources:
             vm_info = None
             for resource in resources:
                 if resource.get('vmid') == vmid:
@@ -6275,8 +10446,11 @@ def api_vm_control(vmid):
             control_result = subprocess.run(
                 ['pvesh', 'create', f'/nodes/{node}/{vm_type}/{vmid}/status/{action}'],
                 capture_output=True, text=True, timeout=30)
-            
+
             if control_result.returncode == 0:
+                # Invalidate VM resources cache so the next /api/vms call
+                # returns fresh status instead of the pre-action snapshot.
+                _pvesh_cache['cluster_resources_vm_time'] = 0
                 return jsonify({
                     'success': True,
                     'vmid': vmid,
@@ -6291,8 +10465,6 @@ def api_vm_control(vmid):
         else:
             return jsonify({'error': 'Failed to get VM details'}), 500
     except Exception as e:
-        # print(f"Error controlling VM: {e}")
-        pass
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/vms/<int:vmid>/config', methods=['PUT'])
@@ -6304,11 +10476,9 @@ def api_vm_config_update(vmid):
         description = data.get('description', '')
         
         # Get VM type and node
-        result = subprocess.run(['pvesh', 'get', '/cluster/resources', '--type', 'vm', '--output-format', 'json'], 
-                              capture_output=True, text=True, timeout=10)
+        resources = get_cached_pvesh_cluster_resources_vm()
         
-        if result.returncode == 0:
-            resources = json.loads(result.stdout)
+        if resources:
             vm_info = None
             for resource in resources:
                 if resource.get('vmid') == vmid:
@@ -6426,20 +10596,176 @@ def stream_script_logs(session_id):
 
 
 if __name__ == '__main__':
-    # API endpoints available at: /api/system, /api/system-info, /api/storage, /api/proxmox-storage, /api/network, /api/vms, /api/logs, /api/health, /api/hardware, /api/prometheus, /api/node/metrics
-    
     import sys
     import logging
     
-    # Silence werkzeug logger
+    # Custom filter to suppress TLS handshake noise when running HTTP
+    # (browsers may cache HTTPS and keep sending TLS ClientHello to an HTTP server)
+    class TLSNoiseFilter(logging.Filter):
+        def filter(self, record):
+            msg = record.getMessage() if record else ""
+            if "Bad request version" in msg or "Bad request syntax" in msg:
+                return False
+            return True
+    
+    # Silence werkzeug logger and add TLS noise filter
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
+    log.addFilter(TLSNoiseFilter())
     
-    # Silence Flask CLI banner (removes "Serving Flask app", "Debug mode", "WARNING" messages)
+    # Silence Flask CLI banner
     cli = sys.modules['flask.cli']
     cli.show_server_banner = lambda *x: None
     
-    # Print only essential information
-    # print("API endpoints available at: /api/system, /api/system-info, /api/storage, /api/proxmox-storage, /api/network, /api/vms, /api/logs, /api/health, /api/hardware, /api/prometheus, /api/node/metrics")
+    # ── Ensure journald stores info-level messages ──
+    # Proxmox defaults MaxLevelStore=warning which drops info/notice entries.
+    # This causes System Logs to show almost identical counts across date ranges
+    # (since most log activity is info-level and gets silently discarded).
+    # We create a drop-in to raise the level to info so logs are properly stored.
+    try:
+        journald_conf = "/etc/systemd/journald.conf"
+        dropin_dir = "/etc/systemd/journald.conf.d"
+        dropin_file = f"{dropin_dir}/proxmenux-loglevel.conf"
+        
+        if os.path.isfile(journald_conf) and not os.path.isfile(dropin_file):
+            # Read current MaxLevelStore
+            current_max = ""
+            with open(journald_conf, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("MaxLevelStore="):
+                        current_max = line.split("=", 1)[1].strip().lower()
+            
+            restrictive_levels = {"emerg", "alert", "crit", "err", "warning"}
+            if current_max in restrictive_levels:
+                os.makedirs(dropin_dir, exist_ok=True)
+                with open(dropin_file, 'w') as f:
+                    f.write("# ProxMenux: Allow info-level messages for proper log display\n")
+                    f.write("# Proxmox default MaxLevelStore=warning drops most system logs\n")
+                    f.write("[Journal]\n")
+                    f.write("MaxLevelStore=info\n")
+                    f.write("MaxLevelSyslog=info\n")
+                subprocess.run(["systemctl", "restart", "systemd-journald"], 
+                             capture_output=True, timeout=10)
+                print("[ProxMenux] Fixed journald MaxLevelStore (was too restrictive for log display)")
+    except Exception as e:
+        print(f"[ProxMenux] journald check skipped: {e}")
     
-    app.run(host='0.0.0.0', port=8008, debug=False)
+    # ── Temperature & Latency history collector ──
+    # Initialize SQLite DB and start background thread to record CPU temp + latency every 60s
+    if init_temperature_db() and init_latency_db():
+        # Record initial readings immediately
+        _record_temperature()
+        _record_latency()
+        # Start background collector thread (handles both temp and latency)
+        temp_thread = threading.Thread(target=_temperature_collector_loop, daemon=True)
+        temp_thread.start()
+        print("[ProxMenux] Temperature & Latency history collector started (60s interval)")
+    else:
+        print("[ProxMenux] Temperature/Latency history disabled (DB init failed)")
+
+    # ── Background Health Monitor ──
+    # Run full health checks every 5 min, keeping cache fresh and recording events for notifications
+    try:
+        health_thread = threading.Thread(target=_health_collector_loop, daemon=True)
+        health_thread.start()
+        print("[ProxMenux] Background health monitor started (5 min interval)")
+    except Exception as e:
+        print(f"[ProxMenux] Background health monitor failed to start: {e}")
+
+    # ── Vital Signs Sampler (rapid CPU + Temperature) ──
+    try:
+        vital_thread = threading.Thread(target=_vital_signs_sampler, daemon=True)
+        vital_thread.start()
+    except Exception as e:
+        print(f"[ProxMenux] Vital signs sampler failed to start: {e}")
+
+    # ── Notification Service ──
+    try:
+        notification_manager.start()
+        if notification_manager._enabled:
+            print(f"[ProxMenux] Notification service started (channels: {list(notification_manager._channels.keys())})")
+        else:
+            print("[ProxMenux] Notification service loaded (disabled - configure in Settings)")
+    except Exception as e:
+        print(f"[ProxMenux] Notification service failed to start: {e}")
+
+    # Check for SSL configuration
+    ssl_ctx = None
+    ssl_cert = None
+    ssl_key = None
+    try:
+        ssl_ctx = auth_manager.get_ssl_context()
+        if ssl_ctx:
+            ssl_cert, ssl_key = ssl_ctx
+            print(f"[ProxMenux] Starting with HTTPS (cert: {ssl_cert})")
+        else:
+            print("[ProxMenux] Starting with HTTP (no SSL configured)")
+    except Exception as e:
+        print(f"[ProxMenux] SSL config error, falling back to HTTP: {e}")
+        ssl_ctx = None
+    
+    # Use gevent for SSL+WebSocket support, or fallback to Flask dev server
+    gevent_available = False
+    ssl_loaded = False
+    
+    if ssl_ctx:
+        # Validate SSL certificates before starting server
+        try:
+            import ssl
+            import os
+            
+            # Check certificate files exist and are readable
+            if not os.path.isfile(ssl_cert):
+                raise FileNotFoundError(f"SSL certificate not found: {ssl_cert}")
+            if not os.path.isfile(ssl_key):
+                raise FileNotFoundError(f"SSL key not found: {ssl_key}")
+            
+            # Try to load the certificate to validate it
+            test_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            test_ctx.load_cert_chain(ssl_cert, ssl_key)
+            ssl_loaded = True
+            print(f"[ProxMenux] SSL certificates validated successfully")
+        except Exception as e:
+            print(f"[ProxMenux] SSL certificate error: {e}")
+            print(f"[ProxMenux] Falling back to HTTP mode (SSL disabled)")
+            ssl_ctx = None
+    
+    try:
+        if ssl_ctx and ssl_loaded:
+            # Try gevent with SSL for proper WebSocket (WSS) support
+            try:
+                from gevent import pywsgi
+                from geventwebsocket.handler import WebSocketHandler
+                import ssl
+                
+                ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ssl_context.load_cert_chain(ssl_cert, ssl_key)
+                
+                print("[ProxMenux] Starting gevent server with SSL/WSS support...")
+                server = pywsgi.WSGIServer(
+                    ('0.0.0.0', 8008), 
+                    app, 
+                    handler_class=WebSocketHandler,
+                    ssl_context=ssl_context
+                )
+                gevent_available = True
+                server.serve_forever()
+            except ImportError as e:
+                print(f"[ProxMenux] gevent not available ({e})")
+                # Fallback: Flask dev server with SSL - flask-sock handles WebSockets
+                import ssl
+                ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ssl_context.load_cert_chain(ssl_cert, ssl_key)
+                print("[ProxMenux] Starting Flask server with SSL (using flask-sock for WebSockets)...")
+                app.run(host='0.0.0.0', port=8008, debug=False, ssl_context=ssl_context)
+        else:
+            # HTTP mode - use Flask dev server (simpler, works fine without SSL)
+            print("[ProxMenux] Starting Flask server with HTTP...")
+            app.run(host='0.0.0.0', port=8008, debug=False)
+    except Exception as e:
+        if ssl_ctx and not gevent_available:
+            print(f"[ProxMenux] SSL startup failed ({e}), falling back to HTTP")
+            app.run(host='0.0.0.0', port=8008, debug=False)
+        else:
+            raise e

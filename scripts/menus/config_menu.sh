@@ -114,6 +114,33 @@ check_monitor_status() {
     fi
 }
 
+is_beta_program_active() {
+    [[ -f "$CONFIG_FILE" ]] || return 1
+    local flag
+    flag=$(jq -r '.beta_program.status // empty' "$CONFIG_FILE" 2>/dev/null)
+    [[ "$flag" == "active" ]]
+}
+
+deactivate_beta_program() {
+    if dialog --clear --backtitle "ProxMenux Configuration" \
+              --title "$(translate "Deactivate Beta Program")" \
+              --yesno "\n$(translate "You will stop receiving beta update prompts. Stable updates continue normally.\n\nTo rejoin the beta program later, run the beta installer again.\n\nDeactivate now?")" 14 64; then
+        local tmp
+        tmp=$(mktemp)
+        if jq '.beta_program.status = "inactive"' "$CONFIG_FILE" > "$tmp" 2>/dev/null; then
+            mv "$tmp" "$CONFIG_FILE"
+            dialog --clear --backtitle "ProxMenux Configuration" \
+                   --title "$(translate "Beta Program Deactivated")" \
+                   --msgbox "\n\n$(translate "Beta program deactivated. You will now receive stable updates only.")" 10 60
+        else
+            rm -f "$tmp"
+            dialog --clear --backtitle "ProxMenux Configuration" \
+                   --title "$(translate "Error")" \
+                   --msgbox "\n\n$(translate "Could not update config file.")" 10 50
+        fi
+    fi
+}
+
 toggle_monitor_service() {
     local status=$(check_monitor_status)
     
@@ -211,7 +238,13 @@ show_config_menu() {
             option_actions[$option_num]="show_monitor_status"
             ((option_num++))
         fi
-        
+
+        if is_beta_program_active; then
+            menu_options+=("$option_num" "$(translate "Deactivate Beta Program")")
+            option_actions[$option_num]="deactivate_beta"
+            ((option_num++))
+        fi
+
         # Build menu based on installation type
         if [ "$install_type" = "translation" ]; then
             menu_options+=("$option_num" "$(translate "Change Language")")
@@ -255,6 +288,9 @@ show_config_menu() {
                 ;;
             "show_monitor_status")
                 show_monitor_status
+                ;;
+            "deactivate_beta")
+                deactivate_beta_program
                 ;;
             "change_language")
                 change_language

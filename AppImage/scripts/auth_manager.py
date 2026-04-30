@@ -57,7 +57,9 @@ def load_auth_config():
         "configured": bool,
         "totp_enabled": bool,  # 2FA enabled flag
         "totp_secret": str,    # TOTP secret key
-        "backup_codes": list   # List of backup codes
+        "backup_codes": list,  # List of backup codes
+        "api_tokens": list,    # List of stored API token metadata
+        "revoked_tokens": list # List of revoked token hashes
     }
     """
     if not AUTH_CONFIG_FILE.exists():
@@ -69,7 +71,9 @@ def load_auth_config():
             "configured": False,
             "totp_enabled": False,
             "totp_secret": None,
-            "backup_codes": []
+            "backup_codes": [],
+            "api_tokens": [],
+            "revoked_tokens": []
         }
     
     try:
@@ -81,6 +85,8 @@ def load_auth_config():
             config.setdefault("totp_enabled", False)
             config.setdefault("totp_secret", None)
             config.setdefault("backup_codes", [])
+            config.setdefault("api_tokens", [])
+            config.setdefault("revoked_tokens", [])
             return config
     except Exception as e:
         print(f"Error loading auth config: {e}")
@@ -92,7 +98,9 @@ def load_auth_config():
             "configured": False,
             "totp_enabled": False,
             "totp_secret": None,
-            "backup_codes": []
+            "backup_codes": [],
+            "api_tokens": [],
+            "revoked_tokens": []
         }
 
 
@@ -141,11 +149,18 @@ def verify_token(token):
     """
     Verify a JWT token
     Returns username if valid, None otherwise
+    Also checks if the token has been revoked
     """
     if not JWT_AVAILABLE or not token:
         return None
     
     try:
+        # Check if the token has been revoked
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        config = load_auth_config()
+        if token_hash in config.get("revoked_tokens", []):
+            return None
+        
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload.get('username')
     except jwt.ExpiredSignatureError:
@@ -154,6 +169,88 @@ def verify_token(token):
     except jwt.InvalidTokenError as e:
         print(f"Invalid token: {e}")
         return None
+
+
+def store_api_token_metadata(token, token_name="API Token"):
+    """
+    Store API token metadata (hash, name, creation date) for listing and revocation.
+    The actual token is never stored - only a hash for identification.
+    """
+    config = load_auth_config()
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    token_id = token_hash[:16]
+    
+    token_entry = {
+        "id": token_id,
+        "name": token_name,
+        "token_hash": token_hash,
+        "token_prefix": token[:12] + "...",
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "expires_at": (datetime.utcnow() + timedelta(days=365)).isoformat() + "Z"
+    }
+    
+    config.setdefault("api_tokens", [])
+    config["api_tokens"].append(token_entry)
+    save_auth_config(config)
+    return token_entry
+
+
+def list_api_tokens():
+    """
+    List all stored API token metadata (no actual tokens are returned).
+    Returns list of token entries with id, name, prefix, creation and expiration dates.
+    """
+    config = load_auth_config()
+    tokens = config.get("api_tokens", [])
+    revoked = set(config.get("revoked_tokens", []))
+    
+    result = []
+    for t in tokens:
+        entry = {
+            "id": t.get("id"),
+            "name": t.get("name", "API Token"),
+            "token_prefix": t.get("token_prefix", "***"),
+            "created_at": t.get("created_at"),
+            "expires_at": t.get("expires_at"),
+            "revoked": t.get("token_hash") in revoked
+        }
+        result.append(entry)
+    return result
+
+
+def revoke_api_token(token_id):
+    """
+    Revoke an API token by its ID.
+    Adds the token hash to the revoked list so it fails verification.
+    Returns (success: bool, message: str)
+    """
+    config = load_auth_config()
+    tokens = config.get("api_tokens", [])
+    
+    target = None
+    for t in tokens:
+        if t.get("id") == token_id:
+            target = t
+            break
+    
+    if not target:
+        return False, "Token not found"
+    
+    token_hash = target.get("token_hash")
+    config.setdefault("revoked_tokens", [])
+    
+    if token_hash in config["revoked_tokens"]:
+        return False, "Token is already revoked"
+    
+    config["revoked_tokens"].append(token_hash)
+    
+    # Remove from the active tokens list
+    config["api_tokens"] = [t for t in tokens if t.get("id") != token_id]
+    
+    if save_auth_config(config):
+        return True, "Token revoked successfully"
+    else:
+        return False, "Failed to save configuration"
 
 
 def get_auth_status():
@@ -243,6 +340,8 @@ def disable_auth():
     config["totp_enabled"] = False
     config["totp_secret"] = None
     config["backup_codes"] = []
+    config["api_tokens"] = []
+    config["revoked_tokens"] = []
     
     if save_auth_config(config):
         return True, "Authentication disabled"
@@ -472,6 +571,203 @@ def disable_totp(username, password):
         return False, "Failed to disable 2FA"
 
 
+# -------------------------------------------------------------------
+# SSL/HTTPS Certificate Management
+# -------------------------------------------------------------------
+
+SSL_CONFIG_FILE = Path(os.environ.get("PROXMENUX_SSL_CONFIG", "/etc/proxmenux/ssl_config.json"))
+
+# Default Proxmox certificate paths
+PROXMOX_CERT_PATH = "/etc/pve/local/pve-ssl.pem"
+PROXMOX_KEY_PATH = "/etc/pve/local/pve-ssl.key"
+
+
+def load_ssl_config():
+    """Load SSL configuration from file"""
+    if not SSL_CONFIG_FILE.exists():
+        return {
+            "enabled": False,
+            "cert_path": "",
+            "key_path": "",
+            "source": "none"  # "none", "proxmox", "custom"
+        }
+    
+    try:
+        with open(SSL_CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+            config.setdefault("enabled", False)
+            config.setdefault("cert_path", "")
+            config.setdefault("key_path", "")
+            config.setdefault("source", "none")
+            return config
+    except Exception:
+        return {
+            "enabled": False,
+            "cert_path": "",
+            "key_path": "",
+            "source": "none"
+        }
+
+
+def save_ssl_config(config):
+    """Save SSL configuration to file"""
+    try:
+        SSL_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SSL_CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving SSL config: {e}")
+        return False
+
+
+def detect_proxmox_certificates():
+    """
+    Detect available Proxmox certificates.
+    Returns dict with detection results.
+    """
+    result = {
+        "proxmox_available": False,
+        "proxmox_cert": PROXMOX_CERT_PATH,
+        "proxmox_key": PROXMOX_KEY_PATH,
+        "cert_info": None
+    }
+    
+    if os.path.isfile(PROXMOX_CERT_PATH) and os.path.isfile(PROXMOX_KEY_PATH):
+        result["proxmox_available"] = True
+        
+        # Try to get certificate info
+        try:
+            import subprocess
+            cert_output = subprocess.run(
+                ["openssl", "x509", "-in", PROXMOX_CERT_PATH, "-noout", "-subject", "-enddate", "-issuer"],
+                capture_output=True, text=True, timeout=5
+            )
+            if cert_output.returncode == 0:
+                lines = cert_output.stdout.strip().split('\n')
+                info = {}
+                for line in lines:
+                    if line.startswith("subject="):
+                        info["subject"] = line.replace("subject=", "").strip()
+                    elif line.startswith("notAfter="):
+                        info["expires"] = line.replace("notAfter=", "").strip()
+                    elif line.startswith("issuer="):
+                        issuer = line.replace("issuer=", "").strip()
+                        info["issuer"] = issuer
+                        info["is_self_signed"] = info.get("subject", "") == issuer
+                result["cert_info"] = info
+        except Exception:
+            pass
+    
+    return result
+
+
+def validate_certificate_files(cert_path, key_path):
+    """
+    Validate that cert and key files exist and are readable.
+    Returns (valid: bool, message: str)
+    """
+    if not cert_path or not key_path:
+        return False, "Certificate and key paths are required"
+    
+    if not os.path.isfile(cert_path):
+        return False, f"Certificate file not found: {cert_path}"
+    
+    if not os.path.isfile(key_path):
+        return False, f"Key file not found: {key_path}"
+    
+    # Verify files are readable
+    try:
+        with open(cert_path, 'r') as f:
+            content = f.read(100)
+            if "BEGIN CERTIFICATE" not in content and "BEGIN TRUSTED CERTIFICATE" not in content:
+                return False, "Certificate file does not appear to be a valid PEM certificate"
+        
+        with open(key_path, 'r') as f:
+            content = f.read(100)
+            if "BEGIN" not in content or "KEY" not in content:
+                return False, "Key file does not appear to be a valid PEM key"
+    except PermissionError:
+        return False, "Cannot read certificate files. Check file permissions."
+    except Exception as e:
+        return False, f"Error reading certificate files: {str(e)}"
+    
+    # Verify cert and key match
+    try:
+        import subprocess
+        cert_mod = subprocess.run(
+            ["openssl", "x509", "-noout", "-modulus", "-in", cert_path],
+            capture_output=True, text=True, timeout=5
+        )
+        key_mod = subprocess.run(
+            ["openssl", "rsa", "-noout", "-modulus", "-in", key_path],
+            capture_output=True, text=True, timeout=5
+        )
+        if cert_mod.returncode == 0 and key_mod.returncode == 0:
+            if cert_mod.stdout.strip() != key_mod.stdout.strip():
+                return False, "Certificate and key do not match"
+    except Exception:
+        pass  # Non-critical, proceed anyway
+    
+    return True, "Certificate files are valid"
+
+
+def configure_ssl(cert_path, key_path, source="custom"):
+    """
+    Configure SSL with given certificate and key paths.
+    Returns (success: bool, message: str)
+    """
+    valid, message = validate_certificate_files(cert_path, key_path)
+    if not valid:
+        return False, message
+    
+    config = {
+        "enabled": True,
+        "cert_path": cert_path,
+        "key_path": key_path,
+        "source": source
+    }
+    
+    if save_ssl_config(config):
+        return True, "SSL configured successfully. Restart the monitor service to apply changes."
+    else:
+        return False, "Failed to save SSL configuration"
+
+
+def disable_ssl():
+    """Disable SSL and return to HTTP"""
+    config = {
+        "enabled": False,
+        "cert_path": "",
+        "key_path": "",
+        "source": "none"
+    }
+    
+    if save_ssl_config(config):
+        return True, "SSL disabled. Restart the monitor service to apply changes."
+    else:
+        return False, "Failed to save SSL configuration"
+
+
+def get_ssl_context():
+    """
+    Get SSL context for Flask if SSL is configured and enabled.
+    Returns tuple (cert_path, key_path) or None
+    """
+    config = load_ssl_config()
+    
+    if not config.get("enabled"):
+        return None
+    
+    cert_path = config.get("cert_path", "")
+    key_path = config.get("key_path", "")
+    
+    if cert_path and key_path and os.path.isfile(cert_path) and os.path.isfile(key_path):
+        return (cert_path, key_path)
+    
+    return None
+
+
 def authenticate(username, password, totp_token=None):
     """
     Authenticate a user with username, password, and optional TOTP
@@ -490,12 +786,15 @@ def authenticate(username, password, totp_token=None):
     
     if config.get("totp_enabled"):
         if not totp_token:
+            # First step: password OK, now request TOTP code (not a failure)
             return False, None, True, "2FA code required"
         
         # Verify TOTP token or backup code
         success, message = verify_totp(username, totp_token, use_backup=len(totp_token) == 9)  # Backup codes are formatted XXXX-XXXX
         if not success:
-            return False, None, True, message
+            # TOTP code is wrong: return requires_totp=False so the caller
+            # logs it as a real authentication failure for Fail2Ban
+            return False, None, False, "Invalid 2FA code"
     
     token = generate_token(username)
     if token:

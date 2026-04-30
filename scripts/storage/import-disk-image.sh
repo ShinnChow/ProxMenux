@@ -6,24 +6,14 @@
 # Author      : MacRimi
 # Copyright   : (c) 2024 MacRimi
 # License     : (GPL-3.0) (https://github.com/MacRimi/ProxMenux/blob/main/LICENSE)
-# Version     : 1.1
-# Last Updated: 29/05/2025
+# Version     : 1.3
+# Last Updated: 12/04/2026
 # ==========================================================
 # Description:
-# This script automates the process of importing disk images into Proxmox VE virtual machines (VMs), 
-# making it easy to attach pre-existing disk files without manual configuration.
-#
-# Before running the script, ensure that disk images are available in /var/lib/vz/template/images/. 
-# The script scans this directory for compatible formats (.img, .qcow2, .vmdk, .raw) and lists the available files.
-#
-# Using an interactive menu, you can:
-# - Select a VM to attach the imported disk.
-# - Choose one or multiple disk images for import.
-# - Pick a storage volume in Proxmox for disk placement.
-# - Assign a suitable interface (SATA, SCSI, VirtIO, or IDE).
-# - Enable optional settings like SSD emulation or bootable disk configuration.
-#
-# Once completed, the script ensures the selected images are correctly attached and ready to use.
+# Imports disk images (.img, .qcow2, .vmdk, .raw) into Proxmox VE VMs.
+# Supports the default system ISO directory and custom paths.
+# All user decisions are collected in Phase 1 (dialogs) before
+# any operation is executed in Phase 2 (terminal output).
 # ==========================================================
 
 # Configuration ============================================
@@ -31,256 +21,340 @@ LOCAL_SCRIPTS="/usr/local/share/proxmenux/scripts"
 BASE_DIR="/usr/local/share/proxmenux"
 UTILS_FILE="$BASE_DIR/utils.sh"
 VENV_PATH="/opt/googletrans-env"
+BACKTITLE="ProxMenux"
+UI_MENU_H=20
+UI_MENU_W=84
+UI_MENU_LIST_H=10
+UI_SHORT_MENU_H=16
+UI_SHORT_MENU_W=72
+UI_SHORT_MENU_LIST_H=6
+UI_MSG_H=10
+UI_MSG_W=72
+UI_YESNO_H=10
+UI_YESNO_W=72
+UI_RESULT_H=14
+UI_RESULT_W=86
 
+# shellcheck source=/dev/null
 [[ -f "$UTILS_FILE" ]] && source "$UTILS_FILE"
 load_language
 initialize_cache
 # Configuration ============================================
 
 
-
-detect_image_dir() {
-  for store in $(pvesm status -content images | awk 'NR>1 {print $1}'); do
+_get_default_images_dir() {
+  for dir in /var/lib/vz/template/iso /var/lib/vz/template/images; do
+    [[ -d "$dir" ]] && echo "$dir" && return 0
+  done
+  local store path
+  for store in $(pvesm status -content images 2>/dev/null | awk 'NR>1 {print $1}'); do
     path=$(pvesm path "${store}:template" 2>/dev/null)
-    if [[ -d "$path" ]]; then
-      for ext in raw img qcow2 vmdk; do
-        if compgen -G "$path/*.$ext" > /dev/null; then
-          echo "$path"
-          return 0
-        fi
-      done
-      for sub in images iso; do
-        dir="$path/$sub"
-        if [[ -d "$dir" ]]; then
-          for ext in raw img qcow2 vmdk; do
-            if compgen -G "$dir/*.$ext" > /dev/null; then
-              echo "$dir"
-              return 0
-            fi
-          done
-        fi
-      done
-    fi
+    [[ -d "$path" ]] && echo "$path" && return 0
   done
-  for fallback in /var/lib/vz/template/images /var/lib/vz/template/iso; do
-    if [[ -d "$fallback" ]]; then
-      for ext in raw img qcow2 vmdk; do
-        if compgen -G "$fallback/*.$ext" > /dev/null; then
-          echo "$fallback"
-          return 0
-        fi
-      done
-    fi
-  done
-  return 1
+  echo "/var/lib/vz/template/iso"
 }
 
 
-IMAGES_DIR=$(detect_image_dir)
-if [[ -z "$IMAGES_DIR" ]]; then
-  dialog --title "$(translate 'No Images Found')" \
-         --msgbox "$(translate 'Could not find any directory containing disk images')\n\n$(translate 'Make sure there is at least one file with extension .img, .qcow2, .vmdk or .raw')" 15 60
+# ==========================================================
+# PHASE 1 — SELECTION
+# All dialogs run here. No execution, no show_proxmenux_logo.
+# ==========================================================
+
+# ── Step 1: Select VM ─────────────────────────────────────
+VM_OPTIONS=()
+while read -r vmid vmname _rest; do
+  VM_OPTIONS+=("$vmid" "${vmname:-VM-$vmid}")
+done < <(qm list 2>/dev/null | awk 'NR>1')
+stop_spinner
+
+if [[ ${#VM_OPTIONS[@]} -eq 0 ]]; then
+  dialog --backtitle "$BACKTITLE" \
+    --title "$(translate 'No VMs Found')" \
+    --msgbox "\n$(translate 'No VMs available in the system.')" \
+    $UI_MSG_H $UI_MSG_W
   exit 1
 fi
 
-IMAGES=$(ls -A "$IMAGES_DIR" | grep -E "\.(img|qcow2|vmdk|raw)$")
-if [ -z "$IMAGES" ]; then
-  dialog --title "$(translate 'No Disk Images Found')" \
-         --msgbox "$(translate 'No compatible disk images found in:')\n\n$IMAGES_DIR\n\n$(translate 'Supported formats: .img, .qcow2, .vmdk, .raw')" 15 60
-  exit 1
-fi
+VMID=$(dialog --backtitle "$BACKTITLE" \
+  --title "$(translate 'Select VM')" \
+  --menu "$(translate 'Select the VM where you want to import the disk image:')" \
+  $UI_MENU_H $UI_MENU_W $UI_MENU_LIST_H \
+  "${VM_OPTIONS[@]}" \
+  2>&1 >/dev/tty)
+[[ -z "$VMID" ]] && exit 0
 
 
-# 1. Select VM
-msg_info "$(translate 'Getting VM list')"
-VM_LIST=$(qm list | awk 'NR>1 {print $1" "$2}')
-if [ -z "$VM_LIST" ]; then
-    msg_error "$(translate 'No VMs available in the system')"
-    exit 1
-fi
-msg_ok "$(translate 'VM list obtained')"
-
-VMID=$(whiptail --title "$(translate 'Select VM')" --menu "$(translate 'Select the VM where you want to import the disk image:')" 15 60 8 $VM_LIST 3>&1 1>&2 2>&3)
-
-if [ -z "$VMID" ]; then
-   
-    exit 1
-fi
-
-
-
-# 2. Select storage volume
-msg_info "$(translate 'Getting storage volumes')"
-STORAGE_LIST=$(pvesm status -content images | awk 'NR>1 {print $1}')
-if [ -z "$STORAGE_LIST" ]; then
-    msg_error "$(translate 'No storage volumes available')"
-    exit 1
-fi
-msg_ok "$(translate 'Storage volumes obtained')"
-
-
+# ── Step 2: Select storage ────────────────────────────────
 STORAGE_OPTIONS=()
-while read -r storage; do
-    STORAGE_OPTIONS+=("$storage" "")
-done <<< "$STORAGE_LIST"
+while read -r storage type _rest; do
+  STORAGE_OPTIONS+=("$storage" "$type")
+done < <(pvesm status -content images 2>/dev/null | awk 'NR>1')
+stop_spinner
 
-STORAGE=$(whiptail --title "$(translate 'Select Storage')" --menu "$(translate 'Select the storage volume for disk import:')" 15 60 8 "${STORAGE_OPTIONS[@]}" 3>&1 1>&2 2>&3)
+if [[ ${#STORAGE_OPTIONS[@]} -eq 0 ]]; then
+  dialog --backtitle "$BACKTITLE" \
+    --title "$(translate 'No Storage Found')" \
+    --msgbox "\n$(translate 'No storage volumes available for disk images.')" \
+    $UI_MSG_H $UI_MSG_W
+  exit 1
+fi
 
-if [ -z "$STORAGE" ]; then
-    
-    exit 1
+if [[ ${#STORAGE_OPTIONS[@]} -eq 2 ]]; then
+  # Only one storage available — auto-select it
+  STORAGE="${STORAGE_OPTIONS[0]}"
+else
+  STORAGE=$(dialog --backtitle "$BACKTITLE" \
+    --title "$(translate 'Select Storage')" \
+    --menu "$(translate 'Select the storage volume for disk import:')" \
+    $UI_MENU_H $UI_MENU_W $UI_MENU_LIST_H \
+    "${STORAGE_OPTIONS[@]}" \
+    2>&1 >/dev/tty)
+  [[ -z "$STORAGE" ]] && exit 0
 fi
 
 
+# ── Step 3: Select image source directory ────────────────
+ISO_DIR="/var/lib/vz/template/iso"
 
-# 3. Select disk images
-msg_info "$(translate 'Scanning disk images')"
-if [ -z "$IMAGES" ]; then
-    msg_warn "$(translate 'No compatible disk images found in') $IMAGES_DIR"
-    exit 0
+DIR_CHOICE=$(dialog --backtitle "$BACKTITLE" \
+  --title "$(translate 'Image Source Directory')" \
+  --menu "$(translate 'Select the directory containing disk images:')" \
+  $UI_SHORT_MENU_H $UI_MENU_W $UI_SHORT_MENU_LIST_H \
+  "$ISO_DIR" "$(translate 'Default ISO directory')" \
+  "custom"   "$(translate 'Custom path...')" \
+  2>&1 >/dev/tty)
+[[ -z "$DIR_CHOICE" ]] && exit 0
+
+if [[ "$DIR_CHOICE" == "custom" ]]; then
+  IMAGES_DIR=$(dialog --backtitle "$BACKTITLE" \
+    --title "$(translate 'Custom Directory')" \
+    --inputbox "\n$(translate 'Enter the full path to the directory containing disk images:')\n$(translate 'Supported formats: .img, .qcow2, .vmdk, .raw')" \
+    10 $UI_RESULT_W "" \
+    2>&1 >/dev/tty)
+  [[ -z "$IMAGES_DIR" ]] && exit 0
+else
+  IMAGES_DIR="$ISO_DIR"
 fi
-msg_ok "$(translate 'Disk images found')"
 
+if [[ ! -d "$IMAGES_DIR" ]]; then
+  dialog --backtitle "$BACKTITLE" \
+    --title "$(translate 'Directory Not Found')" \
+    --msgbox "\n$(translate 'The specified directory does not exist:')\n\n$IMAGES_DIR" \
+    $UI_MSG_H $UI_MSG_W
+  exit 1
+fi
+
+IMAGES=$(find "$IMAGES_DIR" -maxdepth 1 -type f \
+  \( -name "*.img" -o -name "*.qcow2" -o -name "*.vmdk" -o -name "*.raw" \) \
+  -printf '%f\n' 2>/dev/null | sort)
+
+if [[ -z "$IMAGES" ]]; then
+  dialog --backtitle "$BACKTITLE" \
+    --title "$(translate 'No Disk Images Found')" \
+    --msgbox "\n$(translate 'No compatible disk images found in:')\n\n$IMAGES_DIR\n\n$(translate 'Supported formats: .img, .qcow2, .vmdk, .raw')" \
+    $UI_RESULT_H $UI_RESULT_W
+  exit 1
+fi
+
+
+# ── Step 4: Select images ─────────────────────────────────
 IMAGE_OPTIONS=()
-while read -r img; do
-    IMAGE_OPTIONS+=("$img" "" "OFF")
+while IFS= read -r img; do
+  IMAGE_OPTIONS+=("$img" "" "OFF")
 done <<< "$IMAGES"
 
-SELECTED_IMAGES=$(whiptail --title "$(translate 'Select Disk Images')" --checklist "$(translate 'Select the disk images to import:')" 20 60 10 "${IMAGE_OPTIONS[@]}" 3>&1 1>&2 2>&3)
+SELECTED_IMAGES_STR=$(dialog --backtitle "$BACKTITLE" \
+  --title "$(translate 'Select Disk Images')" \
+  --checklist "$(translate 'Select one or more disk images to import:')" \
+  $UI_MENU_H $UI_MENU_W $UI_MENU_LIST_H \
+  "${IMAGE_OPTIONS[@]}" \
+  2>&1 >/dev/tty)
+[[ -z "$SELECTED_IMAGES_STR" ]] && exit 0
 
-if [ -z "$SELECTED_IMAGES" ]; then
-   
-    exit 1
+eval "declare -a SELECTED_ARRAY=($SELECTED_IMAGES_STR)"
+
+
+# ── Step 5: Per-image options ─────────────────────────────
+declare -a IMG_NAMES=()
+declare -a IMG_INTERFACES=()
+declare -a IMG_SSD_OPTIONS=()
+declare -a IMG_BOOTABLE=()
+
+for IMAGE in "${SELECTED_ARRAY[@]}"; do
+  IMAGE="${IMAGE//\"/}"
+
+  INTERFACE=$(dialog --backtitle "$BACKTITLE" \
+    --title "$(translate 'Interface Type') — $IMAGE" \
+    --default-item "scsi" \
+    --menu "$(translate 'Select the interface type for:') $IMAGE" \
+    $UI_SHORT_MENU_H $UI_SHORT_MENU_W $UI_SHORT_MENU_LIST_H \
+    "scsi"   "SCSI $(translate '(recommended)')" \
+    "virtio" "VirtIO" \
+    "sata"   "SATA" \
+    "ide"    "IDE" \
+    2>&1 >/dev/tty)
+  [[ -z "$INTERFACE" ]] && continue
+
+  SSD_OPTION=""
+  if [[ "$INTERFACE" != "virtio" ]]; then
+    if dialog --backtitle "$BACKTITLE" \
+              --title "$(translate 'SSD Emulation') — $IMAGE" \
+              --yesno "\n$(translate 'Enable SSD emulation for this disk?')" \
+              $UI_YESNO_H $UI_YESNO_W; then
+      SSD_OPTION=",ssd=1"
+    fi
+  fi
+
+  BOOTABLE="no"
+  if dialog --backtitle "$BACKTITLE" \
+            --title "$(translate 'Boot Disk') — $IMAGE" \
+            --yesno "\n$(translate 'Set this disk as the primary boot disk?')" \
+            $UI_YESNO_H $UI_YESNO_W; then
+    BOOTABLE="yes"
+  fi
+
+  IMG_NAMES+=("$IMAGE")
+  IMG_INTERFACES+=("$INTERFACE")
+  IMG_SSD_OPTIONS+=("$SSD_OPTION")
+  IMG_BOOTABLE+=("$BOOTABLE")
+done
+
+if [[ ${#IMG_NAMES[@]} -eq 0 ]]; then
+  exit 0
 fi
 
 
+# ==========================================================
+# PHASE 2 — EXECUTION
+# show_proxmenux_logo appears here exactly once.
+# No dialogs from this point on.
+# ==========================================================
 
-# 4. Import each selected image
-for IMAGE in $SELECTED_IMAGES; do
+show_proxmenux_logo
+msg_title "$(translate 'Import Disk Image to VM')"
 
+VM_NAME=$(qm config "$VMID" 2>/dev/null | awk '/^name:/ {print $2}')
+msg_ok "$(translate 'VM:') ${VM_NAME:-VM-$VMID} (${VMID})"
+msg_ok "$(translate 'Storage:') $STORAGE"
+msg_ok "$(translate 'Image directory:') $IMAGES_DIR"
+msg_ok "$(translate 'Images to import:') ${#IMG_NAMES[@]}"
+echo ""
 
-    IMAGE=$(echo "$IMAGE" | tr -d '"')
+PROCESSED=0
+FAILED=0
 
+for i in "${!IMG_NAMES[@]}"; do
+  IMAGE="${IMG_NAMES[$i]}"
+  INTERFACE="${IMG_INTERFACES[$i]}"
+  SSD_OPTION="${IMG_SSD_OPTIONS[$i]}"
+  BOOTABLE="${IMG_BOOTABLE[$i]}"
+  FULL_PATH="$IMAGES_DIR/$IMAGE"
 
-    INTERFACE=$(whiptail --title "$(translate 'Interface Type')" --menu "$(translate 'Select the interface type for the image:') $IMAGE" 15 40 4 \
-    "sata" "SATA" \
-    "scsi" "SCSI" \
-    "virtio" "VirtIO" \
-    "ide" "IDE" 3>&1 1>&2 2>&3)
+  if [[ ! -f "$FULL_PATH" ]]; then
+    msg_error "$(translate 'Image file not found:') $FULL_PATH"
+    FAILED=$((FAILED + 1))
+    continue
+  fi
 
-    if [ -z "$INTERFACE" ]; then
-        msg_error "$(translate 'No interface type selected for') $IMAGE"
-        continue
+  # Snapshot of unused entries before import for reliable detection
+  BEFORE_UNUSED=$(qm config "$VMID" 2>/dev/null | grep -E '^unused[0-9]+:' || true)
+
+  TEMP_STATUS_FILE=$(mktemp)
+  TEMP_DISK_FILE=$(mktemp)
+
+  msg_info "$(translate 'Importing') $IMAGE..."
+
+  (
+    qm importdisk "$VMID" "$FULL_PATH" "$STORAGE" 2>&1
+    echo $? > "$TEMP_STATUS_FILE"
+  ) | while IFS= read -r line; do
+    if [[ "$line" =~ [0-9]+\.[0-9]+% ]]; then
+      echo -ne "\r${TAB}${BL}$(translate 'Importing') ${IMAGE}${CL} ${BASH_REMATCH[0]}   "
+    fi
+    if echo "$line" | grep -qiF "successfully imported disk"; then
+      echo "$line" | sed -n "s/.*successfully imported disk as '\\([^']*\\)'.*/\\1/p" > "$TEMP_DISK_FILE"
+    fi
+  done
+  echo -ne "\n"
+
+  IMPORT_STATUS=$(cat "$TEMP_STATUS_FILE" 2>/dev/null)
+  rm -f "$TEMP_STATUS_FILE"
+  [[ -z "$IMPORT_STATUS" ]] && IMPORT_STATUS=1
+
+  if [[ "$IMPORT_STATUS" -ne 0 ]]; then
+    msg_error "$(translate 'Failed to import') $IMAGE"
+    rm -f "$TEMP_DISK_FILE"
+    FAILED=$((FAILED + 1))
+    continue
+  fi
+
+  msg_ok "$(translate 'Image imported:') $IMAGE"
+
+  # Primary: parse disk name from qm importdisk output
+  IMPORTED_DISK=$(cat "$TEMP_DISK_FILE" 2>/dev/null | xargs)
+  rm -f "$TEMP_DISK_FILE"
+
+  # Fallback: compare unused entries before/after import
+  if [[ -z "$IMPORTED_DISK" ]]; then
+    AFTER_UNUSED=$(qm config "$VMID" 2>/dev/null | grep -E '^unused[0-9]+:' || true)
+    NEW_LINE=$(comm -13 \
+      <(echo "$BEFORE_UNUSED" | sort) \
+      <(echo "$AFTER_UNUSED" | sort) | head -1)
+    if [[ -n "$NEW_LINE" ]]; then
+      IMPORTED_DISK=$(echo "$NEW_LINE" | cut -d':' -f2- | xargs)
+    fi
+  fi
+
+  if [[ -z "$IMPORTED_DISK" ]]; then
+    msg_error "$(translate 'Could not identify the imported disk in VM config')"
+    FAILED=$((FAILED + 1))
+    continue
+  fi
+
+  # Find the unusedN key that holds this disk (needed to clean it up after assignment)
+  IMPORTED_ID=$(qm config "$VMID" 2>/dev/null | grep -F "$IMPORTED_DISK" | cut -d':' -f1 | head -1)
+
+  # Find next available slot for the chosen interface
+  LAST_SLOT=$(qm config "$VMID" 2>/dev/null | grep -oE "^${INTERFACE}[0-9]+" | grep -oE '[0-9]+' | sort -n | tail -1)
+  if [[ -z "$LAST_SLOT" ]]; then
+    NEXT_SLOT=0
+  else
+    NEXT_SLOT=$((LAST_SLOT + 1))
+  fi
+
+  msg_info "$(translate 'Configuring disk as') ${INTERFACE}${NEXT_SLOT}..."
+  if qm set "$VMID" "--${INTERFACE}${NEXT_SLOT}" "${IMPORTED_DISK}${SSD_OPTION}" >/dev/null 2>&1; then
+    msg_ok "$(translate 'Disk configured as') ${INTERFACE}${NEXT_SLOT}${SSD_OPTION:+ (SSD)}"
+
+    # Remove the unusedN entry now that the disk is properly assigned
+    if [[ -n "$IMPORTED_ID" ]]; then
+      qm set "$VMID" -delete "$IMPORTED_ID" >/dev/null 2>&1
     fi
 
-    FULL_PATH="$IMAGES_DIR/$IMAGE"
-
-
-    msg_info "$(translate 'Importing image:')"
-
-
-    TEMP_DISK_FILE=$(mktemp)
-
-
-    qm importdisk "$VMID" "$FULL_PATH" "$STORAGE" 2>&1 | while read -r line; do
-        if [[ "$line" =~ transferred ]]; then
-
-            PERCENT=$(echo "$line" | grep -oP "\d+\.\d+(?=%)")
- 
-            echo -ne "\r${TAB}${BL}-$(translate 'Importing image:') $IMAGE-${CL} ${PERCENT}%"
-        elif [[ "$line" =~ successfully\ imported\ disk ]]; then
-
-            echo "$line" | grep -oP "(?<=successfully imported disk ').*(?=')" > "$TEMP_DISK_FILE"
-        fi
-    done
-    echo -ne "\n" 
-
-    IMPORT_STATUS=${PIPESTATUS[0]} 
-
-    if [ $IMPORT_STATUS -eq 0 ]; then
-        msg_ok "$(translate 'Image imported successfully')"
-
-
-        IMPORTED_DISK=$(cat "$TEMP_DISK_FILE")
-        rm -f "$TEMP_DISK_FILE" 
-
-   
-        if [ -z "$IMPORTED_DISK" ]; then
-   
-            STORAGE_TYPE=$(pvesm status -storage "$STORAGE" | awk 'NR>1 {print $2}')
-
-            if [[ "$STORAGE_TYPE" == "btrfs" || "$STORAGE_TYPE" == "dir" || "$STORAGE_TYPE" == "nfs" ]]; then
-   
-                UNUSED_LINE=$(qm config "$VMID" | grep -E '^unused[0-9]+:')
-                IMPORTED_ID=$(echo "$UNUSED_LINE" | cut -d: -f1)
-                IMPORTED_DISK=$(echo "$UNUSED_LINE" | cut -d: -f2- | xargs)
-            else
-   
-                IMPORTED_DISK=$(qm config "$VMID" | grep -E 'unused[0-9]+' | tail -1 | cut -d: -f2- | xargs)
-                IMPORTED_ID=$(qm config "$VMID" | grep -E 'unused[0-9]+' | tail -1 | cut -d: -f1)
-            fi
-        fi
-
-        if [ -n "$IMPORTED_DISK" ]; then
-       
-            EXISTING_DISKS=$(qm config "$VMID" | grep -oP "${INTERFACE}\d+" | sort -n)
-            if [ -z "$EXISTING_DISKS" ]; then
-                NEXT_SLOT=0
-            else
-                LAST_SLOT=$(echo "$EXISTING_DISKS" | tail -n1 | sed "s/${INTERFACE}//")
-                NEXT_SLOT=$((LAST_SLOT + 1))
-            fi
-
-   
-            if [ "$INTERFACE" != "virtio" ]; then
-                if (whiptail --title "$(translate 'SSD Emulation')" --yesno "$(translate 'Do you want to use SSD emulation for this disk?')" 10 60); then
-                    SSD_OPTION=",ssd=1"
-                else
-                    SSD_OPTION=""
-                fi
-            else
-                SSD_OPTION=""
-            fi
-
-            msg_info "$(translate 'Configuring disk')"
-
- 
-            if qm set "$VMID" --${INTERFACE}${NEXT_SLOT} "$IMPORTED_DISK${SSD_OPTION}" &>/dev/null; then
-                msg_ok "$(translate 'Image') $IMAGE $(translate 'configured as') ${INTERFACE}${NEXT_SLOT}"
-
-   
-                if [[ -n "$IMPORTED_ID" ]]; then
-                    qm set "$VMID" -delete "$IMPORTED_ID" >/dev/null 2>&1
-                fi
-
-  
-                if (whiptail --title "$(translate 'Make Bootable')" --yesno "$(translate 'Do you want to make this disk bootable?')" 10 60); then
-                    msg_info "$(translate 'Configuring disk as bootable')"
-
-                    if qm set "$VMID" --boot c --bootdisk ${INTERFACE}${NEXT_SLOT} &>/dev/null; then
-                        msg_ok "$(translate 'Disk configured as bootable')"
-                    else
-                        msg_error "$(translate 'Could not configure the disk as bootable')"
-                    fi
-                fi
-            else
-                msg_error "$(translate 'Could not configure disk') ${INTERFACE}${NEXT_SLOT} $(translate 'for VM') $VMID"
-                echo "DEBUG: Tried to configure: --${INTERFACE}${NEXT_SLOT} \"$IMPORTED_DISK${SSD_OPTION}\""
-                echo "DEBUG: VM config after import:"
-                qm config "$VMID" | grep -E "(unused|${INTERFACE})"
-            fi
-        else
-            msg_error "$(translate 'Could not find the imported disk')"
-            echo "DEBUG: VM config after import:"
-            qm config "$VMID"
-        fi
-    else
-        msg_error "$(translate 'Could not import') $IMAGE"
+    if [[ "$BOOTABLE" == "yes" ]]; then
+      msg_info "$(translate 'Setting boot order...')"
+      if qm set "$VMID" --boot "order=${INTERFACE}${NEXT_SLOT}" >/dev/null 2>&1; then
+        msg_ok "$(translate 'Boot order set to') ${INTERFACE}${NEXT_SLOT}"
+      else
+        msg_error "$(translate 'Could not set boot order for') ${INTERFACE}${NEXT_SLOT}"
+      fi
     fi
+
+    PROCESSED=$((PROCESSED + 1))
+  else
+    msg_error "$(translate 'Could not assign disk') ${INTERFACE}${NEXT_SLOT} $(translate 'to VM') $VMID"
+    FAILED=$((FAILED + 1))
+  fi
 done
 
+echo ""
+if [[ $FAILED -eq 0 ]]; then
+  msg_ok "$(translate 'All images imported and configured successfully')"
+elif [[ $PROCESSED -gt 0 ]]; then
+  msg_warn "$(translate 'Completed with errors —') $(translate 'imported:') $PROCESSED, $(translate 'failed:') $FAILED"
+else
+  msg_error "$(translate 'All imports failed')"
+fi
 
-
-msg_ok "$(translate 'All selected images have been processed')"
-msg_success "$(translate "Press Enter to return to menu...")"
+msg_success "$(translate 'Press Enter to return to menu...')"
 read -r

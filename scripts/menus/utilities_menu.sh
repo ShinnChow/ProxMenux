@@ -26,12 +26,14 @@ initialize_cache
 
     while true; do
         OPTION=$(dialog --clear --backtitle "ProxMenux" --title "$(translate "Utilities Menu")" \
-                        --menu "$(translate "Select an option:")" 20 70 8 \
+                        --menu "\n$(translate "Select an option:")" 20 70 11 \
                         "1" "$(translate "UUp Dump ISO creator Custom")" \
                         "2" "$(translate "System Utilities Installer")" \
                         "3" "$(translate "Proxmox System Update")" \
                         "4" "$(translate "Upgrade PVE 8 to PVE 9")" \
-                        "5" "$(translate "Return to Main Menu")" \
+                        "5" "$(translate "Export VM to OVA or OVF")" \
+                        "6" "$(translate "Import VM from OVA or OVF")" \
+                        "7" "$(translate "Return to Main Menu")" \
                         2>&1 >/dev/tty)
 
         case $OPTION in
@@ -76,7 +78,19 @@ initialize_cache
                     return
                 fi
                 ;;    
-            5) exec bash "$LOCAL_SCRIPTS/menus/main_menu.sh" ;;
+            5)
+                bash "$LOCAL_SCRIPTS/utilities/export_vm_ova_ovf.sh"
+                if [ $? -ne 0 ]; then
+                    return
+                fi
+                ;;
+            6)
+                bash "$LOCAL_SCRIPTS/utilities/import_vm_ova_ovf.sh"
+                if [ $? -ne 0 ]; then
+                    return
+                fi
+                ;;
+            7) exec bash "$LOCAL_SCRIPTS/menus/main_menu.sh" ;;
             *) exec bash "$LOCAL_SCRIPTS/menus/main_menu.sh" ;;
         esac
     done

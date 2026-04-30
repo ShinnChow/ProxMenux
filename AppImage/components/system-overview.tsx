@@ -7,9 +7,17 @@ import { Badge } from "./ui/badge"
 import { Cpu, MemoryStick, Thermometer, Server, Zap, AlertCircle, HardDrive, Network } from "lucide-react"
 import { NodeMetricsCharts } from "./node-metrics-charts"
 import { NetworkTrafficChart } from "./network-traffic-chart"
+import { TemperatureDetailModal } from "./temperature-detail-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { fetchApi } from "../lib/api-config"
 import { formatNetworkTraffic, getNetworkUnit } from "../lib/format-network"
+import { formatStorage } from "../lib/utils"
+import { Area, AreaChart, ResponsiveContainer } from "recharts"
+
+interface TempDataPoint {
+  timestamp: number
+  value: number
+}
 
 interface SystemData {
   cpu_usage: number
@@ -17,6 +25,7 @@ interface SystemData {
   memory_total: number
   memory_used: number
   temperature: number
+  temperature_sparkline?: TempDataPoint[]
   uptime: string
   load_average: number[]
   hostname: string
@@ -102,9 +111,9 @@ const fetchSystemData = async (retries = 3, delayMs = 500): Promise<SystemData |
     try {
       const data = await fetchApi<SystemData>("/api/system")
       return data
-    } catch (error) {
+    } catch {
       if (attempt === retries - 1) {
-        console.error("[v0] Failed to fetch system data after retries:", error)
+        // Silent fail - API not available (expected in preview environment)
         return null
       }
       // Wait before retry
@@ -118,8 +127,8 @@ const fetchVMData = async (): Promise<VMData[]> => {
   try {
     const data = await fetchApi<any>("/api/vms")
     return Array.isArray(data) ? data : data.vms || []
-  } catch (error) {
-    console.error("[v0] Failed to fetch VM data:", error)
+  } catch {
+    // Silent fail - API not available
     return []
   }
 }
@@ -128,8 +137,7 @@ const fetchStorageData = async (): Promise<StorageData | null> => {
   try {
     const data = await fetchApi<StorageData>("/api/storage/summary")
     return data
-  } catch (error) {
-    console.log("[v0] Storage API not available (this is normal if not configured)")
+  } catch {
     return null
   }
 }
@@ -138,18 +146,16 @@ const fetchNetworkData = async (): Promise<NetworkData | null> => {
   try {
     const data = await fetchApi<NetworkData>("/api/network/summary")
     return data
-  } catch (error) {
-    console.log("[v0] Network API not available (this is normal if not configured)")
+  } catch {
     return null
   }
 }
 
-const fetchProxmoxStorageData = async (): Promise<ProxmoxStorageData | null> => {
+const fetchProxmoxStorageData = async (): Promise<ProxmoxStorage[] | null> => {
   try {
-    const data = await fetchApi<ProxmoxStorageData>("/api/proxmox-storage")
+    const data = await fetchApi<ProxmoxStorage[]>("/api/proxmox-storage")
     return data
-  } catch (error) {
-    console.log("[v0] Proxmox storage API not available")
+  } catch {
     return null
   }
 }
@@ -177,6 +183,7 @@ export function SystemOverview() {
   const [networkTimeframe, setNetworkTimeframe] = useState("day")
   const [networkTotals, setNetworkTotals] = useState<{ received: number; sent: number }>({ received: 0, sent: 0 })
   const [networkUnit, setNetworkUnit] = useState<"Bytes" | "Bits">("Bytes") // Added networkUnit state
+  const [tempModalOpen, setTempModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -215,7 +222,7 @@ export function SystemOverview() {
     const systemInterval = setInterval(async () => {
       const data = await fetchSystemData()
       if (data) setSystemData(data)
-    }, 9000)
+    }, 5000)
 
     const vmInterval = setInterval(async () => {
       const data = await fetchVMData()
@@ -252,19 +259,13 @@ export function SystemOverview() {
 
   if (!hasAttemptedLoad || loadingStates.system) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="bg-card border-border animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 bg-muted rounded w-1/2 mb-4"></div>
-                <div className="h-8 bg-muted rounded w-3/4 mb-2"></div>
-                <div className="h-2 bg-muted rounded w-full mb-2"></div>
-                <div className="h-3 bg-muted rounded w-2/3"></div>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="relative">
+          <div className="h-12 w-12 rounded-full border-2 border-muted"></div>
+          <div className="absolute inset-0 h-12 w-12 rounded-full border-2 border-transparent border-t-primary animate-spin"></div>
         </div>
+        <div className="text-sm font-medium text-foreground">Loading system overview...</div>
+        <p className="text-xs text-muted-foreground">Fetching system status and metrics</p>
       </div>
     )
   }
@@ -457,26 +458,59 @@ export function SystemOverview() {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border">
+        <Card 
+          className={`bg-card border-border ${systemData.temperature > 0 ? "cursor-pointer hover:bg-white/5 transition-colors" : ""}`}
+          onClick={() => systemData.temperature > 0 && setTempModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Temperature</CardTitle>
             <Thermometer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl lg:text-2xl font-bold text-foreground">
-              {systemData.temperature === 0 ? "N/A" : `${systemData.temperature}°C`}
-            </div>
-            <div className="flex items-center mt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xl lg:text-2xl font-bold text-foreground">
+                {systemData.temperature === 0 ? "N/A" : `${Math.round(systemData.temperature * 10) / 10}°C`}
+              </span>
               <Badge variant="outline" className={tempStatus.color}>
                 {tempStatus.status}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {systemData.temperature === 0 ? "No sensor available" : "Live temperature reading"}
-            </p>
+            {systemData.temperature > 0 && systemData.temperature_sparkline && systemData.temperature_sparkline.length > 1 ? (
+              <div className="mt-2 h-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={systemData.temperature_sparkline} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="tempSparkGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={systemData.temperature >= 75 ? "#ef4444" : systemData.temperature >= 60 ? "#f59e0b" : "#22c55e"} stopOpacity={0.3} />
+                        <stop offset="100%" stopColor={systemData.temperature >= 75 ? "#ef4444" : systemData.temperature >= 60 ? "#f59e0b" : "#22c55e"} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke={systemData.temperature >= 75 ? "#ef4444" : systemData.temperature >= 60 ? "#f59e0b" : "#22c55e"}
+                      strokeWidth={1.5}
+                      fill="url(#tempSparkGradient)"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-2">
+                {systemData.temperature === 0 ? "No sensor available" : "Collecting data..."}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      <TemperatureDetailModal 
+        open={tempModalOpen} 
+        onOpenChange={setTempModalOpen}
+        liveTemperature={systemData.temperature}
+      />
 
       <NodeMetricsCharts />
 
@@ -508,7 +542,7 @@ export function SystemOverview() {
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-foreground">Total Node Capacity:</span>
                         <span className="text-lg font-bold text-foreground">
-                          {formatNetworkTraffic(totalCapacity, "Bytes")}
+                          {formatStorage(totalCapacity)}
                         </span>
                       </div>
                       <Progress
@@ -520,13 +554,13 @@ export function SystemOverview() {
                           <span className="text-xs text-muted-foreground">
                             Used:{" "}
                             <span className="font-semibold text-foreground">
-                              {formatNetworkTraffic(totalUsed, "Bytes")}
+                              {formatStorage(totalUsed)}
                             </span>
                           </span>
                           <span className="text-xs text-muted-foreground">
                             Free:{" "}
                             <span className="font-semibold text-green-500">
-                              {formatNetworkTraffic(totalAvailable, "Bytes")}
+                              {formatStorage(totalAvailable)}
                             </span>
                           </span>
                         </div>
@@ -555,20 +589,20 @@ export function SystemOverview() {
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-muted-foreground">Used:</span>
                       <span className="text-sm font-semibold text-foreground">
-                        {formatNetworkTraffic(vmLxcStorageUsed, "Bytes")}
+                        {formatStorage(vmLxcStorageUsed)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-muted-foreground">Available:</span>
                       <span className="text-sm font-semibold text-green-500">
-                        {formatNetworkTraffic(vmLxcStorageAvailable, "Bytes")}
+                        {formatStorage(vmLxcStorageAvailable)}
                       </span>
                     </div>
                     <Progress value={vmLxcStoragePercent} className="mt-2 [&>div]:bg-blue-500" />
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-xs text-muted-foreground">
-                        {formatNetworkTraffic(vmLxcStorageUsed, "Bytes")} /{" "}
-                        {formatNetworkTraffic(vmLxcStorageTotal, "Bytes")}
+                        {formatStorage(vmLxcStorageUsed)} /{" "}
+                        {formatStorage(vmLxcStorageTotal)}
                       </span>
                       <span className="text-xs text-muted-foreground">{vmLxcStoragePercent.toFixed(1)}%</span>
                     </div>
@@ -591,20 +625,20 @@ export function SystemOverview() {
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-muted-foreground">Used:</span>
                       <span className="text-sm font-semibold text-foreground">
-                        {formatNetworkTraffic(localStorage.used, "Bytes")}
+                        {formatStorage(localStorage.used)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-muted-foreground">Available:</span>
                       <span className="text-sm font-semibold text-green-500">
-                        {formatNetworkTraffic(localStorage.available, "Bytes")}
+                        {formatStorage(localStorage.available)}
                       </span>
                     </div>
                     <Progress value={localStorage.percent} className="mt-2 [&>div]:bg-purple-500" />
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-xs text-muted-foreground">
-                        {formatNetworkTraffic(localStorage.used, "Bytes")} /{" "}
-                        {formatNetworkTraffic(localStorage.total, "Bytes")}
+                        {formatStorage(localStorage.used)} /{" "}
+                        {formatStorage(localStorage.total)}
                       </span>
                       <span className="text-xs text-muted-foreground">{localStorage.percent.toFixed(1)}%</span>
                     </div>

@@ -414,7 +414,7 @@ mount_nfs_share() {
         # Add to fstab if permanent
         if [[ "$PERMANENT_MOUNT" == "true" ]]; then
             pct exec "$CTID" -- sed -i "\|$MOUNT_POINT|d" /etc/fstab
-            FSTAB_ENTRY="$NFS_PATH $MOUNT_POINT nfs $MOUNT_OPTIONS 0 0"
+            FSTAB_ENTRY="$NFS_PATH $MOUNT_POINT nfs ${MOUNT_OPTIONS},_netdev,x-systemd.automount,noauto 0 0"
             pct exec "$CTID" -- bash -c "echo '$FSTAB_ENTRY' >> /etc/fstab"
             msg_ok "$(translate "Added to /etc/fstab for permanent mounting.")"
         fi

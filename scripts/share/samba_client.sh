@@ -643,7 +643,7 @@ configure_mount_options() {
         1)
             MOUNT_OPTIONS="rw,file_mode=0664,dir_mode=0775,iocharset=utf8"
             ;;
-        1)
+        2)
             MOUNT_OPTIONS="ro,file_mode=0444,dir_mode=0555,iocharset=utf8"
             ;;
         3)
@@ -792,7 +792,7 @@ mount_samba_share() {
             pct exec "$CTID" -- sed -i "\|$MOUNT_POINT|d" /etc/fstab
             
 
-            FSTAB_ENTRY="$UNC_PATH $MOUNT_POINT cifs $FULL_OPTIONS 0 0"
+            FSTAB_ENTRY="$UNC_PATH $MOUNT_POINT cifs ${FULL_OPTIONS},_netdev,x-systemd.automount,noauto 0 0"
             pct exec "$CTID" -- bash -c "echo '$FSTAB_ENTRY' >> /etc/fstab"
             msg_ok "$(translate "Added to /etc/fstab for permanent mounting.")"
         fi

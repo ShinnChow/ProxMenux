@@ -7,10 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { Progress } from "./ui/progress"
 import { Button } from "./ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog"
-import { Server, Play, Square, Cpu, MemoryStick, HardDrive, Network, Power, RotateCcw, StopCircle, Container, ChevronDown, ChevronUp } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog"
+import { Server, Play, Square, Cpu, MemoryStick, HardDrive, Network, Power, RotateCcw, StopCircle, Container, ChevronDown, ChevronUp, Terminal, Archive, Plus, Loader2, Clock, Database, Shield, Bell, FileText, Settings2, Activity } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Checkbox } from "./ui/checkbox"
+import { Textarea } from "./ui/textarea"
+import { Label } from "./ui/label"
 import useSWR from "swr"
 import { MetricsView } from "./metrics-dialog"
+import { LxcTerminalModal } from "./lxc-terminal-modal"
 import { formatStorage } from "../lib/utils"
 import { formatNetworkTraffic, getNetworkUnit } from "../lib/format-network"
 import { fetchApi } from "../lib/api-config"
@@ -120,6 +125,29 @@ interface VMDetails extends VMData {
   }
 }
 
+interface BackupStorage {
+  storage: string
+  type: string
+  content: string
+  total: number
+  used: number
+  avail: number
+  total_human?: string
+  used_human?: string
+  avail_human?: string
+}
+
+interface VMBackup {
+  volid: string
+  storage: string
+  type: string
+  size: number
+  size_human: string
+  timestamp: number
+  date: string
+  notes?: string
+}
+
 const fetcher = async (url: string) => {
   return fetchApi(url)
 }
@@ -196,6 +224,28 @@ const getUsageColor = (percent: number): string => {
   return "text-foreground"
 }
 
+// Generate consistent color for storage names
+const storageColors = [
+  { bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/30" },
+  { bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/30" },
+  { bg: "bg-purple-500/20", text: "text-purple-400", border: "border-purple-500/30" },
+  { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/30" },
+  { bg: "bg-pink-500/20", text: "text-pink-400", border: "border-pink-500/30" },
+  { bg: "bg-cyan-500/20", text: "text-cyan-400", border: "border-cyan-500/30" },
+  { bg: "bg-rose-500/20", text: "text-rose-400", border: "border-rose-500/30" },
+  { bg: "bg-indigo-500/20", text: "text-indigo-400", border: "border-indigo-500/30" },
+]
+
+const getStorageColor = (storageName: string) => {
+  // Generate a consistent hash from storage name
+  let hash = 0
+  for (let i = 0; i < storageName.length; i++) {
+    hash = storageName.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const index = Math.abs(hash) % storageColors.length
+  return storageColors[index]
+}
+
 const getIconColor = (percent: number): string => {
   if (percent >= 95) return "text-red-500"
   if (percent >= 86) return "text-orange-500"
@@ -245,10 +295,10 @@ export function VirtualMachines() {
     isLoading,
     mutate,
   } = useSWR<VMData[]>("/api/vms", fetcher, {
-    refreshInterval: 23000,
-    revalidateOnFocus: false,
+    refreshInterval: 2500,
+    revalidateOnFocus: true,
     revalidateOnReconnect: true,
-    dedupingInterval: 10000,
+    dedupingInterval: 1000,
     errorRetryCount: 2,
   })
 
@@ -256,6 +306,9 @@ export function VirtualMachines() {
   const [vmDetails, setVMDetails] = useState<VMDetails | null>(null)
   const [controlLoading, setControlLoading] = useState(false)
   const [detailsLoading, setDetailsLoading] = useState(false)
+  const [terminalOpen, setTerminalOpen] = useState(false)
+  const [terminalVmid, setTerminalVmid] = useState<number | null>(null)
+  const [terminalVmName, setTerminalVmName] = useState<string>("")
   const [vmConfigs, setVmConfigs] = useState<Record<number, string>>({})
   const [currentView, setCurrentView] = useState<"main" | "metrics">("main")
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false)
@@ -267,6 +320,40 @@ export function VirtualMachines() {
   const [ipsLoaded, setIpsLoaded] = useState(false)
   const [loadingIPs, setLoadingIPs] = useState(false)
   const [networkUnit, setNetworkUnit] = useState<"Bytes" | "Bits">("Bytes")
+  
+  // Backup states
+  const [vmBackups, setVmBackups] = useState<VMBackup[]>([])
+  const [backupStorages, setBackupStorages] = useState<BackupStorage[]>([])
+  const [selectedBackupStorage, setSelectedBackupStorage] = useState<string>("")
+  const [loadingBackups, setLoadingBackups] = useState(false)
+  const [creatingBackup, setCreatingBackup] = useState(false)
+  
+  // Backup modal states
+  const [showBackupModal, setShowBackupModal] = useState(false)
+  const [backupMode, setBackupMode] = useState<string>("snapshot")
+  const [backupProtected, setBackupProtected] = useState(false)
+  const [backupNotification, setBackupNotification] = useState<string>("auto")
+  const [backupNotes, setBackupNotes] = useState<string>("{{guestname}}")
+  const [backupPbsChangeMode, setBackupPbsChangeMode] = useState<string>("default")
+  
+  // Tab state for modal
+  const [activeModalTab, setActiveModalTab] = useState<"status" | "backups">("status")
+  
+  // Detect standalone mode (webapp vs browser)
+  const [isStandalone, setIsStandalone] = useState(false)
+  
+  useEffect(() => {
+    const checkStandalone = () => {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                        (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+      setIsStandalone(standalone)
+    }
+    checkStandalone()
+    
+    const mediaQuery = window.matchMedia('(display-mode: standalone)')
+    mediaQuery.addEventListener('change', checkStandalone)
+    return () => mediaQuery.removeEventListener('change', checkStandalone)
+  }, [])
 
   useEffect(() => {
     const fetchLXCIPs = async () => {
@@ -336,6 +423,16 @@ export function VirtualMachines() {
     }
   }, [])
 
+  // Keep the open modal's VM in sync with the /api/vms poll so CPU/RAM/I-O values
+  // don't stay frozen at click-time. Single data source (/cluster/resources) shared
+  // with the list — no source mismatch, no flicker.
+  useEffect(() => {
+    if (!selectedVM || !vmData) return
+    const updated = vmData.find((v) => v.vmid === selectedVM.vmid)
+    if (!updated || updated === selectedVM) return
+    setSelectedVM(updated)
+  }, [vmData])
+
   const handleVMClick = async (vm: VMData) => {
     setSelectedVM(vm)
     setCurrentView("main")
@@ -344,6 +441,11 @@ export function VirtualMachines() {
     setIsEditingNotes(false)
     setEditedNotes("")
     setDetailsLoading(true)
+    
+    // Load backups immediately (independent of config)
+    fetchBackupStorages()
+    fetchVmBackups(vm.vmid)
+    
     try {
       const details = await fetchApi(`/api/vms/${vm.vmid}`)
       setVMDetails(details)
@@ -360,6 +462,77 @@ export function VirtualMachines() {
 
   const handleBackToMain = () => {
     setCurrentView("main")
+  }
+
+  // Backup functions
+  const fetchBackupStorages = async () => {
+    try {
+      const response = await fetchApi("/api/backup-storages")
+      if (response.storages) {
+        setBackupStorages(response.storages)
+        if (response.storages.length > 0 && !selectedBackupStorage) {
+          setSelectedBackupStorage(response.storages[0].storage)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching backup storages:", error)
+    }
+  }
+
+  const fetchVmBackups = async (vmid: number) => {
+    setLoadingBackups(true)
+    try {
+      const response = await fetchApi(`/api/vms/${vmid}/backups`)
+      if (response.backups) {
+        setVmBackups(response.backups)
+      }
+    } catch (error) {
+      console.error("Error fetching VM backups:", error)
+      setVmBackups([])
+    } finally {
+      setLoadingBackups(false)
+    }
+  }
+
+  const openBackupModal = () => {
+    // Reset modal to defaults
+    setBackupMode("snapshot")
+    setBackupProtected(false)
+    setBackupNotification("auto")
+    setBackupNotes("{{guestname}}")
+    setBackupPbsChangeMode("default")
+    // Auto-select first storage if none selected
+    if (!selectedBackupStorage && backupStorages.length > 0) {
+      setSelectedBackupStorage(backupStorages[0].storage)
+    }
+    setShowBackupModal(true)
+  }
+
+  const handleCreateBackup = async () => {
+    if (!selectedVM || !selectedBackupStorage) return
+    
+    setCreatingBackup(true)
+    setShowBackupModal(false)
+    
+    try {
+      await fetchApi(`/api/vms/${selectedVM.vmid}/backup`, {
+        method: "POST",
+        body: JSON.stringify({ 
+          storage: selectedBackupStorage,
+          mode: backupMode,
+          compress: "zstd",
+          protected: backupProtected,
+          notification: backupNotification,
+          notes: backupNotes,
+          pbs_change_detection: backupPbsChangeMode
+        }),
+      })
+      setTimeout(() => fetchVmBackups(selectedVM.vmid), 2000)
+    } catch (error) {
+      console.error("Error creating backup:", error)
+    } finally {
+      setCreatingBackup(false)
+    }
   }
 
   const handleVMControl = async (vmid: number, action: string) => {
@@ -380,7 +553,14 @@ export function VirtualMachines() {
     }
   }
 
-  const handleDownloadLogs = async (vmid: number, vmName: string) => {
+  // Open terminal for LXC container
+  const openLxcTerminal = (vmid: number, vmName: string) => {
+    setTerminalVmid(vmid)
+    setTerminalVmName(vmName)
+    setTerminalOpen(true)
+  }
+  
+const handleDownloadLogs = async (vmid: number, vmName: string) => {
     try {
       const data = await fetchApi(`/api/vms/${vmid}/logs`)
 
@@ -451,10 +631,19 @@ export function VirtualMachines() {
     }
   }
 
-  const safeVMData = vmData || []
+  // Ensure vmData is always an array (backend may return object on error)
+  const safeVMData = Array.isArray(vmData) ? vmData : []
 
+  // Total allocated RAM for ALL VMs/LXCs (running + stopped)
   const totalAllocatedMemoryGB = useMemo(() => {
     return (safeVMData.reduce((sum, vm) => sum + (vm.maxmem || 0), 0) / 1024 ** 3).toFixed(1)
+  }, [safeVMData])
+
+  // Allocated RAM only for RUNNING VMs/LXCs (this is what actually matters for overcommit)
+  const runningAllocatedMemoryGB = useMemo(() => {
+    return (safeVMData
+      .filter((vm) => vm.status === "running")
+      .reduce((sum, vm) => sum + (vm.maxmem || 0), 0) / 1024 ** 3).toFixed(1)
   }, [safeVMData])
 
   const { data: systemData } = useSWR<{ memory_total: number; memory_used: number; memory_usage: number }>(
@@ -470,7 +659,9 @@ export function VirtualMachines() {
   const usedMemoryGB = systemData?.memory_used ?? null
   const memoryUsagePercent = systemData?.memory_usage ?? null
   const allocatedMemoryGB = Number.parseFloat(totalAllocatedMemoryGB)
-  const isMemoryOvercommit = physicalMemoryGB !== null && allocatedMemoryGB > physicalMemoryGB
+  const runningAllocatedGB = Number.parseFloat(runningAllocatedMemoryGB)
+  // Overcommit warning should be based on RUNNING VMs allocation, not total
+  const isMemoryOvercommit = physicalMemoryGB !== null && runningAllocatedGB > physicalMemoryGB
 
   const getMemoryUsageColor = (percent: number | null) => {
     if (percent === null) return "bg-blue-500"
@@ -490,8 +681,13 @@ export function VirtualMachines() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="text-center py-8 text-muted-foreground">Loading virtual machines...</div>
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="relative">
+          <div className="h-12 w-12 rounded-full border-2 border-muted"></div>
+          <div className="absolute inset-0 h-12 w-12 rounded-full border-2 border-transparent border-t-primary animate-spin"></div>
+        </div>
+        <div className="text-sm font-medium text-foreground">Loading virtual machines...</div>
+        <p className="text-xs text-muted-foreground">Fetching VM and LXC container status</p>
       </div>
     )
   }
@@ -758,13 +954,21 @@ export function VirtualMachines() {
               </div>
             )}
 
-            {/* Allocated RAM (configured) */}
+            {/* Allocated RAM (configured) - Split into Running and Total */}
             <div className="pt-3 border-t border-border">
-              {/* Layout para desktop (sin cambios) */}
+              {/* Layout para desktop */}
               <div className="hidden lg:flex items-center justify-between">
-                <div>
-                  <div className="text-lg font-semibold text-foreground">{totalAllocatedMemoryGB} GB</div>
-                  <div className="text-xs text-muted-foreground">Allocated RAM</div>
+                <div className="flex gap-6">
+                  {/* Running allocation - most important */}
+                  <div>
+                    <div className="text-lg font-semibold text-foreground">{runningAllocatedMemoryGB} GB</div>
+                    <div className="text-xs text-muted-foreground">Running Allocated</div>
+                  </div>
+                  {/* Total allocation */}
+                  <div>
+                    <div className="text-lg font-semibold text-muted-foreground">{totalAllocatedMemoryGB} GB</div>
+                    <div className="text-xs text-muted-foreground">Total Allocated</div>
+                  </div>
                 </div>
                 {physicalMemoryGB !== null && (
                   <div>
@@ -781,10 +985,20 @@ export function VirtualMachines() {
                 )}
               </div>
 
-              {/* Layout para móvil (44.0 GB solo, Allocated RAM en otra línea, badge en tercera línea) */}
-              <div className="lg:hidden space-y-1">
-                <div className="text-lg font-semibold text-foreground">{totalAllocatedMemoryGB} GB</div>
-                <div className="text-xs text-muted-foreground">Allocated RAM</div>
+              {/* Layout para movil */}
+              <div className="lg:hidden space-y-2">
+                <div className="flex gap-4">
+                  {/* Running allocation */}
+                  <div>
+                    <div className="text-lg font-semibold text-foreground">{runningAllocatedMemoryGB} GB</div>
+                    <div className="text-xs text-muted-foreground">Running</div>
+                  </div>
+                  {/* Total allocation */}
+                  <div>
+                    <div className="text-lg font-semibold text-muted-foreground">{totalAllocatedMemoryGB} GB</div>
+                    <div className="text-xs text-muted-foreground">Total</div>
+                  </div>
+                </div>
                 {physicalMemoryGB !== null && (
                   <div>
                     {isMemoryOvercommit ? (
@@ -1042,10 +1256,15 @@ export function VirtualMachines() {
           setShowNotes(false)
           setIsEditingNotes(false)
           setEditedNotes("")
+          setActiveModalTab("status")
         }}
       >
         <DialogContent
-          className="max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col p-0 overflow-hidden"
+          className={`max-w-4xl flex flex-col p-0 overflow-hidden ${
+            isStandalone 
+              ? "h-[95vh] sm:h-[90vh]" 
+              : "h-[85vh] sm:h-[85vh] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-40px)]"
+          }`}
           key={selectedVM?.vmid || "no-vm"}
         >
           {currentView === "main" ? (
@@ -1105,8 +1324,39 @@ export function VirtualMachines() {
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="flex-1 overflow-y-auto px-6 py-4">
-                <div className="space-y-6">
+              {/* Tab Navigation */}
+              <div className="flex border-b border-border px-6 shrink-0">
+                <button
+                  onClick={() => setActiveModalTab("status")}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    activeModalTab === "status"
+                      ? "border-cyan-500 text-cyan-500"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Activity className="h-4 w-4" />
+                  Status
+                </button>
+                <button
+                  onClick={() => setActiveModalTab("backups")}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    activeModalTab === "backups"
+                      ? "border-amber-500 text-amber-500"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Archive className="h-4 w-4" />
+                  Backups
+                  {vmBackups.length > 0 && (
+                    <Badge variant="secondary" className="text-xs h-5 ml-1">{vmBackups.length}</Badge>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+                {/* Status Tab */}
+                {activeModalTab === "status" && (
+                <div className="space-y-4">
                   {selectedVM && (
                     <>
                       <div key={`metrics-${selectedVM.vmid}`}>
@@ -1118,7 +1368,13 @@ export function VirtualMachines() {
                             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                               {/* CPU Usage */}
                               <div>
-                                <div className="text-xs text-muted-foreground mb-2">CPU Usage</div>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                  <Cpu className="h-3.5 w-3.5" />
+                                  <span>CPU Usage</span>
+                                  {vmDetails?.config?.cores && (
+                                    <span className="text-muted-foreground/60">({vmDetails.config.cores} cores)</span>
+                                  )}
+                                </div>
                                 <div className={`text-base font-semibold mb-2 ${getUsageColor(selectedVM.cpu * 100)}`}>
                                   {(selectedVM.cpu * 100).toFixed(1)}%
                                 </div>
@@ -1130,7 +1386,10 @@ export function VirtualMachines() {
 
                               {/* Memory */}
                               <div>
-                                <div className="text-xs text-muted-foreground mb-2">Memory</div>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                  <MemoryStick className="h-3.5 w-3.5" />
+                                  <span>Memory</span>
+                                </div>
                                 <div
                                   className={`text-base font-semibold mb-2 ${getUsageColor((selectedVM.mem / selectedVM.maxmem) * 100)}`}
                                 >
@@ -1145,7 +1404,10 @@ export function VirtualMachines() {
 
                               {/* Disk */}
                               <div>
-                                <div className="text-xs text-muted-foreground mb-2">Disk</div>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                  <HardDrive className="h-3.5 w-3.5" />
+                                  <span>Disk</span>
+                                </div>
                                 <div
                                   className={`text-base font-semibold mb-2 ${getUsageColor((selectedVM.disk / selectedVM.maxdisk) * 100)}`}
                                 >
@@ -1160,7 +1422,10 @@ export function VirtualMachines() {
 
                               {/* Disk I/O */}
                               <div>
-                                <div className="text-xs text-muted-foreground mb-2">Disk I/O</div>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                  <HardDrive className="h-3.5 w-3.5" />
+                                  <span>Disk I/O</span>
+                                </div>
                                 <div className="space-y-1">
                                   <div className="text-sm text-green-500 flex items-center gap-1">
                                     <span>↓</span>
@@ -1175,7 +1440,10 @@ export function VirtualMachines() {
 
                               {/* Network I/O */}
                               <div>
-                                <div className="text-xs text-muted-foreground mb-2">Network I/O</div>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                  <Network className="h-3.5 w-3.5" />
+                                  <span>Network I/O</span>
+                                </div>
                                 <div className="space-y-1">
                                   <div className="text-sm text-green-500 flex items-center gap-1">
                                     <span>↓</span>
@@ -1203,9 +1471,12 @@ export function VirtualMachines() {
                           <Card className="border border-border bg-card/50" key={`config-${selectedVM.vmid}`}>
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                                  Resources
-                                </h3>
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-md bg-blue-500/10">
+                                    <Cpu className="h-4 w-4 text-blue-500" />
+                                  </div>
+                                  <h3 className="text-sm font-semibold text-foreground">Resources</h3>
+                                </div>
                                 <div className="flex gap-2">
                                   <Button
                                     variant="outline"
@@ -1249,19 +1520,28 @@ export function VirtualMachines() {
                               <div className="grid grid-cols-3 lg:grid-cols-4 gap-3 lg:gap-4">
                                 {vmDetails.config.cores && (
                                   <div>
-                                    <div className="text-xs text-muted-foreground mb-1">CPU Cores</div>
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                                      <Cpu className="h-3.5 w-3.5" />
+                                      <span>CPU Cores</span>
+                                    </div>
                                     <div className="font-semibold text-blue-500">{vmDetails.config.cores}</div>
                                   </div>
                                 )}
                                 {vmDetails.config.memory && (
                                   <div>
-                                    <div className="text-xs text-muted-foreground mb-1">Memory</div>
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                                      <MemoryStick className="h-3.5 w-3.5" />
+                                      <span>Memory</span>
+                                    </div>
                                     <div className="font-semibold text-blue-500">{vmDetails.config.memory} MB</div>
                                   </div>
                                 )}
-                                {vmDetails.config.swap && (
+                                {vmDetails.config.swap !== undefined && (
                                   <div>
-                                    <div className="text-xs text-muted-foreground mb-1">Swap</div>
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                                      <RotateCcw className="h-3.5 w-3.5" />
+                                      <span>Swap</span>
+                                    </div>
                                     <div className="font-semibold text-foreground">{vmDetails.config.swap} MB</div>
                                   </div>
                                 )}
@@ -1270,7 +1550,8 @@ export function VirtualMachines() {
                               {/* IP Addresses with proper keys */}
                               {selectedVM?.type === "lxc" && vmDetails?.lxc_ip_info && (
                                 <div className="mt-4 lg:mt-6 pt-4 lg:pt-6 border-t border-border">
-                                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                  <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                    <Network className="h-4 w-4" />
                                     IP Addresses
                                   </h4>
                                   <div className="flex flex-wrap gap-2">
@@ -1373,7 +1654,8 @@ export function VirtualMachines() {
                                 <div className="mt-6 pt-6 border-t border-border space-y-6">
                                   {selectedVM?.type === "lxc" && vmDetails?.hardware_info && (
                                     <div>
-                                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                      <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                        <Container className="h-4 w-4" />
                                         Container Configuration
                                       </h4>
                                       <div className="space-y-4">
@@ -1381,7 +1663,10 @@ export function VirtualMachines() {
                                         {vmDetails.hardware_info.privileged !== null &&
                                           vmDetails.hardware_info.privileged !== undefined && (
                                             <div>
-                                              <div className="text-xs text-muted-foreground mb-2">Privilege Level</div>
+                                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                                <Shield className="h-3.5 w-3.5" />
+                                                <span>Privilege Level</span>
+                                              </div>
                                               <Badge
                                                 variant="outline"
                                                 className={
@@ -1399,7 +1684,10 @@ export function VirtualMachines() {
                                         {vmDetails.hardware_info.gpu_passthrough &&
                                           vmDetails.hardware_info.gpu_passthrough.length > 0 && (
                                             <div>
-                                              <div className="text-xs text-muted-foreground mb-2">GPU Passthrough</div>
+                                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                                <Cpu className="h-3.5 w-3.5" />
+                                                <span>GPU Passthrough</span>
+                                              </div>
                                               <div className="flex flex-wrap gap-2">
                                                 {vmDetails.hardware_info.gpu_passthrough.map((gpu, index) => (
                                                   <Badge
@@ -1422,7 +1710,10 @@ export function VirtualMachines() {
                                         {vmDetails.hardware_info.devices &&
                                           vmDetails.hardware_info.devices.length > 0 && (
                                             <div>
-                                              <div className="text-xs text-muted-foreground mb-2">Hardware Devices</div>
+                                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                                                <Server className="h-3.5 w-3.5" />
+                                                <span>Hardware Devices</span>
+                                              </div>
                                               <div className="flex flex-wrap gap-2">
                                                 {vmDetails.hardware_info.devices.map((device, index) => (
                                                   <Badge
@@ -1442,7 +1733,8 @@ export function VirtualMachines() {
 
                                   {/* Hardware Section */}
                                   <div>
-                                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                      <Settings2 className="h-4 w-4" />
                                       Hardware
                                     </h4>
                                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1543,7 +1835,8 @@ export function VirtualMachines() {
 
                                   {/* Storage Section */}
                                   <div>
-                                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                      <HardDrive className="h-4 w-4" />
                                       Storage
                                     </h4>
                                     <div className="space-y-3">
@@ -1608,7 +1901,8 @@ export function VirtualMachines() {
 
                                   {/* Network Section */}
                                   <div>
-                                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                      <Network className="h-4 w-4" />
                                       Network
                                     </h4>
                                     <div className="space-y-3">
@@ -1657,7 +1951,8 @@ export function VirtualMachines() {
                                   {/* PCI Devices with proper keys */}
                                   {Object.keys(vmDetails.config).some((key) => key.match(/^hostpci\d+$/)) && (
                                     <div>
-                                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                      <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                        <Cpu className="h-4 w-4" />
                                         PCI Passthrough
                                       </h4>
                                       <div className="space-y-3">
@@ -1680,7 +1975,8 @@ export function VirtualMachines() {
                                   {/* USB Devices with proper keys */}
                                   {Object.keys(vmDetails.config).some((key) => key.match(/^usb\d+$/)) && (
                                     <div>
-                                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                      <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                        <Server className="h-4 w-4" />
                                         USB Devices
                                       </h4>
                                       <div className="space-y-3">
@@ -1703,7 +1999,8 @@ export function VirtualMachines() {
                                   {/* Serial Ports with proper keys */}
                                   {Object.keys(vmDetails.config).some((key) => key.match(/^serial\d+$/)) && (
                                     <div>
-                                      <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                      <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                        <Terminal className="h-4 w-4" />
                                         Serial Ports
                                       </h4>
                                       <div className="space-y-3">
@@ -1731,12 +2028,102 @@ export function VirtualMachines() {
                     </>
                   )}
                 </div>
+                )}
+
+                {/* Backups Tab */}
+                {activeModalTab === "backups" && (
+                  <div className="space-y-4">
+                    <Card className="border border-border bg-card/50">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 rounded-md bg-amber-500/10">
+                              <Archive className="h-4 w-4 text-amber-500" />
+                            </div>
+                            <h3 className="text-sm font-semibold text-foreground">Backups</h3>
+                          </div>
+                          <Button 
+                            size="sm"
+                            className="h-7 text-xs bg-amber-600/20 border border-amber-600/50 text-amber-400 hover:bg-amber-600/30 gap-1"
+                            onClick={openBackupModal}
+                            disabled={creatingBackup}
+                          >
+                            {creatingBackup ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Plus className="h-3 w-3" />
+                            )}
+                            <span>Create Backup</span>
+                          </Button>
+                        </div>
+                        
+                        {/* Divider */}
+                        <div className="border-t border-border/50 mb-4" />
+                        
+                        {/* Backup List */}
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs text-muted-foreground">Available backups</span>
+                          <Badge variant="secondary" className="text-xs h-5">{vmBackups.length}</Badge>
+                        </div>
+                        
+                        {loadingBackups ? (
+                          <div className="flex items-center justify-center py-6 text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            <span className="text-sm">Loading backups...</span>
+                          </div>
+                        ) : vmBackups.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                            <Archive className="h-12 w-12 mb-3 opacity-30" />
+                            <span className="text-sm">No backups found</span>
+                            <span className="text-xs mt-1">Create your first backup using the button above</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {vmBackups.map((backup, index) => (
+                              <div 
+                                key={`backup-${backup.volid}-${index}`}
+                                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                                  <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  <span className="text-sm text-foreground">{backup.date}</span>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-xs ml-auto flex-shrink-0 ${getStorageColor(backup.storage).bg} ${getStorageColor(backup.storage).text} ${getStorageColor(backup.storage).border}`}
+                                  >
+                                    {backup.storage}
+                                  </Badge>
+                                </div>
+                                <Badge variant="outline" className="text-xs font-mono ml-2 flex-shrink-0">
+                                  {backup.size_human}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
 
-              <div className="border-t border-border bg-background px-6 py-4 mt-auto">
+              <div className="border-t border-border bg-background px-6 py-4 mt-auto shrink-0">
+                {/* Terminal button for LXC containers - only when running */}
+                {selectedVM?.type === "lxc" && selectedVM?.status === "running" && (
+                  <div className="mb-3">
+                    <Button
+                      className="w-full bg-zinc-600/20 border border-zinc-600/50 text-zinc-300 hover:bg-zinc-600/30"
+                      onClick={() => selectedVM && openLxcTerminal(selectedVM.vmid, selectedVM.name)}
+                    >
+                      <Terminal className="h-4 w-4 mr-2" />
+                      Open Terminal
+                    </Button>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Button
-                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    className="w-full bg-green-600/20 border border-green-600/50 text-green-400 hover:bg-green-600/30"
                     disabled={selectedVM?.status === "running" || controlLoading}
                     onClick={() => selectedVM && handleVMControl(selectedVM.vmid, "start")}
                   >
@@ -1744,7 +2131,7 @@ export function VirtualMachines() {
                     Start
                   </Button>
                   <Button
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="w-full bg-blue-600/20 border border-blue-600/50 text-blue-400 hover:bg-blue-600/30"
                     disabled={selectedVM?.status !== "running" || controlLoading}
                     onClick={() => selectedVM && handleVMControl(selectedVM.vmid, "shutdown")}
                   >
@@ -1752,7 +2139,7 @@ export function VirtualMachines() {
                     Shutdown
                   </Button>
                   <Button
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="w-full bg-blue-600/20 border border-blue-600/50 text-blue-400 hover:bg-blue-600/30"
                     disabled={selectedVM?.status !== "running" || controlLoading}
                     onClick={() => selectedVM && handleVMControl(selectedVM.vmid, "reboot")}
                   >
@@ -1760,7 +2147,7 @@ export function VirtualMachines() {
                     Reboot
                   </Button>
                   <Button
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="w-full bg-red-600/20 border border-red-600/50 text-red-400 hover:bg-red-600/30"
                     disabled={selectedVM?.status !== "running" || controlLoading}
                     onClick={() => selectedVM && handleVMControl(selectedVM.vmid, "stop")}
                   >
@@ -1782,6 +2169,173 @@ export function VirtualMachines() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Backup Configuration Modal */}
+      <Dialog open={showBackupModal} onOpenChange={setShowBackupModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <Archive className="h-5 w-5" />
+              Backup {selectedVM?.type?.toUpperCase()} {selectedVM?.vmid} ({selectedVM?.name})
+            </DialogTitle>
+            <DialogDescription>
+              Configure backup options for this {selectedVM?.type === 'lxc' ? 'container' : 'virtual machine'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            {/* Storage & Mode Row */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm flex items-center gap-1.5">
+                  <Database className="h-3.5 w-3.5" />
+                  Storage
+                </Label>
+                <Select value={selectedBackupStorage} onValueChange={setSelectedBackupStorage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select storage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {backupStorages.map((storage) => (
+                      <SelectItem key={`modal-storage-${storage.storage}`} value={storage.storage}>
+                        {storage.storage} ({storage.avail_human} free)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-sm flex items-center gap-1.5">
+                  <Settings2 className="h-3.5 w-3.5" />
+                  Mode
+                </Label>
+                <Select value={backupMode} onValueChange={setBackupMode}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="snapshot">Snapshot</SelectItem>
+                    <SelectItem value="suspend">Suspend</SelectItem>
+                    <SelectItem value="stop">Stop</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {/* Notification Row */}
+            <div className="space-y-2">
+              <Label className="text-sm flex items-center gap-1.5">
+                <Bell className="h-3.5 w-3.5" />
+                Notification
+              </Label>
+              <Select value={backupNotification} onValueChange={setBackupNotification}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Use global settings</SelectItem>
+                  <SelectItem value="always">Always notify</SelectItem>
+                  <SelectItem value="failure">Notify on failure</SelectItem>
+                  <SelectItem value="never">Never notify</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Protected Checkbox */}
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="backup-protected" 
+                checked={backupProtected}
+                onCheckedChange={(checked) => setBackupProtected(checked === true)}
+              />
+              <Label htmlFor="backup-protected" className="text-sm flex items-center gap-1.5 cursor-pointer">
+                <Shield className="h-3.5 w-3.5" />
+                Protected (prevent accidental deletion)
+              </Label>
+            </div>
+            
+            {/* PBS Change Detection Mode (only for LXC) */}
+            {selectedVM?.type === 'lxc' && (
+              <div className="space-y-2">
+                <Label className="text-sm flex items-center gap-1.5">
+                  <Settings2 className="h-3.5 w-3.5" />
+                  PBS change detection mode
+                  <span className="text-xs text-muted-foreground ml-1">(for PBS storage)</span>
+                </Label>
+                <Select value={backupPbsChangeMode} onValueChange={setBackupPbsChangeMode}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="legacy">Legacy</SelectItem>
+                    <SelectItem value="data">Data</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label className="text-sm flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                Notes
+              </Label>
+              <Textarea 
+                value={backupNotes}
+                onChange={(e) => setBackupNotes(e.target.value)}
+                placeholder="{{guestname}}"
+                className="min-h-[80px] resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                {'Variables: {{cluster}}, {{guestname}}, {{node}}, {{vmid}}'}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 pt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowBackupModal(false)}
+              className="flex-1 bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:bg-zinc-700/50"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateBackup}
+              disabled={creatingBackup || !selectedBackupStorage}
+              className="flex-1 bg-amber-600/20 border border-amber-600/50 text-amber-400 hover:bg-amber-600/30"
+            >
+              {creatingBackup ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Backup
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* LXC Terminal Modal */}
+      {terminalVmid !== null && (
+        <LxcTerminalModal
+          open={terminalOpen}
+          onClose={() => {
+            setTerminalOpen(false)
+            setTerminalVmid(null)
+            setTerminalVmName("")
+          }}
+          vmid={terminalVmid}
+          vmName={terminalVmName}
+        />
+      )}
     </div>
   )
 }

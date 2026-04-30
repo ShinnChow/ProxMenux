@@ -11,6 +11,7 @@ import { VirtualMachines } from "./virtual-machines"
 import Hardware from "./hardware"
 import { SystemLogs } from "./system-logs"
 import { Settings } from "./settings"
+import { Security } from "./security"
 import { OnboardingCarousel } from "./onboarding-carousel"
 import { HealthStatusModal } from "./health-status-modal"
 import { ReleaseNotesModal, useVersionCheck } from "./release-notes-modal"
@@ -31,6 +32,8 @@ import {
   FileText,
   SettingsIcon,
   Terminal,
+  ShieldCheck,
+  Info,
 } from "lucide-react"
 import Image from "next/image"
 import { ThemeToggle } from "./theme-toggle"
@@ -76,10 +79,76 @@ export function ProxmoxDashboard() {
   const [componentKey, setComponentKey] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  const [infoCount, setInfoCount] = useState(0)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
   const [showNavigation, setShowNavigation] = useState(true)
   const [lastScrollY, setLastScrollY] = useState(0)
   const [showHealthModal, setShowHealthModal] = useState(false)
   const { showReleaseNotes, setShowReleaseNotes } = useVersionCheck()
+
+  // Category keys for health info count calculation
+  const HEALTH_CATEGORY_KEYS = [
+    { key: "cpu", category: "temperature" },
+    { key: "memory", category: "memory" },
+    { key: "storage", category: "storage" },
+    { key: "disks", category: "disks" },
+    { key: "network", category: "network" },
+    { key: "vms", category: "vms" },
+    { key: "services", category: "pve_services" },
+    { key: "logs", category: "logs" },
+    { key: "updates", category: "updates" },
+    { key: "security", category: "security" },
+  ]
+
+  // Fetch ProxMenux update status
+  const fetchUpdateStatus = useCallback(async () => {
+    try {
+      const response = await fetchApi("/api/proxmenux/update-status")
+      if (response?.success && response?.update_available) {
+        const { stable, beta } = response.update_available
+        setUpdateAvailable(stable || beta)
+      }
+    } catch (error) {
+      // Silently fail - updateAvailable will remain false
+    }
+  }, [])
+
+  // Fetch health info count independently (for initial load and refresh)
+  const fetchHealthInfoCount = useCallback(async () => {
+    try {
+      const response = await fetchApi("/api/health/full")
+      let calculatedInfoCount = 0
+      
+      if (response && response.health?.details) {
+        // Get categories that have dismissed items (these become INFO)
+        const customCats = new Set((response.custom_suppressions || []).map((cs: { category: string }) => cs.category))
+        const filteredDismissed = (response.dismissed || []).filter((item: { category: string }) => !customCats.has(item.category))
+        const categoriesWithDismissed = new Set<string>()
+        filteredDismissed.forEach((item: { category: string }) => {
+          const catMeta = HEALTH_CATEGORY_KEYS.find(c => c.category === item.category || c.key === item.category)
+          if (catMeta) {
+            categoriesWithDismissed.add(catMeta.key)
+          }
+        })
+        
+        // Count effective INFO categories (original INFO + OK categories with dismissed)
+        HEALTH_CATEGORY_KEYS.forEach(({ key }) => {
+          const cat = response.health.details[key as keyof typeof response.health.details]
+          if (cat) {
+            const originalStatus = cat.status?.toUpperCase()
+            // Count as INFO if: originally INFO OR (originally OK and has dismissed items)
+            if (originalStatus === "INFO" || (originalStatus === "OK" && categoriesWithDismissed.has(key))) {
+              calculatedInfoCount++
+            }
+          }
+        })
+      }
+      
+      setInfoCount(calculatedInfoCount)
+    } catch (error) {
+      // Silently fail - infoCount will remain at 0
+    }
+  }, [])
 
   const fetchSystemData = useCallback(async () => {
     try {
@@ -108,7 +177,7 @@ export function ProxmoxDashboard() {
       })
       setIsServerConnected(true)
     } catch (error) {
-      console.error("[v0] Failed to fetch system data from Flask server:", error)
+      // Expected to fail in v0 preview (no Flask server)
 
       setIsServerConnected(false)
       setSystemStatus((prev) => ({
@@ -123,22 +192,28 @@ export function ProxmoxDashboard() {
   }, [])
 
   useEffect(() => {
-    // Siempre fetch inicial
-    fetchSystemData()
+  // Siempre fetch inicial
+  fetchSystemData()
+  fetchHealthInfoCount()
+  fetchUpdateStatus()
 
     // En overview: cada 30 segundos para actualización frecuente del estado de salud
     // En otras tabs: cada 60 segundos para reducir carga
     let interval: ReturnType<typeof setInterval> | null = null
+    let healthInterval: ReturnType<typeof setInterval> | null = null
     if (activeTab === "overview") {
       interval = setInterval(fetchSystemData, 30000) // 30 segundos
+      healthInterval = setInterval(fetchHealthInfoCount, 30000) // Also refresh info count
     } else {
       interval = setInterval(fetchSystemData, 60000) // 60 segundos
+      healthInterval = setInterval(fetchHealthInfoCount, 60000) // Also refresh info count
     }
 
     return () => {
       if (interval) clearInterval(interval)
+      if (healthInterval) clearInterval(healthInterval)
     }
-  }, [fetchSystemData, activeTab])
+  }, [fetchSystemData, fetchHealthInfoCount, fetchUpdateStatus, activeTab])
 
   useEffect(() => {
     const handleChangeTab = (event: CustomEvent) => {
@@ -153,10 +228,28 @@ export function ProxmoxDashboard() {
       window.removeEventListener("changeTab", handleChangeTab as EventListener)
     }
   }, [])
+  
+  // Auto-refresh terminal on mobile devices
+  // This fixes the issue where terminal doesn't connect properly on mobile/VPN
+  useEffect(() => {
+    if (activeTab === "terminal") {
+      const isMobileDevice = window.innerWidth < 768 || 
+        ('ontouchstart' in window && navigator.maxTouchPoints > 0)
+      
+      if (isMobileDevice) {
+        // Delay to allow initial connection attempt, then refresh to ensure proper connection
+        const timeoutId = setTimeout(() => {
+          setComponentKey(prev => prev + 1)
+        }, 500)
+        
+        return () => clearTimeout(timeoutId)
+      }
+    }
+  }, [activeTab])
 
   useEffect(() => {
     const handleHealthStatusUpdate = (event: CustomEvent) => {
-      const { status } = event.detail
+      const { status, infoCount: newInfoCount } = event.detail
       let healthStatus: "healthy" | "warning" | "critical"
 
       if (status === "CRITICAL") {
@@ -171,6 +264,11 @@ export function ProxmoxDashboard() {
         ...prev,
         status: healthStatus,
       }))
+      
+      // Update info count (INFO categories + dismissed items)
+      if (typeof newInfoCount === "number") {
+        setInfoCount(newInfoCount)
+      }
     }
 
     window.addEventListener("healthStatusUpdated", handleHealthStatusUpdate as EventListener)
@@ -265,8 +363,10 @@ export function ProxmoxDashboard() {
         return "Terminal"
       case "logs":
         return "System Logs"
-      case "settings":
-        return "Settings"
+  case "security":
+  return "Security"
+  case "settings":
+  return "Settings"
       default:
         return "Navigation Menu"
     }
@@ -309,14 +409,13 @@ export function ProxmoxDashboard() {
             <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
               <div className="w-16 h-16 md:w-10 md:h-10 relative flex items-center justify-center bg-primary/10 flex-shrink-0">
                 <Image
-                  src="/images/proxmenux-logo.png"
+                  src={updateAvailable ? "/images/proxmenux_update-logo.png" : "/images/proxmenux-logo.png"}
                   alt="ProxMenux Logo"
                   width={64}
                   height={64}
                   className="object-contain md:w-10 md:h-10"
                   priority
                   onError={(e) => {
-                    console.log("[v0] Logo failed to load, using fallback icon")
                     const target = e.target as HTMLImageElement
                     target.style.display = "none"
                     const fallback = target.parentElement?.querySelector(".fallback-icon")
@@ -346,10 +445,18 @@ export function ProxmoxDashboard() {
                 </div>
               </div>
 
-              <Badge variant="outline" className={statusColor}>
-                {statusIcon}
-                <span className="ml-1 capitalize">{systemStatus.status}</span>
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={statusColor}>
+                  {statusIcon}
+                  <span className="ml-1 capitalize">{systemStatus.status}</span>
+                </Badge>
+                {systemStatus.status === "healthy" && infoCount > 0 && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                    <Info className="h-4 w-4" />
+                    <span className="ml-1">{infoCount} info</span>
+                  </Badge>
+                )}
+              </div>
 
               <div className="text-sm text-muted-foreground whitespace-nowrap">
                 Uptime: {systemStatus.uptime || "N/A"}
@@ -375,11 +482,18 @@ export function ProxmoxDashboard() {
             </div>
 
             {/* Mobile Actions */}
-            <div className="flex lg:hidden items-center gap-2">
-              <Badge variant="outline" className={`${statusColor} text-xs px-2`}>
-                {statusIcon}
-                <span className="ml-1 capitalize hidden sm:inline">{systemStatus.status}</span>
-              </Badge>
+            <div className="flex lg:hidden items-start gap-2 pt-2">
+              <div className="flex flex-col items-end gap-1">
+                <Badge variant="outline" className={`${statusColor} text-xs px-2`}>
+                  {statusIcon}
+                </Badge>
+                {systemStatus.status === "healthy" && infoCount > 0 && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-xs px-2">
+                    <Info className="h-4 w-4" />
+                    <span className="ml-1">{infoCount}</span>
+                  </Badge>
+                )}
+              </div>
 
               <Button
                 variant="ghost"
@@ -389,12 +503,12 @@ export function ProxmoxDashboard() {
                   refreshData()
                 }}
                 disabled={isRefreshing}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 -mt-1"
               >
                 <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
               </Button>
 
-              <div onClick={(e) => e.stopPropagation()}>
+              <div onClick={(e) => e.stopPropagation()} className="-mt-1">
                 <ThemeToggle />
               </div>
             </div>
@@ -409,14 +523,14 @@ export function ProxmoxDashboard() {
 
       <div
         className={`sticky z-40 bg-background
-          top-[120px] md:top-[76px]
-          transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]
+          top-[120px] lg:top-[76px]
+          transition-all duration-700 ease-in-out
           ${showNavigation ? "translate-y-0 opacity-100" : "-translate-y-[120%] opacity-0 pointer-events-none"}
         `}
       >
-        <div className="container mx-auto px-4 md:px-6 pt-4 md:pt-6">
+        <div className="container mx-auto px-4 lg:px-6 pt-4 lg:pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
-            <TabsList className="hidden md:grid w-full grid-cols-8 bg-card border border-border">
+            <TabsList className="hidden lg:grid w-full grid-cols-9 bg-card border border-border">
               <TabsTrigger
                 value="overview"
                 className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:rounded-md"
@@ -460,6 +574,12 @@ export function ProxmoxDashboard() {
                 Terminal
               </TabsTrigger>
               <TabsTrigger
+                value="security"
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:rounded-md"
+              >
+                Security
+              </TabsTrigger>
+              <TabsTrigger
                 value="settings"
                 className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:rounded-md"
               >
@@ -468,7 +588,7 @@ export function ProxmoxDashboard() {
             </TabsList>
 
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <div className="md:hidden">
+              <div className="lg:hidden">
                 <SheetTrigger asChild>
                   <Button
                     variant="outline"
@@ -591,6 +711,21 @@ export function ProxmoxDashboard() {
                   <Button
                     variant="ghost"
                     onClick={() => {
+                      setActiveTab("security")
+                      setMobileMenuOpen(false)
+                    }}
+                    className={`w-full justify-start gap-3 ${
+                      activeTab === "security"
+                        ? "bg-blue-500/10 text-blue-500 border-l-4 border-blue-500 rounded-l-none"
+                        : ""
+                    }`}
+                  >
+                    <ShieldCheck className="h-5 w-5" />
+                    <span>Security</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
                       setActiveTab("settings")
                       setMobileMenuOpen(false)
                     }}
@@ -640,13 +775,17 @@ export function ProxmoxDashboard() {
             <TerminalPanel key={`terminal-${componentKey}`} />
           </TabsContent>
 
+          <TabsContent value="security" className="space-y-4 md:space-y-6 mt-0">
+            <Security key={`security-${componentKey}`} />
+          </TabsContent>
+
           <TabsContent value="settings" className="space-y-4 md:space-y-6 mt-0">
             <Settings />
           </TabsContent>
         </Tabs>
 
         <footer className="mt-8 md:mt-12 pt-4 md:pt-6 border-t border-border text-center text-xs md:text-sm text-muted-foreground">
-          <p className="font-medium mb-2">ProxMenux Monitor v1.0.2</p>
+          <p className="font-medium mb-2">ProxMenux Monitor v1.2.0</p>
           <p>
             <a
               href="https://ko-fi.com/macrimi"

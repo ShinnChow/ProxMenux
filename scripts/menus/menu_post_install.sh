@@ -80,15 +80,15 @@ confirm_automated_script() {
 # ==========================================================
 
 declare -a PROXMENUX_SCRIPTS=(
-    "Customizable post-installation script|ProxMenux|bash \"$LOCAL_SCRIPTS/post_install/customizable_post_install.sh\""
     "Automated post-installation script|ProxMenux|confirm_automated_script"
+    "Customizable post-installation script|ProxMenux|bash \"$LOCAL_SCRIPTS/post_install/customizable_post_install.sh\""
     "Uninstall optimizations|ProxMenux|bash \"$LOCAL_SCRIPTS/post_install/uninstall-tools.sh\""
 )
 
 
 declare -a COMMUNITY_SCRIPTS=(
     "Proxmox VE Post Install|Helper-Scripts|bash -c \"\$(wget -qLO - https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh); msg_success \\\"\$(translate 'Press ENTER to continue...')\\\"; read -r _\""
-    "Xshok-proxmox Post install|fork xshok-proxmox|confirm_and_run \"Xshok\" \"wget https://raw.githubusercontent.com/MacRimi/xshok-proxmox/master/install-post.sh -c -O install-post.sh && bash install-post.sh && rm install-post.sh\""
+    "Proxmox VE Microcode|Helper-Scripts|bash -c \"\$(wget -qLO - https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/microcode.sh); msg_success \\\"\$(translate 'Press ENTER to continue...')\\\"; read -r _\""
 )
 
 # ==========================================================
@@ -137,7 +137,7 @@ show_menu() {
         
 
         menu_items+=("" "")
-        menu_items+=("-" "───────────────────── $(translate "Community Scripts") ──────────────────────")
+        menu_items+=("-" "───────────────────── Community Scripts ──────────────────────")
         menu_items+=("" "")
         
 

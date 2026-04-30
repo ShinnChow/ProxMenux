@@ -303,7 +303,7 @@ show_storage_commands() {
             15) cmd="lvs" ;;
             16) cmd="cat /etc/pve/storage.cfg" ;;
             17) cmd="pvesm status" ;;
-            19)
+            18)
                 echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter storage ID: ')${CL}"
                 read -r store
                 cmd="pvesm list $store"
@@ -591,41 +591,115 @@ show_update_commands() {
 
 
 # ===============================================================
-# 06 GPU Passthrough Commands
+# 06 GPU/TPU Passthrough Commands
 # ===============================================================
 show_gpu_commands() {
     while true; do
         clear
-        echo -e "${YELLOW}$(translate 'GPU Passthrough Commands')${NC}"
-        echo "------------------------------------------------"
-        echo -e " 1) ${GREEN}lspci -nn | grep -i nvidia${NC}       - $(translate 'List NVIDIA PCI devices')"
-        echo -e " 2) ${GREEN}lspci -nn | grep -i vga${NC}          - $(translate 'List all VGA compatible devices')"
-        echo -e " 3) ${GREEN}dmesg | grep -i vfio${NC}             - $(translate 'Check VFIO module messages')"
-        echo -e " 4) ${GREEN}cat /etc/modprobe.d/vfio.conf${NC}    - $(translate 'Review VFIO passthrough configuration')"
-        echo -e " 5) ${GREEN}update-initramfs -u${NC}              - $(translate 'Apply initramfs changes (VFIO)')"
-        echo -e " 6) ${GREEN}cat /etc/default/grub${NC}            - $(translate 'Review GRUB options for IOMMU')"
-        echo -e " 7) ${GREEN}update-grub${NC}                      - $(translate 'Apply GRUB changes')"
+        echo -e "${YELLOW}$(translate 'GPU/TPU Passthrough Commands')${NC}"
+        echo -e "${TAB}${YW}$(translate 'Inspection commands run directly. Template commands [T] require parameter substitution.')${CL}"
+        echo "------------------------------------------------------------"
+        echo -e " 1) ${GREEN}lspci -nn | grep -iE 'VGA|3D|Display'${NC}         - $(translate 'Detect GPUs in host')"
+        echo -e " 2) ${GREEN}lspci -nnk | grep -A3 -Ei 'VGA|3D'${NC}            - $(translate 'Show GPU kernel driver in use')"
+        echo -e " 3) ${GREEN}cat /proc/cmdline${NC}                              - $(translate 'Check kernel params (IOMMU flags)')"
+        echo -e " 4) ${GREEN}dmesg -T | grep -Ei 'DMAR|IOMMU|vfio|pcie'${NC}    - $(translate 'Inspect passthrough/kernel events')"
+        echo -e " 5) ${GREEN}find /sys/kernel/iommu_groups -type l${NC}          - $(translate 'List IOMMU group mapping')"
+        echo -e " 6) ${GREEN}lsmod | grep -E 'vfio|nvidia|amdgpu|apex'${NC}      - $(translate 'Check loaded GPU/TPU modules')"
+        echo -e " 7) ${GREEN}grep -R \"vfio-pci|blacklist\" /etc/modprobe.d${NC}  - $(translate 'Review passthrough config files')"
+        echo -e " 8) ${GREEN}nvidia-smi${NC}                                     - $(translate 'Check NVIDIA driver and devices')"
+        echo -e " 9) ${GREEN}qm config <vmid> | grep 'hostpci|bios'${NC}         - [T] $(translate 'Check VM passthrough settings')"
+        echo -e "10) ${GREEN}pct config <ctid> | grep 'dev|lxc.cgroup2'${NC}     - [T] $(translate 'Check LXC GPU/TPU mapping')"
+        echo -e "11) ${GREEN}ls -l /dev/dri /dev/kfd /dev/nvidia*${NC}           - $(translate 'Inspect host device nodes')"
+        echo -e "12) ${GREEN}qm set <vmid> --hostpci<slot> <BDF>,pcie=1${NC}     - [T] $(translate 'Assign GPU PCI function to VM')"
+        echo -e "13) ${GREEN}qm set <vmid> -delete hostpci<slot>${NC}            - [T] $(translate 'Remove passthrough device from VM')"
+        echo -e "14) ${GREEN}qm set <vmid> -onboot 0${NC}                        - [T] $(translate 'Disable autostart on conflicting VM')"
+        echo -e "15) ${GREEN}sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/ s|...|'${NC}   - [T] $(translate 'Enable IOMMU in GRUB or ZFS boot')"
+        echo -e "16) ${GREEN}update-initramfs -u && proxmox-boot-tool${NC}       - [T] $(translate 'Apply boot/initramfs changes')"
+        echo -e "17) ${GREEN}lsusb | grep Coral ; lspci | grep Unichip${NC}      - $(translate 'Check Coral USB/M.2 detection')"
         echo -e " ${DEF}0) $(translate ' Back to previous menu or Esc + Enter')"
         echo
         echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter a number, or write or paste a command: ') ${CL}"
         read -r user_input
 
-        # Check for Esc key press
         if [[ "$user_input" == $'\x1b' ]]; then
             break
         fi
 
+        mode="exec"
         case "$user_input" in
-            1) cmd="lspci -nn | grep -i nvidia" ;;
-            2) cmd="lspci -nn | grep -i vga" ;;
-            3) cmd="dmesg | grep -i vfio" ;;
-            4) cmd="cat /etc/modprobe.d/vfio.conf" ;;
-            5) cmd="update-initramfs -u" ;;
-            6) cmd="cat /etc/default/grub" ;;
-            7) cmd="update-grub" ;;
+            1) cmd="lspci -nn | grep -iE 'VGA compatible|3D controller|Display controller'" ;;
+            2) cmd="lspci -nnk | grep -A3 -Ei 'VGA compatible|3D controller|Display controller'" ;;
+            3) cmd="cat /proc/cmdline" ;;
+            4) cmd="dmesg -T | grep -Ei 'DMAR|IOMMU|vfio|pcie|AER|reset'" ;;
+            5) cmd="find /sys/kernel/iommu_groups -type l" ;;
+            6) cmd="lsmod | grep -E 'vfio|nvidia|amdgpu|i915|apex|gasket'" ;;
+            7) cmd="grep -R \"vfio-pci\\|blacklist .*nvidia\\|blacklist .*amdgpu\\|blacklist .*radeon\" /etc/modprobe.d /etc/modules /etc/default/grub /etc/kernel/cmdline 2>/dev/null" ;;
+            8) cmd="nvidia-smi" ;;
+            9)
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter VM ID: ')${CL}"
+                read -r vmid
+                cmd="qm config $vmid | grep -E '^(hostpci|cpu:|machine:|bios:|args:|boot:)'"
+                ;;
+            10)
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter CT ID: ')${CL}"
+                read -r ctid
+                cmd="pct config $ctid | grep -E '^(dev[0-9]+:|lxc\\.cgroup2\\.devices\\.allow:|lxc\\.mount\\.entry:|features:)'"
+                ;;
+            11) cmd="ls -l /dev/dri /dev/kfd /dev/nvidia* /dev/apex* 2>/dev/null" ;;
+            12)
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter VM ID: ')${CL}"; read -r vmid
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter hostpci slot (e.g. 0): ')${CL}"; read -r slot
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter PCI BDF (e.g. 0000:01:00.0): ')${CL}"; read -r bdf
+                cmd="qm set $vmid --hostpci${slot} ${bdf},pcie=1"
+                mode="template"
+                ;;
+            13)
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter VM ID: ')${CL}"; read -r vmid
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter hostpci slot (e.g. 0): ')${CL}"; read -r slot
+                cmd="qm set $vmid -delete hostpci${slot}"
+                mode="template"
+                ;;
+            14)
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Enter VM ID: ')${CL}"; read -r vmid
+                cmd="qm set $vmid -onboot 0"
+                mode="template"
+                ;;
+            15)
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'Boot type (grub/zfs): ')${CL}"; read -r boot_type
+                echo -en "${TAB}${BOLD}${YW}${HOLD}$(translate 'CPU vendor (intel/amd): ')${CL}"; read -r cpu_vendor
+                case "$cpu_vendor" in
+                    amd|AMD) iommu_param="amd_iommu=on iommu=pt" ;;
+                    *)       iommu_param="intel_iommu=on iommu=pt" ;;
+                esac
+                case "$boot_type" in
+                    zfs|ZFS) cmd="sed -i 's/\$/ ${iommu_param}/' /etc/kernel/cmdline" ;;
+                    *)       cmd="sed -i '/GRUB_CMDLINE_LINUX_DEFAULT=/ s|\"$| ${iommu_param}\"|' /etc/default/grub" ;;
+                esac
+                mode="template"
+                ;;
+            16)
+                cmd="update-initramfs -u -k all && (proxmox-boot-tool refresh || update-grub)"
+                mode="template"
+                ;;
+            17) cmd="lsusb | grep -Ei '18d1:9302|1a6e:089a' ; lspci | grep -i 'Global Unichip'" ;;
             0) break ;;
-            *) cmd="$user_input" ;;
+            *)
+                if [[ -n "$user_input" ]]; then
+                    cmd="$user_input"
+                else
+                    continue
+                fi
+                ;;
         esac
+
+        if [[ "$mode" == "template" ]]; then
+            echo -e "\n${GREEN}$(translate 'Manual command template (copy/paste):')${NC}\n"
+            echo "$cmd"
+            echo
+            msg_success "$(translate 'Press ENTER to continue...')"
+            read -r tmp
+            continue
+        fi
 
         echo -e "\n${GREEN}> $cmd${NC}\n"
         bash -c "$cmd"
@@ -913,7 +987,7 @@ show_tools_commands() {
 while true; do
     OPTION=$(dialog --stdout \
         --title "$(translate 'Help and Info')" \
-        --menu "\n$(translate 'Select a category of useful commands:')" 20 70 9 \
+        --menu "$(translate 'Select a category of useful commands:')" 20 70 9 \
         1 "$(translate 'Useful System Commands')" \
         2 "$(translate 'VM and CT Management Commands')" \
         3 "$(translate 'Storage and Disks Commands')" \

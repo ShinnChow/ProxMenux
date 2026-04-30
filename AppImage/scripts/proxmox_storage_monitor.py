@@ -8,18 +8,32 @@ Monitors configured Proxmox storages and tracks unavailable storages
 import json
 import subprocess
 import socket
+import time
 from typing import Dict, List, Any, Optional
 
 
 class ProxmoxStorageMonitor:
     """Monitor Proxmox storage configuration and status"""
     
+    # Cache TTL: 177 seconds (~3 min) - offset to avoid sync with other processes
+    _CACHE_TTL = 177
+    
     def __init__(self):
         self.configured_storages: Dict[str, Dict[str, Any]] = {}
+        self._node_name_cache = {'name': None, 'time': 0}
+        self._storage_status_cache = {'data': None, 'time': 0}
+        self._config_cache_time = 0  # Track when config was last loaded
         self._load_configured_storages()
     
     def _get_node_name(self) -> str:
-        """Get current Proxmox node name"""
+        """Get current Proxmox node name (cached)"""
+        current_time = time.time()
+        cache = self._node_name_cache
+        
+        # Return cached result if fresh
+        if cache['name'] and (current_time - cache['time']) < self._CACHE_TTL:
+            return cache['name']
+        
         try:
             result = subprocess.run(
                 ['pvesh', 'get', '/nodes', '--output-format', 'json'],
@@ -32,9 +46,14 @@ class ProxmoxStorageMonitor:
                 hostname = socket.gethostname()
                 for node in nodes:
                     if node.get('node') == hostname:
+                        cache['name'] = hostname
+                        cache['time'] = current_time
                         return hostname
                 if nodes:
-                    return nodes[0].get('node', hostname)
+                    name = nodes[0].get('node', hostname)
+                    cache['name'] = name
+                    cache['time'] = current_time
+                    return name
             return socket.gethostname()
         except Exception:
             return socket.gethostname()
@@ -84,7 +103,7 @@ class ProxmoxStorageMonitor:
     
     def get_storage_status(self) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Get storage status, including unavailable storages
+        Get storage status, including unavailable storages (cached)
         
         Returns:
             {
@@ -92,6 +111,13 @@ class ProxmoxStorageMonitor:
                 'unavailable': [...]
             }
         """
+        current_time = time.time()
+        cache = self._storage_status_cache
+        
+        # Return cached result if fresh
+        if cache['data'] and (current_time - cache['time']) < self._CACHE_TTL:
+            return cache['data']
+        
         try:
             local_node = self._get_node_name()
             
@@ -176,10 +202,16 @@ class ProxmoxStorageMonitor:
                         'node': local_node
                     })
             
-            return {
+            result_data = {
                 'available': available_storages,
                 'unavailable': unavailable_storages
             }
+            
+            # Cache the result
+            cache['data'] = result_data
+            cache['time'] = current_time
+            
+            return result_data
         
         except Exception:
             return {
@@ -192,10 +224,21 @@ class ProxmoxStorageMonitor:
         status = self.get_storage_status()
         return len(status['unavailable'])
     
-    def reload_configuration(self) -> None:
-        """Reload storage configuration from Proxmox"""
+    def reload_configuration(self, force: bool = False) -> None:
+        """Reload storage configuration from Proxmox (cached)
+        
+        Args:
+            force: If True, bypass cache and force reload
+        """
+        current_time = time.time()
+        
+        # Skip reload if cache is still fresh (unless forced)
+        if not force and (current_time - self._config_cache_time) < self._CACHE_TTL:
+            return
+        
         self.configured_storages.clear()
         self._load_configured_storages()
+        self._config_cache_time = current_time
 
 
 # Global instance

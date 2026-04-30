@@ -15,7 +15,16 @@ import {
   AlignJustify,
   Grid2X2,
   GripHorizontal,
+  ChevronDown,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -34,6 +43,7 @@ interface TerminalInstance {
   ws: WebSocket | null
   isConnected: boolean
   fitAddon: any // Added fitAddon to TerminalInstance
+  pingInterval?: ReturnType<typeof setInterval> | null // Heartbeat interval to keep connection alive
 }
 
 function getWebSocketUrl(): string {
@@ -171,6 +181,29 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
     }
   }, [])
 
+  // Handle page visibility change for automatic reconnection when user returns
+  // This is especially important for mobile/tablet devices (iPad) where switching apps
+  // puts the browser tab in background and may close WebSocket connections
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // When page becomes visible again, check all terminal connections
+        terminals.forEach((terminal) => {
+          if (terminal.ws && terminal.ws.readyState !== WebSocket.OPEN && terminal.term) {
+            // Terminal is disconnected, attempt to reconnect
+            reconnectTerminal(terminal.id)
+          }
+        })
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [terminals])
+
   const handleResizeStart = (e: React.MouseEvent | React.TouchEvent) => {
     // Bloquear solo en pantallas muy pequeñas (móviles)
     if (window.innerWidth < 640 && !isTablet) {
@@ -273,6 +306,85 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
     return () => clearTimeout(debounce)
   }, [searchQuery])
 
+  // Function to reconnect a terminal when connection is lost
+  // This is called when page visibility changes (user returns from another app)
+  const reconnectTerminal = async (terminalId: string) => {
+    const terminal = terminals.find(t => t.id === terminalId)
+    if (!terminal || !terminal.term) return
+    
+    // Show reconnecting message
+    terminal.term.writeln('\r\n\x1b[33m[INFO] Reconnecting...\x1b[0m')
+    
+    const wsUrl = websocketUrl || getWebSocketUrl()
+    const ws = new WebSocket(wsUrl)
+    
+    ws.onopen = () => {
+      // Clear any existing ping interval
+      if (terminal.pingInterval) {
+        clearInterval(terminal.pingInterval)
+      }
+      
+      // Start heartbeat ping every 25 seconds to keep connection alive
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }))
+        } else {
+          clearInterval(pingInterval)
+        }
+      }, 25000)
+      
+      setTerminals((prev) =>
+        prev.map((t) => (t.id === terminalId ? { ...t, isConnected: true, ws, pingInterval } : t))
+      )
+      terminal.term.writeln('\r\n\x1b[32m[INFO] Reconnected successfully\x1b[0m')
+      
+      // Sync terminal size
+      if (terminal.fitAddon) {
+        try {
+          terminal.fitAddon.fit()
+          ws.send(JSON.stringify({
+            type: 'resize',
+            cols: terminal.term.cols,
+            rows: terminal.term.rows,
+          }))
+        } catch (err) {
+          console.warn('[Terminal] resize on reconnect failed:', err)
+        }
+      }
+    }
+    
+    ws.onmessage = (event) => {
+      // Filter out pong responses from heartbeat - don't display in terminal
+      if (event.data === '{"type": "pong"}' || event.data === '{"type":"pong"}') {
+        return
+      }
+      terminal.term.write(event.data)
+    }
+    
+    ws.onerror = () => {
+      terminal.term.writeln('\r\n\x1b[31m[ERROR] Reconnection failed\x1b[0m')
+    }
+    
+    ws.onclose = () => {
+      setTerminals((prev) => prev.map((t) => {
+        if (t.id === terminalId) {
+          if (t.pingInterval) {
+            clearInterval(t.pingInterval)
+          }
+          return { ...t, isConnected: false, pingInterval: null }
+        }
+        return t
+      }))
+      terminal.term.writeln('\r\n\x1b[33m[INFO] Connection closed\x1b[0m')
+    }
+    
+    terminal.term.onData((data: string) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data)
+      }
+    })
+  }
+
   const addNewTerminal = () => {
     if (terminals.length >= 4) return
 
@@ -286,6 +398,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
         ws: null,
         isConnected: false,
         fitAddon: null, // Added fitAddon initialization
+        pingInterval: null, // Added pingInterval initialization
       },
     ])
     setActiveTerminalId(newId)
@@ -294,6 +407,10 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
   const closeTerminal = (id: string) => {
     const terminal = terminals.find((t) => t.id === id)
     if (terminal) {
+      // Clear heartbeat interval
+      if (terminal.pingInterval) {
+        clearInterval(terminal.pingInterval)
+      }
       if (terminal.ws) {
         terminal.ws.close()
       }
@@ -314,12 +431,18 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
   }
 
   useEffect(() => {
-    terminals.forEach((terminal) => {
-      const container = containerRefs.current[terminal.id]
-      if (!terminal.term && container) {
-        initializeTerminal(terminal, container)
-      }
-    })
+    // Small delay to ensure DOM refs are available after state update
+    // This fixes the issue where first terminal doesn't connect on mobile/VPN
+    const timer = setTimeout(() => {
+      terminals.forEach((terminal) => {
+        const container = containerRefs.current[terminal.id]
+        if (!terminal.term && container) {
+          initializeTerminal(terminal, container)
+        }
+      })
+    }, 50)
+    
+    return () => clearTimeout(timer)
   }, [terminals, isMobile])
 
   useEffect(() => {
@@ -401,7 +524,22 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
     fitAddon.fit()
 
     const wsUrl = websocketUrl || getWebSocketUrl()
+    
+    // Connection with timeout for VPN/mobile (15 seconds)
+    const connectionTimeout = 15000
+    let connectionTimedOut = false
+    
     const ws = new WebSocket(wsUrl)
+    
+    // Set connection timeout
+    const timeoutId = setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        connectionTimedOut = true
+        ws.close()
+        term.writeln('\x1b[31m[ERROR] Connection timeout. Please check your network and try again.\x1b[0m')
+        term.writeln('\x1b[33m[TIP] If using VPN, ensure the connection is stable.\x1b[0m')
+      }
+    }, connectionTimeout)
 
     const syncSizeWithBackend = () => {
       try {
@@ -423,25 +561,66 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
     }
 
     ws.onopen = () => {
+      // Clear connection timeout - we're connected!
+      clearTimeout(timeoutId)
+      
+      // Start heartbeat ping every 25 seconds to keep connection alive
+      // This prevents disconnection when switching apps on mobile/tablet (iPad)
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }))
+        } else {
+          clearInterval(pingInterval)
+        }
+      }, 25000)
+      
       setTerminals((prev) =>
-        prev.map((t) => (t.id === terminal.id ? { ...t, isConnected: true, term, ws, fitAddon } : t)),
+        prev.map((t) => (t.id === terminal.id ? { ...t, isConnected: true, term, ws, fitAddon, pingInterval } : t)),
       )
       syncSizeWithBackend()
     }
 
     ws.onmessage = (event) => {
+      // Filter out pong responses from heartbeat - don't display in terminal
+      if (event.data === '{"type": "pong"}' || event.data === '{"type":"pong"}') {
+        return
+      }
       term.write(event.data)
     }
 
     ws.onerror = (error) => {
+      clearTimeout(timeoutId)
       console.error("[v0] TerminalPanel: WebSocket error:", error)
-      setTerminals((prev) => prev.map((t) => (t.id === terminal.id ? { ...t, isConnected: false } : t)))
-      term.writeln("\r\n\x1b[31m[ERROR] WebSocket connection error\x1b[0m")
+      setTerminals((prev) => prev.map((t) => {
+        if (t.id === terminal.id) {
+          if (t.pingInterval) {
+            clearInterval(t.pingInterval)
+          }
+          return { ...t, isConnected: false, pingInterval: null }
+        }
+        return t
+      }))
+      // Only show error if not already shown by timeout
+      if (!connectionTimedOut) {
+        term.writeln("\r\n\x1b[31m[ERROR] WebSocket connection error\x1b[0m")
+      }
     }
 
     ws.onclose = () => {
-      setTerminals((prev) => prev.map((t) => (t.id === terminal.id ? { ...t, isConnected: false } : t)))
-      term.writeln("\r\n\x1b[33m[INFO] Connection closed\x1b[0m")
+      clearTimeout(timeoutId)
+      setTerminals((prev) => prev.map((t) => {
+        if (t.id === terminal.id) {
+          if (t.pingInterval) {
+            clearInterval(t.pingInterval)
+          }
+          return { ...t, isConnected: false, pingInterval: null }
+        }
+        return t
+      }))
+      // Only show close message if not already shown by timeout
+      if (!connectionTimedOut) {
+        term.writeln("\r\n\x1b[33m[INFO] Connection closed\x1b[0m")
+      }
     }
 
     term.onData((data) => {
@@ -518,8 +697,10 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
     }
   }
 
-  const handleClose = () => {
+const handleClose = () => {
     terminals.forEach((terminal) => {
+      // Clear heartbeat interval
+      if (terminal.pingInterval) clearInterval(terminal.pingInterval)
       if (terminal.ws) terminal.ws.close()
       if (terminal.term) terminal.term.dispose()
     })
@@ -543,13 +724,13 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
       e.preventDefault()
       e.stopPropagation()
     }
-
+    
     const activeTerminal = terminals.find((t) => t.id === activeTerminalId)
     if (activeTerminal?.ws && activeTerminal.ws.readyState === WebSocket.OPEN) {
       activeTerminal.ws.send(seq)
     }
   }
-
+  
   const getLayoutClass = () => {
     const count = terminals.length
     if (isMobile || count === 1) return "grid grid-cols-1"
@@ -611,7 +792,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
             variant="outline"
             size="sm"
             disabled={terminals.length >= 4}
-            className="h-8 gap-2 bg-green-600 hover:bg-green-700 border-green-500 text-white disabled:opacity-50"
+            className="h-8 gap-2 bg-green-600/20 hover:bg-green-600/30 border-green-600/50 text-green-400 disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New</span>
@@ -621,7 +802,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
             variant="outline"
             size="sm"
             disabled={!activeTerminal?.isConnected}
-            className="h-8 gap-2 bg-blue-600 hover:bg-blue-700 border-blue-500 text-white disabled:opacity-50"
+            className="h-8 gap-2 bg-blue-600/20 hover:bg-blue-600/30 border-blue-600/50 text-blue-400 disabled:opacity-50"
           >
             <Search className="h-4 w-4" />
             <span className="hidden sm:inline">Search</span>
@@ -631,7 +812,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
             variant="outline"
             size="sm"
             disabled={!activeTerminal?.isConnected}
-            className="h-8 gap-2 bg-yellow-600 hover:bg-yellow-700 border-yellow-500 text-white disabled:opacity-50"
+            className="h-8 gap-2 bg-yellow-600/20 hover:bg-yellow-600/30 border-yellow-600/50 text-yellow-400 disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
             <span className="hidden sm:inline">Clear</span>
@@ -640,7 +821,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
             onClick={handleClose}
             variant="outline"
             size="sm"
-            className="h-8 gap-2 bg-red-600 hover:bg-red-700 border-red-500 text-white"
+            className="h-8 gap-2 bg-red-600/20 hover:bg-red-600/30 border-red-600/50 text-red-400"
           >
             <X className="h-4 w-4" />
             <span className="hidden sm:inline">Close</span>
@@ -738,7 +919,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
       )}
 
       {(isMobile || isTablet) && (
-        <div className="flex flex-wrap gap-1.5 justify-center items-center px-1 bg-zinc-900 text-sm rounded-b-md border-t border-zinc-700 py-1.5">
+        <div className="flex gap-1.5 justify-center items-center px-1 bg-zinc-900 text-sm rounded-b-md border-t border-zinc-700 py-1.5">
           <Button
             onPointerDown={(e) => {
               e.preventDefault()
@@ -819,22 +1000,38 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ websocketUrl, onCl
             }}
             variant="outline"
             size="sm"
-            className="h-8 px-3 text-xs"
+            className="h-8 px-2 text-xs bg-blue-600/20 hover:bg-blue-600/30 border-blue-600/50 text-blue-400"
           >
-            ↵
+            ↵ Enter
           </Button>
-          <Button
-            onPointerDown={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              sendSequence("\x03", e)
-            }}
-            variant="outline"
-            size="sm"
-            className="h-8 px-2 text-xs"
-          >
-            CTRL+C
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-xs gap-1 bg-transparent"
+              >
+                Ctrl
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Control Sequences</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => sendSequence("\x03")}>
+                <span className="font-mono text-xs mr-2">Ctrl+C</span>
+                <span className="text-muted-foreground text-xs">Cancel/Interrupt</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => sendSequence("\x18")}>
+                <span className="font-mono text-xs mr-2">Ctrl+X</span>
+                <span className="text-muted-foreground text-xs">Exit (nano)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => sendSequence("\x12")}>
+                <span className="font-mono text-xs mr-2">Ctrl+R</span>
+                <span className="text-muted-foreground text-xs">Search history</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
 

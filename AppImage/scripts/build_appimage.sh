@@ -89,6 +89,41 @@ cp "$SCRIPT_DIR/flask_terminal_routes.py" "$APP_DIR/usr/bin/" 2>/dev/null || ech
 cp "$SCRIPT_DIR/hardware_monitor.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  hardware_monitor.py not found"
 cp "$SCRIPT_DIR/proxmox_storage_monitor.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  proxmox_storage_monitor.py not found"
 cp "$SCRIPT_DIR/flask_script_runner.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  flask_script_runner.py not found"
+cp "$SCRIPT_DIR/security_manager.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  security_manager.py not found"
+cp "$SCRIPT_DIR/flask_security_routes.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  flask_security_routes.py not found"
+cp "$SCRIPT_DIR/notification_manager.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  notification_manager.py not found"
+cp "$SCRIPT_DIR/notification_channels.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  notification_channels.py not found"
+cp "$SCRIPT_DIR/notification_templates.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  notification_templates.py not found"
+cp "$SCRIPT_DIR/notification_events.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  notification_events.py not found"
+cp "$SCRIPT_DIR/proxmox_known_errors.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  proxmox_known_errors.py not found"
+cp "$SCRIPT_DIR/ai_context_enrichment.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  ai_context_enrichment.py not found"
+cp "$SCRIPT_DIR/startup_grace.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  startup_grace.py not found"
+cp "$SCRIPT_DIR/flask_notification_routes.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  flask_notification_routes.py not found"
+cp "$SCRIPT_DIR/oci_manager.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  oci_manager.py not found"
+cp "$SCRIPT_DIR/flask_oci_routes.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  flask_oci_routes.py not found"
+cp "$SCRIPT_DIR/oci/description_templates.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  description_templates.py not found"
+
+# Copy AI providers module for notification enhancement
+echo "📋 Copying AI providers module..."
+if [ -d "$SCRIPT_DIR/ai_providers" ]; then
+    mkdir -p "$APP_DIR/usr/bin/ai_providers"
+    cp "$SCRIPT_DIR/ai_providers/"*.py "$APP_DIR/usr/bin/ai_providers/"
+    echo "✅ AI providers module copied"
+else
+    echo "⚠️  ai_providers directory not found"
+fi
+
+# Copy config files (verified AI models, prompts, etc.)
+echo "📋 Copying config files..."
+CONFIG_DIR="$APPIMAGE_ROOT/config"
+if [ -d "$CONFIG_DIR" ]; then
+    mkdir -p "$APP_DIR/usr/bin/config"
+    cp "$CONFIG_DIR/"*.json "$APP_DIR/usr/bin/config/" 2>/dev/null || true
+    cp "$CONFIG_DIR/"*.txt "$APP_DIR/usr/bin/config/" 2>/dev/null || true
+    echo "✅ Config files copied"
+else
+    echo "⚠️  config directory not found"
+fi
 
 echo "📋 Adding translation support..."
 cat > "$APP_DIR/usr/bin/translate_cli.py" << 'PYEOF'
@@ -293,6 +328,7 @@ pip3 install --target "$APP_DIR/usr/lib/python3/dist-packages" \
     h11==0.9.0 || true
 
 # Phase 2: Install modern Flask/WebSocket dependencies (will upgrade h11 and related packages)
+# Note: cryptography removed due to Python version compatibility issues (PyO3 modules)
 pip3 install --target "$APP_DIR/usr/lib/python3/dist-packages" --upgrade --no-deps \
     flask \
     flask-cors \
@@ -309,6 +345,12 @@ pip3 install --target "$APP_DIR/usr/lib/python3/dist-packages" --upgrade \
     wsproto>=1.2.0 \
     simple-websocket>=0.10.0 \
     flask-sock>=0.6.0
+
+# Phase 3b: Install gevent for SSL+WebSocket support (WSS)
+pip3 install --target "$APP_DIR/usr/lib/python3/dist-packages" --upgrade \
+    gevent>=24.2.1 \
+    gevent-websocket>=0.10.1 \
+    greenlet>=3.0.0
 
 cat > "$APP_DIR/usr/lib/python3/dist-packages/cgi.py" << 'PYEOF'
 from typing import Tuple, Dict

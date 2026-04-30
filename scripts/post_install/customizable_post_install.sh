@@ -60,6 +60,14 @@ fi
 
 load_language
 initialize_cache
+
+# Load shared global functions
+if [[ -f "$LOCAL_SCRIPTS/global/common-functions.sh" ]]; then
+    source "$LOCAL_SCRIPTS/global/common-functions.sh"
+fi
+if [[ -f "$LOCAL_SCRIPTS/global/utils-install-functions.sh" ]]; then
+    source "$LOCAL_SCRIPTS/global/utils-install-functions.sh"
+fi
 # ==========================================================
 
 
@@ -112,8 +120,7 @@ $(translate "Do you want to continue anyway?")" 13 70
 
 enable_kexec() {
     msg_info2 "$(translate "Configuring kexec for quick reboots...")"
-    NECESSARY_REBOOT=1 
-    register_tool "kexec" true
+    NECESSARY_REBOOT=1
 
     # Set default answers for debconf
     echo "kexec-tools kexec-tools/load_kexec boolean false" | debconf-set-selections > /dev/null 2>&1
@@ -242,8 +249,12 @@ Compress=yes
 SystemMaxUse=64M
 RuntimeMaxUse=60M
 # Optimize the logging and speed up tasks
-MaxLevelStore=warning
-MaxLevelSyslog=warning
+# MaxLevelStore=info allows ProxMenux Monitor to display system logs correctly.
+# Using "warning" causes the log viewer to show nearly identical entries across
+# all date ranges (1d/3d/7d) because most activity is info-level.
+# It also prevents Fail2Ban from detecting SSH/Proxmox auth failures via journal.
+MaxLevelStore=info
+MaxLevelSyslog=info
 MaxLevelKMsg=warning
 MaxLevelConsole=notice
 MaxLevelWall=crit
@@ -269,6 +280,7 @@ EOF
     journalctl --rotate > /dev/null 2>&1
 
     msg_success "$(translate "Journald optimization completed")"
+    register_tool "journald" true
 }
 
 
@@ -279,31 +291,6 @@ EOF
 
 
 
-
-
-install_kernel_headers() {
-    msg_info2 "$(translate "Installing kernel headers")"
-    NECESSARY_REBOOT=1 
-
-    # Get the current kernel version
-    local kernel_version=$(uname -r)
-    local headers_package="linux-headers-${kernel_version}"
-
-    # Check if headers are already installed
-    if dpkg -s "$headers_package" >/dev/null 2>&1; then
-        msg_ok "$(translate "Kernel headers are already installed")"
-    else
-        msg_info "$(translate "Installing kernel headers...")"
-        if /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::='--force-confdef' install "$headers_package" > /dev/null 2>&1; then
-        msg_ok "$(translate "Kernel headers installed successfully")"
-        else
-        msg_error "$(translate "Failed to install kernel headers")"
-            return 1
-        fi
-    fi
-
-    msg_success "$(translate "Kernel headers installation process completed")"
-}
 
 
 
@@ -333,6 +320,7 @@ EOF
 
 
     msg_ok "$(translate "Kernel panic configuration updated and applied")"
+    register_tool "kernel_panic" true
     msg_success "$(translate "Kernel panic behavior configuration completed")"
 }
 
@@ -393,7 +381,7 @@ kernel.keys.maxkeys=1000000"
     msg_info "$(translate "Setting systemd ulimits...")"
     for file in /etc/systemd/system.conf /etc/systemd/user.conf; do
         if ! grep -q "^DefaultLimitNOFILE=" "$file"; then
-            echo "DefaultLimitNOFILE=256000" >> "$file"
+            echo "DefaultLimitNOFILE=1048576" >> "$file"
         fi
     done
     msg_ok "$(translate "Systemd ulimits set")"
@@ -409,8 +397,9 @@ kernel.keys.maxkeys=1000000"
 
     # Set ulimit for the shell user
     msg_info "$(translate "Setting ulimit for the shell user...")"
-    if ! grep -q "ulimit -n 256000" /root/.profile; then
-        echo "ulimit -n 256000" >> /root/.profile
+    if ! grep -q "ulimit -n 1048576" /root/.profile; then
+        sed -i '/ulimit -n 256000/d' /root/.profile 2>/dev/null
+        echo "ulimit -n 1048576" >> /root/.profile
     fi
     msg_ok "$(translate "Shell user ulimit set")"
 
@@ -424,11 +413,12 @@ vm.vfs_cache_pressure = 100"
     # Increase Max FS open files
     msg_info "$(translate "Increasing maximum file system open files...")"
     append_or_replace "/etc/sysctl.d/99-fs.conf" "
-fs.nr_open = 12000000
-fs.file-max = 9223372036854775807
+fs.nr_open = 2097152
+fs.file-max = 2097152
 fs.aio-max-nr = 1048576"
 
     msg_ok "$(translate "Max FS open files configuration created successfully")"
+    register_tool "system_limits" true
     msg_success "$(translate "System limits increase completed.")"
 }
 
@@ -436,26 +426,6 @@ fs.aio-max-nr = 1048576"
 
 # ==========================================================
 
-
-
-
-skip_apt_languages_() {
-    msg_info2 "$(translate "Configuring APT to skip downloading additional languages")"
-
-    local config_file="/etc/apt/apt.conf.d/99-disable-translations"
-    local config_content="Acquire::Languages \"none\";"
-
-    msg_info "$(translate "Setting APT language configuration...")"
-
-    if [ -f "$config_file" ] && grep -q "$config_content" "$config_file"; then
-        msg_ok "$(translate "APT language configuration updated")"
-    else
-        echo -e "$config_content\n" > "$config_file"
-        msg_ok "$(translate "APT language configuration updated")"
-    fi
-
-    msg_success "$(translate "APT configured to skip downloading additional languages")"
-}
 
 
 
@@ -501,6 +471,7 @@ skip_apt_languages() {
         msg_ok "$(translate "APT language configuration updated")"
     fi
 
+    register_tool "apt_languages" true
     msg_success "$(translate "APT configured to skip downloading additional languages")"
 }
 
@@ -513,47 +484,6 @@ skip_apt_languages() {
 
 
 
-
-configure_time_sync_() {
-    msg_info2 "$(translate "Configuring system time settings...")"
-
-
-    # Get public IP address
-    this_ip=$(dig +short myip.opendns.com @resolver1.opendns.com)
-    if [ -z "$this_ip" ]; then
-        msg_warn "$(translate "Failed to obtain public IP address")"
-        timezone="UTC"
-    else
-        # Get timezone based on IP
-        timezone=$(curl -s "https://ipapi.co/${this_ip}/timezone")
-        if [ -z "$timezone" ]; then
-            msg_warn "$(translate "Failed to determine timezone from IP address")"
-            timezone="UTC"
-        else
-            msg_ok "$(translate "Found timezone $timezone for IP $this_ip")"
-        fi
-    fi
-
-    # Set the timezone
-    if timedatectl set-timezone "$timezone"; then
-        msg_ok "$(translate "Timezone set to $timezone")"
-    else
-        msg_error "$(translate "Failed to set timezone to $timezone")"
-    fi
-
-    # Configure time synchronization
-    msg_info "$(translate "Enabling automatic time synchronization...")"
-    if timedatectl set-ntp true; then
-        systemctl restart postfix 2>/dev/null || true
-        msg_ok "$(translate "Automatic time synchronization enabled")"
-        register_tool "time_sync" true
-        msg_success "$(translate "Time settings configuration completed")"
-    else
-        msg_error "$(translate "Failed to enable automatic time synchronization")"
-    fi
-    
-
-}
 
 
 
@@ -600,467 +530,26 @@ configure_time_sync() {
 
 
 
-install_system_utils_() {
-    command_exists() {
-        command -v "$1" >/dev/null 2>&1
-    }
-
-ensure_repositories_() {
-    local sources_file="/etc/apt/sources.list"
-    local need_update=false
-
-
-    if [[ ! -f "$sources_file" ]]; then
-        msg_warn "$(translate "sources.list not found, creating default Debian repository...")"
-        cat > "$sources_file" << EOF
-# Default Debian ${OS_CODENAME} repository
-deb http://deb.debian.org/debian ${OS_CODENAME} main contrib non-free non-free-firmware
-EOF
-        need_update=true
-    else
-
-        if ! grep -q "deb.*${OS_CODENAME}.*main" "$sources_file"; then
-            echo "deb http://deb.debian.org/debian ${OS_CODENAME} main contrib non-free non-free-firmware" >> "$sources_file"
-            need_update=true
-        fi
-    fi
-
-
-    if [[ "$need_update" == true ]] || ! apt list --installed >/dev/null 2>&1; then
-        msg_info "$(translate "Updating APT package lists...")"
-        apt-get update -o Acquire::AllowInsecureRepositories=true >/dev/null 2>&1
-    fi
 
-    return 0
-}
 
 
 
 
 
 
-ensure_repositories() {
-  local pve_version need_update=false
-  pve_version=$(pveversion 2>/dev/null | grep -oP 'pve-manager/\K[0-9]+' | head -1)
 
-  if [[ -z "$pve_version" ]]; then
-    msg_error "Unable to detect Proxmox version."
-    return 1
-  fi
 
-  if (( pve_version >= 9 )); then
-    # ===== PVE 9 (Debian 13 - trixie) =====
-    # proxmox.sources (no-subscription) ─ create if missing
-    if [[ ! -f /etc/apt/sources.list.d/proxmox.sources ]]; then
-      cat > /etc/apt/sources.list.d/proxmox.sources <<'EOF'
-Enabled: true
-Types: deb
-URIs: http://download.proxmox.com/debian/pve
-Suites: trixie
-Components: pve-no-subscription
-Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
-EOF
-      need_update=true
-    fi
 
-    # debian.sources ─ create if missing
-    if [[ ! -f /etc/apt/sources.list.d/debian.sources ]]; then
-      cat > /etc/apt/sources.list.d/debian.sources <<'EOF'
-Types: deb
-URIs: http://deb.debian.org/debian/
-Suites: trixie trixie-updates
-Components: main contrib non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: http://security.debian.org/debian-security/
-Suites: trixie-security
-Components: main contrib non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
-      need_update=true
-    fi
-
-  # apt-get update only if needed or lists are empty
-  if [[ "$need_update" == true ]] || [[ ! -d /var/lib/apt/lists || -z "$(ls -A /var/lib/apt/lists 2>/dev/null)" ]]; then
-    msg_info "$(translate "Updating APT package lists...")"
-    apt-get update >/dev/null 2>&1 || apt-get update
-  fi
-
-
-  else
-    # ===== PVE 8 (Debian 12 - bookworm) =====
-    local sources_file="/etc/apt/sources.list"
-
-    # Debian base (create or append minimal lines if missing)
-    if ! grep -qE 'deb .* bookworm .* main' "$sources_file" 2>/dev/null; then
-      {
-        echo "deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware"
-        echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware"
-        echo "deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware"
-      } >> "$sources_file"
-      need_update=true
-    fi
-
-    # Proxmox no-subscription list (classic) if missing
-    if [[ ! -f /etc/apt/sources.list.d/pve-no-subscription.list ]]; then
-      echo "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription" \
-        > /etc/apt/sources.list.d/pve-no-subscription.list
-      need_update=true
-    fi
-  fi
-
-  # apt-get update only if needed or lists are empty
-  if [[ "$need_update" == true ]] || [[ ! -d /var/lib/apt/lists || -z "$(ls -A /var/lib/apt/lists 2>/dev/null)" ]]; then
-    msg_info "$(translate "Updating APT package lists...")"
-    apt-get update >/dev/null 2>&1 || apt-get update
-  fi
-
-  return 0
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    install_single_package() {
-        local package="$1"
-        local command_name="${2:-$package}"
-        local description="$3"
-        
-        msg_info "$(translate "Installing") $package ($description)..."
-        local install_success=false
-        
-        if apt install -y "$package" >/dev/null 2>&1; then
-            install_success=true
-        fi
-            
-        cleanup
-        
-        if [ "$install_success" = true ]; then
-            hash -r 2>/dev/null
-            sleep 1
-            if command_exists "$command_name"; then
-                msg_ok "$package $(translate "installed correctly and available")"
-                return 0
-            else
-                msg_warn "$package $(translate "installed but command not immediately available")"
-                msg_info2 "$(translate "May need to restart terminal")"
-                return 2
-            fi
-        else
-            msg_error "$(translate "Error installing") $package"
-            return 1
-        fi
-    }
-
-    show_utilities_selection() {
-        local utilities=(
-            "axel" "$(translate "Download accelerator")" "OFF"
-            "dos2unix" "$(translate "Convert DOS/Unix text files")" "OFF"
-            "grc" "$(translate "Generic log/command colorizer")" "OFF"
-            "htop" "$(translate "Interactive process viewer")" "OFF"
-            "btop" "$(translate "Modern resource monitor")" "OFF"
-            "iftop" "$(translate "Real-time network usage")" "OFF"
-            "iotop" "$(translate "Monitor disk I/O usage")" "OFF"
-            #"iperf3" "$(translate "Network performance testing")" "OFF"
-            "ipset" "$(translate "Manage IP sets")" "OFF"
-            "iptraf-ng" "$(translate "Network monitoring tool")" "OFF"
-            "mlocate" "$(translate "Locate files quickly")" "OFF"
-            "msr-tools" "$(translate "Access CPU MSRs")" "OFF"
-            "net-tools" "$(translate "Legacy networking tools")" "OFF"
-            "sshpass" "$(translate "Non-interactive SSH login")" "OFF"
-            "tmux" "$(translate "Terminal multiplexer")" "OFF"
-            "unzip" "$(translate "Extract ZIP files")" "OFF"
-            "zip" "$(translate "Create ZIP files")" "OFF"
-            "s-tui" "$(translate "Stress-Terminal UI")" "OFF"
-            "libguestfs-tools" "$(translate "VM disk utilities")" "OFF"
-            "aria2" "$(translate "Multi-source downloader")" "OFF"
-            "cabextract" "$(translate "Extract CAB files")" "OFF"
-            "wimtools" "$(translate "Manage WIM images")" "OFF"
-            "genisoimage" "$(translate "Create ISO images")" "OFF"
-            "chntpw" "$(translate "Edit Windows registry/passwords")" "OFF"
-        )
-        
-        local selected
-        selected=$(dialog --clear --backtitle "ProxMenux - $(translate "System Utilities")" \
-            --title "$(translate "Select utilities to install")" \
-            --checklist "$(translate "Use SPACE to select/deselect, ENTER to confirm")" \
-            20 70 12 "${utilities[@]}" 2>&1 >/dev/tty)
-        
-        echo "$selected"
-    }
-
-    install_selected_utilities() {
-        local selected="$1"
-        
-        if [ -z "$selected" ]; then
-            dialog --clear --backtitle "ProxMenux" \
-                --title "$(translate "No Selection")" \
-                --msgbox "$(translate "No utilities were selected")" 8 40
-            return
-        fi
-        
-        clear
-        show_proxmenux_logo
-        msg_title "$SCRIPT_TITLE"
-        msg_info2 "$(translate "Installing selected utilities")"
-        
-
-        if ! ensure_repositories; then
-            msg_error "$(translate "Failed to configure repositories. Installation aborted.")"
-            return 1
-        fi
-        
-        local failed=0
-        local success=0
-        local warning=0
-        local selected_array
-        IFS=' ' read -ra selected_array <<< "$selected"
-        
-        declare -A package_to_command=(
-            ["mlocate"]="locate"
-            ["msr-tools"]="rdmsr"
-            ["net-tools"]="netstat"
-            ["libguestfs-tools"]="virt-filesystems"
-            ["aria2"]="aria2c"
-            ["wimtools"]="wimlib-imagex"
-        )
-        
-        for util in "${selected_array[@]}"; do
-            util=$(echo "$util" | tr -d '"')
-            local verify_command="${package_to_command[$util]:-$util}"
-            install_single_package "$util" "$verify_command" "$util"
-            local install_result=$?
-            
-            case $install_result in
-                0) success=$((success + 1)) ;;
-                1) failed=$((failed + 1)) ;;
-                2) warning=$((warning + 1)) ;;
-            esac
-            sleep 2
-        done
-        
-        if [ -f ~/.bashrc ]; then
-            source ~/.bashrc >/dev/null 2>&1
-        fi
-        
-        hash -r 2>/dev/null
-        echo
-        msg_info2 "$(translate "Installation summary"):"
-        msg_ok "$(translate "Successful"): $success"
-        if [ $warning -gt 0 ]; then
-            msg_warn "$(translate "Warnings"): $warning"
-        fi
-        if [ $failed -gt 0 ]; then
-            msg_error "$(translate "Failed"): $failed"
-        fi
-        msg_success "$(translate "Common system utilities installation completed")"
-    }
-
-
-    local selected_utilities
-    selected_utilities=$(show_utilities_selection)
-    if [ -n "$selected_utilities" ]; then
-        install_selected_utilities "$selected_utilities"
-    fi
-}
-
-
-
-
-
-
-
-
-
-
-
-install_system_utils() {
-    command_exists() { command -v "$1" >/dev/null 2>&1; }
-
-    ensure_repositories() {
-        local sources_file="/etc/apt/sources.list"
-        local need_update=false
-
-        if [[ ! -f "$sources_file" ]]; then
-            msg_warn "$(translate "sources.list not found, creating default Debian repository...")"
-            cat > "$sources_file" << EOF
-# Default Debian ${OS_CODENAME} repository
-deb http://deb.debian.org/debian ${OS_CODENAME} main contrib non-free non-free-firmware
-EOF
-            need_update=true
-        else
-            if ! grep -q "deb.*${OS_CODENAME}.*main" "$sources_file"; then
-                echo "deb http://deb.debian.org/debian ${OS_CODENAME} main contrib non-free non-free-firmware" >> "$sources_file"
-                need_update=true
-            fi
-        fi
-
-        if [[ "$need_update" == true ]] || ! apt list --installed >/dev/null 2>&1; then
-            msg_info "$(translate "Updating APT package lists...")"
-            apt-get update -o Acquire::AllowInsecureRepositories=true >/dev/null 2>&1
-        fi
-        return 0
-    }
-
-    install_single_package() {
-        local package="$1"
-        local command_name="${2:-$package}"
-        local description="$3"
-
-        msg_info "$(translate "Installing") $package ($description)..."
-        local install_success=false
-
-        DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >/dev/null 2>&1 && install_success=true
-        cleanup
-
-        if [[ "$install_success" == true ]]; then
-            hash -r 2>/dev/null
-            sleep 1
-            if command_exists "$command_name"; then
-                msg_ok "$package $(translate "installed correctly and available")"
-                return 0
-            else
-                msg_warn "$package $(translate "installed but command not immediately available")"
-                msg_info2 "$(translate "May need to restart terminal")"
-                return 2
-            fi
-        else
-            msg_error "$(translate "Error installing") $package"
-            return 1
-        fi
-    }
-
-    show_utilities_selection() {
-        local utilities=(
-            "axel"              "$(translate "Download accelerator")"                     "OFF"
-            "dos2unix"          "$(translate "Convert DOS/Unix text files")"              "OFF"
-            "grc"               "$(translate "Generic log/command colorizer")"            "OFF"
-            "htop"              "$(translate "Interactive process viewer")"               "OFF"
-            "btop"              "$(translate "Modern resource monitor")"                  "OFF"
-            "iftop"             "$(translate "Real-time network usage")"                  "OFF"
-            "iotop"             "$(translate "Monitor disk I/O usage")"                   "OFF"
-            # "iperf3"          "$(translate "Network performance testing")"              "OFF"
-            "intel-gpu-tools"   "$(translate "tools for the Intel graphics driver")"      "OFF"
-            "ipset"             "$(translate "Manage IP sets")"                           "OFF"
-            "iptraf-ng"         "$(translate "Network monitoring tool")"                  "OFF"
-            "s-tui"             "$(translate "Stress-Terminal UI")"                       "OFF"
-            "plocate"           "$(translate "Locate files quickly")"                     "OFF"
-            "msr-tools"         "$(translate "Access CPU MSRs")"                          "OFF"
-            "net-tools"         "$(translate "Legacy networking tools")"                  "OFF"
-            "sshpass"           "$(translate "Non-interactive SSH login")"                "OFF"
-            "tmux"              "$(translate "Terminal multiplexer")"                     "OFF"
-            "unzip"             "$(translate "Extract ZIP files")"                        "OFF"
-            "zip"               "$(translate "Create ZIP files")"                         "OFF"
-            "libguestfs-tools"  "$(translate "VM disk utilities")"                        "OFF"
-            "aria2"             "$(translate "Multi-source downloader")"                  "OFF"
-            "cabextract"        "$(translate "Extract CAB files")"                        "OFF"
-            "wimtools"          "$(translate "Manage WIM images")"                        "OFF"
-            "genisoimage"       "$(translate "Create ISO images")"                        "OFF"
-            "chntpw"            "$(translate "Edit Windows registry/passwords")"          "OFF"
-        )
-
-        local selected
-        selected=$(
-            dialog --clear --backtitle "ProxMenux - $(translate "System Utilities")" \
-                   --title "$(translate "Select utilities to install")" \
-                   --checklist "$(translate "Use SPACE to select/deselect, ENTER to confirm")" \
-                   20 70 12 "${utilities[@]}" 3>&1 1>&2 2>&3
-        )
-        local status=$?
-
-
-        echo "$selected"
-        return "$status"
-    }
-
-    install_selected_utilities() {
-        local selected="$1"
-
-
-        if [[ -z "$selected" ]]; then
-            dialog --clear --backtitle "ProxMenux" \
-                   --title "$(translate "No Selection")" \
-                   --msgbox "$(translate "No utilities were selected")" 8 40
-            return 0
-        fi
-
-
-        show_proxmenux_logo
-        msg_title "$SCRIPT_TITLE"
-        msg_info2 "$(translate "Installing selected utilities")"
-
-        if ! ensure_repositories; then
-            msg_error "$(translate "Failed to configure repositories. Installation aborted.")"
-            return 1
-        fi
-
-        local failed=0 success=0 warning=0
-        local selected_array
-        IFS=' ' read -ra selected_array <<< "$selected"
-
-        declare -A package_to_command=(
-            ["plocate"]="locate"
-            ["msr-tools"]="rdmsr"
-            ["net-tools"]="netstat"
-            ["libguestfs-tools"]="virt-filesystems"
-            ["aria2"]="aria2c"
-            ["wimtools"]="wimlib-imagex"
-        )
-
-        for util in "${selected_array[@]}"; do
-            util="${util%\"}"; util="${util#\"}" 
-            local verify_command="${package_to_command[$util]:-$util}"
-            install_single_package "$util" "$verify_command" "$util"
-            case $? in
-                0) success=$((success+1)) ;;
-                1) failed=$((failed+1)) ;;
-                2) warning=$((warning+1)) ;;
-            esac
-            sleep 1
-        done
-
-        [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1
-        hash -r 2>/dev/null
-
-        echo
-        msg_info2 "$(translate "Installation summary"):"
-        msg_ok "$(translate "Successful"): $success"
-        (( warning > 0 )) && msg_warn "$(translate "Warnings"): $warning"
-        (( failed  > 0 )) && msg_error "$(translate "Failed"): $failed"
-        msg_success "$(translate "Common system utilities installation completed")"
-        return 0
-    }
-
-
-    local selected_utilities
-    selected_utilities=$(show_utilities_selection)
-    local dlg_status=$?
-
-    if [[ $dlg_status -ne 0 ]]; then
-        dialog --clear --backtitle "ProxMenux" \
-               --title "$(translate "Canceled")" \
-               --msgbox "$(translate "Action canceled by user")" 8 40
-
-        show_proxmenux_logo       
-        return 0
-    fi
-
-    install_selected_utilities "$selected_utilities"
-}
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1073,30 +562,8 @@ EOF
 
 
 
-configure_entropy() {
-    msg_info2 "$(translate "Configuring entropy generation to prevent slowdowns...")"
-
-    # Install haveged
-    msg_info "$(translate "Installing haveged...")"
-    /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::='--force-confdef' install haveged > /dev/null 2>&1
-    msg_ok "$(translate "haveged installed successfully")"
-
-    # Configure haveged
-    msg_info "$(translate "Configuring haveged...")"
-    cat <<EOF > /etc/default/haveged
-#   -w sets low entropy watermark (in bits)
-DAEMON_ARGS="-w 1024"
-EOF
-
-    # Reload systemd daemon
-    systemctl daemon-reload > /dev/null 2>&1
-
-    # Enable haveged service
-    systemctl enable haveged > /dev/null 2>&1
-    msg_ok "$(translate "haveged service enabled successfully")"
-
-    msg_success "$(translate "Entropy generation configuration completed")"
-}
+# configure_entropy removed — modern kernels (5.6+) have built-in entropy generation
+# haveged is no longer needed and adds unnecessary overhead
 
 
 
@@ -1107,74 +574,6 @@ EOF
 
 
 
-apply_amd_fixes_() {
-    msg_info2 "$(translate "Detecting AMD CPU and applying fixes if necessary...")"
-    NECESSARY_REBOOT=1
-
-    local cpu_model=$(grep -i -m 1 "model name" /proc/cpuinfo)
-    if echo "$cpu_model" | grep -qi "EPYC"; then
-        msg_info "$(translate "AMD EPYC CPU detected")"
-    elif echo "$cpu_model" | grep -qi "Ryzen"; then
-        msg_info "$(translate "AMD Ryzen CPU detected")"
-    else
-        msg_ok "$(translate "No AMD CPU detected. Skipping AMD fixes.")"
-        return
-    fi
-
-    msg_info "$(translate "Applying AMD-specific fixes...")"
-
-    # Apply kernel fix for random crashing and instability
-    local grub_file="/etc/default/grub"
-    if ! grep -q "idle=nomwait" "$grub_file"; then
-        msg_info "$(translate "Setting kernel parameter: idle=nomwait")"
-        if sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="idle=nomwait /g' "$grub_file"; then
-            msg_ok "$(translate "Kernel parameter set successfully")"
-            if update-grub > /dev/null 2>&1; then
-                msg_ok "$(translate "GRUB configuration updated")"
-            else
-                msg_warn "$(translate "Failed to update GRUB configuration")"
-            fi
-        else
-            msg_warn "$(translate "Failed to set kernel parameter")"
-        fi
-    else
-        msg_info "$(translate "Kernel parameter 'idle=nomwait' already set")"
-    fi
-
-    # Add MSR ignore to fix Windows guest on EPYC/Ryzen host
-    local kvm_conf="/etc/modprobe.d/kvm.conf"
-    msg_info "$(translate "Configuring KVM to ignore MSRs...")"
-    if ! grep -q "options kvm ignore_msrs=Y" "$kvm_conf"; then
-        echo "options kvm ignore_msrs=Y" >> "$kvm_conf"
-        msg_ok "$(translate "KVM ignore_msrs option added")"
-    else
-        msg_info "$(translate "KVM ignore_msrs option already set")"
-    fi
-    if ! grep -q "options kvm report_ignored_msrs=N" "$kvm_conf"; then
-        echo "options kvm report_ignored_msrs=N" >> "$kvm_conf"
-        msg_ok "$(translate "KVM report_ignored_msrs option added")"
-    else
-        msg_info "$(translate "KVM report_ignored_msrs option already set")"
-    fi
-
-    # Install the latest Proxmox VE kernel
-    msg_info "$(translate "Checking for Proxmox VE kernel updates...")"
-    local current_kernel=$(uname -r | cut -d'-' -f1-2)
-    local latest_kernel=$(apt-cache search pve-kernel | grep "^pve-kernel-${current_kernel}" | sort -V | tail -n1 | cut -d' ' -f1)
-    
-    if [ "$latest_kernel" != "pve-kernel-$current_kernel" ]; then
-        msg_info "$(translate "Installing the latest Proxmox VE kernel...")"
-        if /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::='--force-confdef' install "$latest_kernel" > /dev/null 2>&1; then
-            msg_ok "$(translate "Latest Proxmox VE kernel installed successfully")"
-        else
-            msg_warn "$(translate "Failed to install the latest Proxmox VE kernel")"
-        fi
-    else
-        msg_ok "$(translate "The latest Proxmox VE kernel is already installed")"
-    fi
-
-    msg_success "$(translate "AMD CPU fixes applied successfully")"
-}
 
 
 
@@ -1273,6 +672,7 @@ apply_amd_fixes() {
     fi
 
     msg_success "$(translate "AMD CPU fixes applied successfully")"
+    register_tool "amd_fixes" true
 }
 
 
@@ -1301,6 +701,7 @@ force_apt_ipv4() {
         fi
     fi
 
+    register_tool "apt_ipv4" true
     msg_success "$(translate "APT IPv4 configuration completed")"
 }
 
@@ -1333,13 +734,13 @@ net.ipv4.conf.all.accept_redirects = 0
 net.ipv4.conf.all.accept_source_route = 0
 net.ipv4.conf.all.secure_redirects = 0
 net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.all.log_martians = 0
 
 net.ipv4.conf.default.accept_redirects = 0
 net.ipv4.conf.default.accept_source_route = 0
 net.ipv4.conf.default.secure_redirects = 0
 net.ipv4.conf.default.send_redirects = 0
-net.ipv4.conf.default.log_martians = 1
+net.ipv4.conf.default.log_martians = 0
 
 net.ipv4.conf.all.rp_filter = 2
 net.ipv4.conf.default.rp_filter = 2
@@ -1906,268 +1307,12 @@ EOF
 
 
 
-install_fail2ban_() {
-    msg_info2 "$(translate "Installing and configuring Fail2Ban to protect the web interface...")"
-
-
-#    if dpkg -l | grep -qw fail2ban; then
-#        msg_info "$(translate "Removing existing Fail2Ban installation...")"
-#        apt-get remove --purge -y fail2ban >/dev/null 2>&1
-#        rm -rf /etc/fail2ban /var/lib/fail2ban /var/run/fail2ban
-#        msg_ok "$(translate "Fail2Ban removed successfully")"
-#    else
-#        msg_ok "$(translate "Fail2Ban was not installed")"
-#    fi
-
- 
-    msg_info "$(translate "Installing Fail2Ban...")"
-    apt-get update >/dev/null 2>&1 && apt-get install -y fail2ban >/dev/null 2>&1
-    if [[ $? -eq 0 ]]; then
-        msg_ok "$(translate "Fail2Ban installed successfully")"
-    else
-        msg_error "$(translate "Failed to install Fail2Ban")"
-        return 1
-    fi
-
-   
-    mkdir -p /etc/fail2ban/jail.d /etc/fail2ban/filter.d
-
-   
-    msg_info "$(translate "Configuring Proxmox filter...")"
-    cat > /etc/fail2ban/filter.d/proxmox.conf << EOF
-[Definition]
-failregex = pvedaemon\[.*authentication failure; rhost=<HOST> user=.* msg=.*
-ignoreregex =
-EOF
-    msg_ok "$(translate "Proxmox filter configured")"
-
-  
-    msg_info "$(translate "Configuring Proxmox jail...")"
-    cat > /etc/fail2ban/jail.d/proxmox.conf << EOF
-[proxmox]
-enabled = true
-port = https,http,8006,8007
-filter = proxmox
-logpath = /var/log/daemon.log
-maxretry = 3
-bantime = 3600
-findtime = 600
-EOF
-    msg_ok "$(translate "Proxmox jail configured")"
-
-  
-    msg_info "$(translate "Configuring general Fail2Ban settings...")"
-    cat > /etc/fail2ban/jail.local << EOF
-[DEFAULT]
-ignoreip = 127.0.0.1
-bantime = 86400
-maxretry = 2
-findtime = 1800
-
-[ssh-iptables]
-enabled = true
-filter = sshd
-action = iptables[name=SSH, port=ssh, protocol=tcp]
-logpath = /var/log/auth.log
-maxretry = 2
-findtime = 3600
-bantime = 32400
-EOF
-    msg_ok "$(translate "General Fail2Ban settings configured")"
-
-    
-    msg_info "$(translate "Stopping Fail2Ban service...")"
-    systemctl stop fail2ban >/dev/null 2>&1
-    msg_ok "$(translate "Fail2Ban service stopped")"
-
-   
-    msg_info "$(translate "Ensuring authentication logs exist...")"
-    touch /var/log/auth.log /var/log/daemon.log
-    chown root:adm /var/log/auth.log /var/log/daemon.log
-    chmod 640 /var/log/auth.log /var/log/daemon.log
-    msg_ok "$(translate "Authentication logs verified")"
-
-    
-    if [[ ! -f /var/log/auth.log && -f /var/log/secure ]]; then
-        msg_warn "$(translate "Using /var/log/secure instead of /var/log/auth.log")"
-        sed -i 's|logpath = /var/log/auth.log|logpath = /var/log/secure|' /etc/fail2ban/jail.local
-    fi
-
-   
-    msg_info "$(translate "Ensuring Fail2Ban runtime directory exists...")"
-    mkdir -p /var/run/fail2ban
-    chown root:root /var/run/fail2ban
-    chmod 755 /var/run/fail2ban
-    msg_ok "$(translate "Fail2Ban runtime directory verified")"
-
-    
-    msg_info "$(translate "Removing old Fail2Ban database (if exists)...")"
-    rm -f /var/lib/fail2ban/fail2ban.sqlite3
-    msg_ok "$(translate "Fail2Ban database reset")"
-
-  
-    msg_info "$(translate "Reloading systemd and restarting Fail2Ban...")"
-    systemctl daemon-reload
-    systemctl enable fail2ban >/dev/null 2>&1
-    systemctl restart fail2ban >/dev/null 2>&1
-    msg_ok "$(translate "Fail2Ban service restarted")"
-
-    
-    sleep 3
-
-   
-    msg_info "$(translate "Checking Fail2Ban service status...")"
-    if systemctl is-active --quiet fail2ban; then
-        msg_ok "$(translate "Fail2Ban is running correctly")"
-    else
-        msg_error "$(translate "Fail2Ban is NOT running! Checking logs...")"
-        journalctl -u fail2ban --no-pager -n 20
-       
-    fi
-
-
-    msg_info "$(translate "Checking Fail2Ban socket...")"
-    if [ -S /var/run/fail2ban/fail2ban.sock ]; then
-        msg_ok "$(translate "Fail2Ban socket exists!")"
-    else
-        msg_warn "$(translate "Warning: Fail2Ban socket does not exist!")"
-    fi
-
-
-    msg_info "$(translate "Testing fail2ban-client...")"
-    if fail2ban-client ping >/dev/null 2>&1; then
-        msg_ok "$(translate "fail2ban-client successfully communicated with the server")"
-    else
-        msg_error "$(translate "fail2ban-client could not communicate with the server")"
-       
-    fi
-
-
-    msg_info "$(translate "Displaying Fail2Ban status...")"
-    fail2ban-client status >/dev/null 2>&1
-    msg_ok "$(translate "Fail2Ban status displayed")"
-
-    msg_success "$(translate "Fail2Ban installation and configuration completed successfully!")"
-    
-}
 
 
 
 
 
 
-install_fail2ban() {
-    msg_info2 "$(translate "Installing and configuring Fail2Ban to protect Proxmox web interface and SSH...")"
-
-
-    local deb_codename
-    deb_codename=$(grep -oP '^VERSION_CODENAME=\K.*' /etc/os-release 2>/dev/null)
-
-
-    if ! grep -RqsE "debian.*(bookworm|trixie)" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
-        msg_warn "$(translate "Debian repositories missing; creating default source file")"
-        local src="/etc/apt/sources.list.d/debian.sources"
-        cat > "$src" <<EOF
-Types: deb
-URIs: http://deb.debian.org/debian
-Suites: ${deb_codename} ${deb_codename}-updates
-Components: main contrib non-free non-free-firmware
-
-Types: deb
-URIs: http://security.debian.org/debian-security
-Suites: ${deb_codename}-security
-Components: main contrib non-free non-free-firmware
-EOF
-        msg_ok "$(translate "Debian repositories configured for ${deb_codename}")"
-    fi
-
-
-    msg_info "$(translate "Installing Fail2Ban...")"
-    if ! DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || \
-       ! DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban >/dev/null 2>&1; then
-        msg_error "$(translate "Failed to install Fail2Ban")"
-        return 1
-    fi
-    msg_ok "$(translate "Fail2Ban installed successfully")"
-
-
-    mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
-    msg_info "$(translate "Configuring Proxmox filter...")"
-    cat > /etc/fail2ban/filter.d/proxmox.conf <<'EOF'
-[Definition]
-failregex = pvedaemon\[.*authentication failure; rhost=<HOST> user=.* msg=.*
-ignoreregex =
-EOF
-    msg_ok "$(translate "Proxmox filter configured")"
-
-
-    msg_info "$(translate "Configuring Proxmox jail...")"
-    cat > /etc/fail2ban/jail.d/proxmox.conf <<'EOF'
-[proxmox]
-enabled = true
-port = 8006
-filter = proxmox
-logpath = /var/log/daemon.log
-maxretry = 3
-bantime = 3600
-findtime = 600
-EOF
-    msg_ok "$(translate "Proxmox jail configured")"
-
-
-    msg_info "$(translate "Configuring global Fail2Ban settings and SSH jail...")"
-    cat > /etc/fail2ban/jail.local <<'EOF'
-[DEFAULT]
-ignoreip = 127.0.0.1
-bantime = 86400
-maxretry = 2
-findtime = 1800
-backend = systemd
-banaction = nftables
-banaction_allports = nftables[type=allports]
-
-[sshd]
-enabled = true
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 2
-findtime = 3600
-bantime = 32400
-EOF
-    msg_ok "$(translate "Global settings and SSH jail configured")"
-
-
-    touch /var/log/auth.log /var/log/daemon.log
-    chown root:adm /var/log/auth.log /var/log/daemon.log 2>/dev/null || true
-    chmod 640 /var/log/auth.log /var/log/daemon.log 2>/dev/null || true
-
-
-    systemctl daemon-reload
-    systemctl enable --now fail2ban >/dev/null 2>&1
-    sleep 2
-
-
-    if systemctl is-active --quiet fail2ban; then
-        msg_ok "$(translate "Fail2Ban is running correctly")"
-    else
-        msg_error "$(translate "Fail2Ban is NOT running!")"
-        journalctl -u fail2ban --no-pager -n 20
-    fi
-
-    if [ -S /var/run/fail2ban/fail2ban.sock ]; then
-        msg_ok "$(translate "Fail2Ban socket exists!")"
-    else
-        msg_warn "$(translate "Warning: Fail2Ban socket does not exist!")"
-    fi
-
-    if fail2ban-client ping >/dev/null 2>&1; then
-        msg_ok "$(translate "fail2ban-client successfully communicated with the server")"
-    else
-        msg_error "$(translate "fail2ban-client could not communicate with the server")"
-    fi
-
-    msg_success "$(translate "Fail2Ban installation and configuration completed successfully!")"
-}
 
 
 
@@ -2180,72 +1325,7 @@ EOF
 
 
 
-install_lynis_() {
-    msg_info2 "$(translate "Installing Lynis security scan tool...")"
 
-    # Install Lynis directly from Debian repositories
-    msg_info "$(translate "Installing Lynis packages...")"
-    (
-        /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::='--force-confdef' install lynis 2>&1 | \
-        while IFS= read -r line; do
-            if [[ $line == *"Installing"* ]] || [[ $line == *"Unpacking"* ]]; then
-                printf "\r%-$(($(tput cols)-1))s\r" " "  # Clear current line
-                printf "\r%s" "$line"
-            fi
-        done
-    )
-
-    if [ $? -eq 0 ]; then
-        printf "\r%-$(($(tput cols)-1))s\r" " "  # Clear final line
-        msg_ok "$(translate "Lynis installed successfully")"
-    else
-        printf "\r%-$(($(tput cols)-1))s\r" " "  # Clear final line
-        msg_warn "$(translate "Failed to install Lynis")"
-    fi
-
-    # Verify installation
-    if command -v lynis >/dev/null 2>&1; then
-        msg_success "$(translate "Lynis is ready to use")"
-    else
-        msg_warn "$(translate "Lynis installation could not be verified")"
-    fi
-}
-
-
-install_lynis() {
-    msg_info2 "$(translate "Installing latest Lynis security scan tool...")"
-
-    if ! command -v git >/dev/null 2>&1; then
-        msg_info "$(translate "Installing Git as a prerequisite...")"
-        apt-get update -qq >/dev/null 2>&1
-        apt-get install -y git >/dev/null 2>&1
-        msg_ok "$(translate "Git installed")"
-    fi
-
-    if [ -d /opt/lynis ]; then
-        rm -rf /opt/lynis >/dev/null 2>&1
-    fi
-
-    msg_info "$(translate "Cloning Lynis from GitHub...")"
-    if git clone --quiet https://github.com/CISOfy/lynis.git /opt/lynis >/dev/null 2>&1; then
-        # Create wrapper script instead of symbolic link
-        cat << 'EOF' > /usr/local/bin/lynis
-#!/bin/bash
-cd /opt/lynis && ./lynis "$@"
-EOF
-        chmod +x /usr/local/bin/lynis
-        msg_ok "$(translate "Lynis installed successfully from GitHub")"
-    else
-        msg_warn "$(translate "Failed to clone Lynis from GitHub")"
-        return 1
-    fi
-
-    if /usr/local/bin/lynis show version >/dev/null 2>&1; then
-        msg_success "$(translate "Lynis is ready to use")"
-    else
-        msg_warn "$(translate "Lynis installation could not be verified")"
-    fi
-}
 
 
 
@@ -2303,51 +1383,6 @@ install_guest_agent() {
 
 
 
-configure_ksmtuned() {
-    msg_info2 "$(translate "Installing and configuring KSM (Kernel Samepage Merging) daemon...")"
-    NECESSARY_REBOOT=1
-
-    # Install ksm-control-daemon
-    msg_info "$(translate "Installing ksm-control-daemon...")"
-    if /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::='--force-confdef' install ksm-control-daemon > /dev/null 2>&1; then
-        msg_ok "$(translate "ksm-control-daemon installed successfully")"
-    fi
-
-    # Determine RAM size and set KSM parameters
-    if [[ RAM_SIZE_GB -le 16 ]]; then
-        KSM_THRES_COEF=50
-        KSM_SLEEP_MSEC=80
-        msg_info "$(translate "RAM <= 16GB: Setting KSM to start at 50% full")"
-    elif [[ RAM_SIZE_GB -le 32 ]]; then
-        KSM_THRES_COEF=40
-        KSM_SLEEP_MSEC=60
-        msg_info "$(translate "RAM <= 32GB: Setting KSM to start at 60% full")"
-    elif [[ RAM_SIZE_GB -le 64 ]]; then
-        KSM_THRES_COEF=30
-        KSM_SLEEP_MSEC=40
-        msg_info "$(translate "RAM <= 64GB: Setting KSM to start at 70% full")"
-    elif [[ RAM_SIZE_GB -le 128 ]]; then
-        KSM_THRES_COEF=20
-        KSM_SLEEP_MSEC=20
-        msg_info "$(translate "RAM <= 128GB: Setting KSM to start at 80% full")"
-    else
-        KSM_THRES_COEF=10
-        KSM_SLEEP_MSEC=10
-        msg_info "$(translate "RAM > 128GB: Setting KSM to start at 90% full")"
-    fi
-    # Update ksmtuned configuration
-    if sed -i -e "s/\# KSM_THRES_COEF=.*/KSM_THRES_COEF=${KSM_THRES_COEF}/g" /etc/ksmtuned.conf && \
-       sed -i -e "s/\# KSM_SLEEP_MSEC=.*/KSM_SLEEP_MSEC=${KSM_SLEEP_MSEC}/g" /etc/ksmtuned.conf; then
-        msg_ok "$(translate "ksmtuned configuration updated successfully")"
-    fi
-
-    # Enable ksmtuned service
-    if systemctl enable ksmtuned > /dev/null 2>&1; then
-        msg_ok "$(translate "ksmtuned service enabled successfully")"
-    fi
-
-    msg_success "$(translate "KSM configuration completed")"
-}
 
 
 
@@ -2357,190 +1392,6 @@ configure_ksmtuned() {
 
 
 
-
-
-enable_vfio_iommu_() {
-    msg_info2 "$(translate "Enabling IOMMU and configuring VFIO for PCI passthrough...")"
-    NECESSARY_REBOOT=1
-
-    # Detect if system uses ZFS
-    local uses_zfs=false
-    local cmdline_file="/etc/kernel/cmdline"
-    if [[ -f "$cmdline_file" && $(grep -q "root=ZFS=" "$cmdline_file") ]]; then
-        uses_zfs=true
-    fi
-
-    # Enable IOMMU
-    local cpu_info=$(cat /proc/cpuinfo)
-    local grub_file="/etc/default/grub"
-    local iommu_param=""
-    local additional_params="pcie_acs_override=downstream,multifunction nofb nomodeset video=vesafb:off,efifb:off"
-
-    if [[ "$cpu_info" == *"GenuineIntel"* ]]; then
-        msg_info "$(translate "Detected Intel CPU")"
-        iommu_param="intel_iommu=on"
-    elif [[ "$cpu_info" == *"AuthenticAMD"* ]]; then
-        msg_info "$(translate "Detected AMD CPU")"
-        iommu_param="amd_iommu=on"
-    else
-        msg_warning "$(translate "Unknown CPU type. IOMMU might not be properly enabled.")"
-        return 1
-    fi
-
-    if [[ "$uses_zfs" == true ]]; then
-        if grep -q "$iommu_param" "$cmdline_file"; then
-            if ! grep -q "iommu=pt" "$cmdline_file"; then
-                cp "$cmdline_file" "${cmdline_file}.bak"
-                sed -i "/^.*root=ZFS=/ s|$| iommu=pt|" "$cmdline_file"
-                msg_ok "$(translate "Added missing iommu=pt to ZFS configuration")"
-            else
-                msg_ok "$(translate "IOMMU and additional parameters already configured for ZFS")"
-            fi
-        else
-            cp "$cmdline_file" "${cmdline_file}.bak"
-            sed -i "/^.*root=ZFS=/ s|$| $iommu_param iommu=pt|" "$cmdline_file"
-            msg_ok "$(translate "IOMMU and additional parameters added for ZFS")"
-        fi
-    else
-
-        if grep -q "$iommu_param" "$grub_file"; then
-            if ! grep -q "iommu=pt" "$grub_file"; then
-                cp "$grub_file" "${grub_file}.bak"
-                sed -i "/GRUB_CMDLINE_LINUX_DEFAULT=/ s|\"$| iommu=pt\"|" "$grub_file"
-                msg_ok "$(translate "Added missing iommu=pt to GRUB configuration")"
-            else
-                msg_ok "$(translate "IOMMU already enabled in GRUB configuration")"
-            fi
-        else
-            cp "$grub_file" "${grub_file}.bak"
-            sed -i "/GRUB_CMDLINE_LINUX_DEFAULT=/ s|\"$| $iommu_param iommu=pt\"|" "$grub_file"
-            msg_ok "$(translate "IOMMU enabled in GRUB configuration")"
-        fi
-    fi
-
-    # Configure VFIO modules (avoid duplicates)
-    local modules_file="/etc/modules"
-    msg_info "$(translate "Checking VFIO modules...")"
-    local vfio_modules=("vfio" "vfio_iommu_type1" "vfio_pci" "vfio_virqfd")
-
-    for module in "${vfio_modules[@]}"; do
-        grep -q "^$module" "$modules_file" || echo "$module" >> "$modules_file"
-    done
-    msg_ok "$(translate "VFIO modules configured.)")"
-
-    # Blacklist conflicting drivers (avoid duplicates)
-    local blacklist_file="/etc/modprobe.d/blacklist.conf"
-    msg_info "$(translate "Checking conflicting drivers blacklist...")"
-    touch "$blacklist_file"
-    local blacklist_drivers=("nouveau" "lbm-nouveau" "amdgpu" "radeon" "nvidia" "nvidiafb")
-
-    for driver in "${blacklist_drivers[@]}"; do
-        grep -q "^blacklist $driver" "$blacklist_file" || echo "blacklist $driver" >> "$blacklist_file"
-    done
-
-    if ! grep -q "options nouveau modeset=0" "$blacklist_file"; then
-        echo "options nouveau modeset=0" >> "$blacklist_file"
-    fi
-    msg_ok "$(translate "Conflicting drivers blacklisted successfully.")"
-
-
-  # Propagate the settings
-    msg_info "$(translate "Updating initramfs, GRUB, and EFI boot, patience...")"
-    if update-initramfs -u -k all > /dev/null 2>&1 && \
-       update-grub > /dev/null 2>&1 && \
-       pve-efiboot-tool refresh > /dev/null 2>&1; then
-     msg_ok "$(translate "Initramfs, GRUB, and EFI boot updated successfully")"
-    else
-        msg_error "$(translate "Failed to update one or more components (initramfs, GRUB, or EFI boot)")"
-    fi
-
-    msg_success "$(translate "IOMMU and VFIO setup completed")"
-}
-
-
-
-enable_vfio_iommu__() {
-    msg_info2 "$(translate "Enabling IOMMU and configuring VFIO for PCI passthrough...")"
-    NECESSARY_REBOOT=1
-
-    # Detect if system uses ZFS/systemd-boot (Proxmox)
-    local uses_zfs=false
-    local cmdline_file="/etc/kernel/cmdline"
-    if [[ -f "$cmdline_file" ]] && grep -qE 'root=ZFS=|root=ZFS/' "$cmdline_file"; then
-        uses_zfs=true
-    fi
-
-    # Enable IOMMU
-    local cpu_info=$(cat /proc/cpuinfo)
-    local grub_file="/etc/default/grub"
-    local iommu_param=""
-    local additional_params="pcie_acs_override=downstream,multifunction nofb nomodeset video=vesafb:off,efifb:off"
-
-    if [[ "$cpu_info" == *"GenuineIntel"* ]]; then
-        msg_info "$(translate "Detected Intel CPU")"
-        iommu_param="intel_iommu=on"
-    elif [[ "$cpu_info" == *"AuthenticAMD"* ]]; then
-        msg_info "$(translate "Detected AMD CPU")"
-        iommu_param="amd_iommu=on"
-    else
-        msg_warning "$(translate "Unknown CPU type. IOMMU might not be properly enabled.")"
-        return 1
-    fi
-
-    if [[ "$uses_zfs" == true ]]; then
-        # --- SYSTEMD-BOOT: /etc/kernel/cmdline ---
-        if grep -q "$iommu_param" "$cmdline_file"; then
-            msg_ok "$(translate "IOMMU already configured in /etc/kernel/cmdline")"
-        else
-            cp "$cmdline_file" "${cmdline_file}.bak"
-          # sed -i "s|\"$| $iommu_param iommu=pt|" "$cmdline_file"
-            sed -i "s|\s*$| $iommu_param iommu=pt|" "$cmdline_file"
-            msg_ok "$(translate "IOMMU parameters added to /etc/kernel/cmdline")"
-        fi
-    else
-        # --- GRUB ---
-        if grep -q "$iommu_param" "$grub_file"; then
-            msg_ok "$(translate "IOMMU already enabled in GRUB configuration")"
-        else
-            cp "$grub_file" "${grub_file}.bak"
-            sed -i "/GRUB_CMDLINE_LINUX_DEFAULT=/ s|\"$| $iommu_param iommu=pt\"|" "$grub_file"
-            msg_ok "$(translate "IOMMU enabled in GRUB configuration")"
-        fi
-    fi
-
-    # Configure VFIO modules (avoid duplicates)
-    local modules_file="/etc/modules"
-    msg_info "$(translate "Checking VFIO modules...")"
-    local vfio_modules=("vfio" "vfio_iommu_type1" "vfio_pci" "vfio_virqfd")
-    for module in "${vfio_modules[@]}"; do
-        grep -q "^$module" "$modules_file" || echo "$module" >> "$modules_file"
-    done
-    msg_ok "$(translate "VFIO modules configured.")"
-
-    # Blacklist conflicting drivers (avoid duplicates)
-    local blacklist_file="/etc/modprobe.d/blacklist.conf"
-    msg_info "$(translate "Checking conflicting drivers blacklist...")"
-    touch "$blacklist_file"
-    local blacklist_drivers=("nouveau" "lbm-nouveau" "amdgpu" "radeon" "nvidia" "nvidiafb")
-    for driver in "${blacklist_drivers[@]}"; do
-        grep -q "^blacklist $driver" "$blacklist_file" || echo "blacklist $driver" >> "$blacklist_file"
-    done
-    if ! grep -q "options nouveau modeset=0" "$blacklist_file"; then
-        echo "options nouveau modeset=0" >> "$blacklist_file"
-    fi
-    msg_ok "$(translate "Conflicting drivers blacklisted successfully.")"
-
-    # Propagate the settings
-    msg_info "$(translate "Updating initramfs, GRUB, and EFI boot, patience...")"
-    update-initramfs -u -k all > /dev/null 2>&1
-    if [[ "$uses_zfs" == true ]]; then
-        proxmox-boot-tool refresh > /dev/null 2>&1
-    else
-        update-grub > /dev/null 2>&1
-    fi
-
-    msg_success "$(translate "IOMMU and VFIO setup completed")"
-}
 
 
 
@@ -2654,11 +1505,19 @@ enable_vfio_iommu() {
         fi
     fi
     
-    # Configure VFIO modules (sin cambios)
+    # Configure VFIO modules
     local modules_file="/etc/modules"
     msg_info "$(translate "Checking VFIO modules...")"
-    local vfio_modules=("vfio" "vfio_iommu_type1" "vfio_pci" "vfio_virqfd")
-    
+    # vfio_virqfd was merged into the vfio module in kernel 6.2+
+    # Adding it as a separate module on kernel >= 6.2 generates warnings
+    local kernel_major kernel_minor
+    kernel_major=$(uname -r | cut -d. -f1)
+    kernel_minor=$(uname -r | cut -d. -f2)
+    local vfio_modules=("vfio" "vfio_iommu_type1" "vfio_pci")
+    if (( kernel_major < 6 || ( kernel_major == 6 && kernel_minor < 2 ) )); then
+        vfio_modules+=("vfio_virqfd")
+    fi
+
     for module in "${vfio_modules[@]}"; do
         if ! grep -q "^$module" "$modules_file"; then
             echo "$module" >> "$modules_file"
@@ -2694,6 +1553,7 @@ enable_vfio_iommu() {
     fi
     
     msg_success "$(translate "IOMMU and VFIO setup completed")"
+    register_tool "vfio_iommu" true
 }
 
 
@@ -2702,48 +1562,6 @@ enable_vfio_iommu() {
 # ==========================================================
 
 
-
-
-
-customize_bashrc_() {
-   msg_info2 "$(translate "Customizing bashrc for root user...")"
-
-    local bashrc="/root/.bashrc"
-    local bash_profile="/root/.bash_profile"
-
-    # Backup original .bashrc if it doesn't exist
-    if [ ! -f "${bashrc}.bak" ]; then
-        cp "$bashrc" "${bashrc}.bak"
-    fi
-
-    # Function to add a line if it doesn't exist
-    add_line_if_not_exists() {
-        local line="$1"
-        local file="$2"
-        grep -qF -- "$line" "$file" || echo "$line" >> "$file"
-    }
-
-    # Add custom configurations to .bashrc
-    add_line_if_not_exists 'export HISTTIMEFORMAT="%d/%m/%y %T "' "$bashrc"
-    add_line_if_not_exists 'export PS1='"'\u@\h:\W \$ '" "$bashrc"
-    add_line_if_not_exists "alias l='ls -CF'" "$bashrc"
-    add_line_if_not_exists "alias la='ls -A'" "$bashrc"
-    add_line_if_not_exists "alias ll='ls -alF'" "$bashrc"
-    add_line_if_not_exists "alias ls='ls --color=auto'" "$bashrc"
-    add_line_if_not_exists "alias grep='grep --color=auto'" "$bashrc"
-    add_line_if_not_exists "alias fgrep='fgrep --color=auto'" "$bashrc"
-    add_line_if_not_exists "alias egrep='egrep --color=auto'" "$bashrc"
-    add_line_if_not_exists "source /etc/profile.d/bash_completion.sh" "$bashrc"
-    add_line_if_not_exists 'export PS1="\[\e[31m\][\[\e[m\]\[\e[38;5;172m\]\u\[\e[m\]@\[\e[38;5;153m\]\h\[\e[m\] \[\e[38;5;214m\]\W\[\e[m\]\[\e[31m\]]\[\e[m\]\\$ "' "$bashrc"
-
-    msg_ok "$(translate "Custom configurations added to .bashrc")"
-
-    # Ensure .bashrc is sourced in .bash_profile
-    add_line_if_not_exists "source /root/.bashrc" "$bash_profile"
-    msg_ok "$(translate ".bashrc sourced in .bash_profile")"
-
-    msg_success "$(translate "Bashrc customization completed")"
-}
 
 
 
@@ -2769,7 +1587,7 @@ customize_bashrc() {
     fi
     
  
-    cat >> "$bashrc" << 'EOF'
+    cat >> "$bashrc" << EOF
 ${marker_begin}
 # ProxMenux core customizations
 export HISTTIMEFORMAT="%d/%m/%y %T "
@@ -2868,7 +1686,7 @@ su root adm
 rotate 7
 create
 compress
-size=10M
+size 10M
 delaycompress
 copytruncate
 
@@ -2878,6 +1696,7 @@ EOF
     systemctl restart logrotate > /dev/null 2>&1
     msg_ok "$(translate "Logrotate service restarted successfully")"
    fi
+    register_tool "logrotate" true
     msg_success "$(translate "Logrotate optimization completed")"
 }
 
@@ -2907,6 +1726,7 @@ remove_subscription_banner() {
 
         bash "$LOCAL_SCRIPTS/global/remove-banner-pve8.sh"
     fi
+    register_tool "subscription_banner" true
 }
 
 
@@ -2947,7 +1767,7 @@ vm.dirty_background_ratio = 5
 vm.overcommit_memory = 1
 
 # Avoid excessive virtual memory areas (safe for most applications)
-vm.max_map_count = 65530
+vm.max_map_count = 262144
 EOF
 
     if [ -f /proc/sys/vm/compaction_proactiveness ]; then
@@ -3266,119 +2086,12 @@ register_tool "fastfetch" true
 
 
 
-add_repo_test() {
- msg_info2 "$(translate "Enable Proxmox testing repository...")"
-    # Enable Proxmox testing repository
-    if [ ! -f /etc/apt/sources.list.d/pve-testing-repo.list ] || ! grep -q "pvetest" /etc/apt/sources.list.d/pve-testing-repo.list; then
-        msg_info "$(translate "Enabling Proxmox testing repository...")"
-        echo -e "deb http://download.proxmox.com/debian/pve ${OS_CODENAME} pvetest\\n" > /etc/apt/sources.list.d/pve-testing-repo.list
-        msg_ok "$(translate "Proxmox testing repository enabled")"
-    fi
- msg_success "$(translate "Proxmox testing repository has been successfully enabled")"
-}
-
-
-
 
 
 
 # ==========================================================
 
 
-
-
-
-configure_figurine_() {
-    msg_info2 "$(translate "Installing and configuring Figurine...")"
-    local version="1.3.0"
-    local file="figurine_linux_amd64_v${version}.tar.gz"
-    local url="https://github.com/arsham/figurine/releases/download/v${version}/${file}"
-    local temp_dir; temp_dir=$(mktemp -d)
-    local install_dir="/usr/local/bin"
-    local profile_script="/etc/profile.d/figurine.sh"
-    local bin_path="${install_dir}/figurine"
-    local bashrc="/root/.bashrc"
-
-    cleanup_dir() { rm -rf "$temp_dir" 2>/dev/null || true; }
-    trap cleanup_dir EXIT
-
-    [[ -f "$bashrc" ]] || touch "$bashrc"
-
-    if command -v figurine &>/dev/null; then
-        msg_info "$(translate "Updating Figurine binary...")"
-    else
-        msg_info "$(translate "Downloading Figurine v${version}...")"
-    fi
-
-    if ! wget -qO "${temp_dir}/${file}" "$url"; then
-        msg_error "$(translate "Failed to download Figurine")"
-        return 1
-    fi
-
-    if ! tar -xf "${temp_dir}/${file}" -C "${temp_dir}"; then
-        msg_error "$(translate "Failed to extract package")"
-        return 1
-    fi
-    msg_ok "$(translate "Extraction successful")"
-
-    if [[ ! -f "${temp_dir}/deploy/figurine" ]]; then
-        msg_error "$(translate "Binary not found in extracted content.")"
-        return 1
-    fi
-
-    msg_info "$(translate "Installing binary to ${install_dir}...")"
-    install -m 0755 -o root -g root "${temp_dir}/deploy/figurine" "$bin_path"
-
-
-    cat > "$profile_script" << 'EOF'
-/usr/local/bin/figurine -f "3d.flf" $(hostname)
-EOF
-    chmod +x "$profile_script"
-
-
-    ensure_aliases() {
-        local bashrc="/root/.bashrc"
-        [[ -f "$bashrc" ]] || touch "$bashrc"
-
-        local -a ALIASES=(
-            "aptup=apt update && apt dist-upgrade"
-            "lxcclean=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/clean-lxcs.sh | bash"
-            "lxcupdate=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/update-lxcs.sh | bash"
-            "kernelclean=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/kernel-clean.sh | bash"
-            "cpugov=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/scaling-governor.sh | bash"
-            "lxctrim=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/fstrim.sh | bash"
-            "updatecerts=pvecm updatecerts"
-            "seqwrite=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4M --size=32G --readwrite=write --ramp_time=4"
-            "seqread=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4M --size=32G --readwrite=read --ramp_time=4"
-            "ranwrite=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4k --size=4G --readwrite=randwrite --ramp_time=4"
-            "ranread=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4k --size=4G --readwrite=randread --ramp_time=4"
-        )
-
-        for entry in "${ALIASES[@]}"; do
-            local name="${entry%%=*}"
-            local cmd="${entry#*=}"
-            local esc_cmd
-            esc_cmd=$(printf "%s" "$cmd" | sed -e 's/[\\/&]/\\&/g')
-
-            if grep -Eq "^alias[[:space:]]+$name=" "$bashrc"; then
-                if ! grep -Eq "^alias[[:space:]]+$name='${esc_cmd}'$" "$bashrc"; then
-                    sed -i -E "s|^alias[[:space:]]+$name=.*$|alias $name='${esc_cmd}'|" "$bashrc"
-                fi
-            else
-                printf "alias %s='%s'\n" "$name" "$cmd" >> "$bashrc"
-            fi
-        done
-
-
-        awk '!seen[$0]++' "$bashrc" > "${bashrc}.tmp" && mv "${bashrc}.tmp" "$bashrc"
-    }
-
-    ensure_aliases
-    msg_ok "$(translate "Aliases added to .bashrc")"
-
-    msg_success "$(translate "Figurine installation and configuration completed successfully.")"
-    register_tool "figurine" true
-}
 
 
 
@@ -3434,44 +2147,6 @@ configure_figurine() {
 /usr/local/bin/figurine -f "3d.flf" $(hostname)
 EOF
     chmod +x "$profile_script"
-
-
-    ensure_aliases_() {
-        local bashrc="/root/.bashrc"
-        [[ -f "$bashrc" ]] || touch "$bashrc"
-
-        local -a ALIASES=(
-            "aptup=apt update && apt dist-upgrade"
-            "lxcclean=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/clean-lxcs.sh | bash"
-            "lxcupdate=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/update-lxcs.sh | bash"
-            "kernelclean=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/kernel-clean.sh | bash"
-            "cpugov=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/scaling-governor.sh | bash"
-            "lxctrim=curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/fstrim.sh | bash"
-            "updatecerts=pvecm updatecerts"
-            "seqwrite=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4M --size=32G --readwrite=write --ramp_time=4"
-            "seqread=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4M --size=32G --readwrite=read --ramp_time=4"
-            "ranwrite=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4k --size=4G --readwrite=randwrite --ramp_time=4"
-            "ranread=sync; fio --randrepeat=1 --ioengine=libaio --direct=1 --name=test --filename=test --bs=4k --size=4G --readwrite=randread --ramp_time=4"
-        )
-
-        for entry in "${ALIASES[@]}"; do
-            local name="${entry%%=*}"
-            local cmd="${entry#*=}"
-            local esc_cmd
-            esc_cmd=$(printf "%s" "$cmd" | sed -e 's/[\\/&]/\\&/g')
-
-            if grep -Eq "^alias[[:space:]]+$name=" "$bashrc"; then
-                if ! grep -Eq "^alias[[:space:]]+$name='${esc_cmd}'$" "$bashrc"; then
-                    sed -i -E "s|^alias[[:space:]]+$name=.*$|alias $name='${esc_cmd}'|" "$bashrc"
-                fi
-            else
-                printf "alias %s='%s'\n" "$name" "$cmd" >> "$bashrc"
-            fi
-        done
-
-
-        awk '!seen[$0]++' "$bashrc" > "${bashrc}.tmp" && mv "${bashrc}.tmp" "$bashrc"
-    }
 
 
     ensure_aliases() {
@@ -3549,159 +2224,6 @@ update_pve_appliance_manager() {
 
 
 
-
-
-
-configure_log2ram_() {
-    msg_info2 "$(translate "Preparing Log2RAM configuration")"
-    sleep 2
-
-    RAM_SIZE_GB=$(free -g | awk '/^Mem:/{print $2}')
-    [[ -z "$RAM_SIZE_GB" || "$RAM_SIZE_GB" -eq 0 ]] && RAM_SIZE_GB=4
-
-    if (( RAM_SIZE_GB <= 8 )); then
-        DEFAULT_SIZE="128"
-        DEFAULT_HOURS="1"
-    elif (( RAM_SIZE_GB <= 16 )); then
-        DEFAULT_SIZE="256"
-        DEFAULT_HOURS="3"
-    else
-        DEFAULT_SIZE="512"
-        DEFAULT_HOURS="6"
-    fi
-
-    USER_SIZE=$(whiptail --title "Log2RAM" --inputbox "$(translate "Enter the maximum size (in MB) to allocate for /var/log in RAM (e.g. 128, 256, 512):")\n\n$(translate "Recommended for $RAM_SIZE_GB GB RAM:") ${DEFAULT_SIZE}M" 12 70 "$DEFAULT_SIZE" 3>&1 1>&2 2>&3) || return 0
-    LOG2RAM_SIZE="${USER_SIZE}M"
-
-    CRON_HOURS=$(whiptail --title "Log2RAM" --radiolist "$(translate "Select the sync interval (in hours):")\n\n$(translate "Suggested interval: every $DEFAULT_HOURS hour(s)")" 15 70 5 \
-        "1" "$(translate "Every hour")" OFF \
-        "3" "$(translate "Every 3 hours")" OFF \
-        "6" "$(translate "Every 6 hours")" OFF \
-        "12" "$(translate "Every 12 hours")" OFF \
-        3>&1 1>&2 2>&3) || return 0
-
-    if whiptail --title "Log2RAM" --yesno "$(translate "Enable auto-sync if /var/log exceeds 90% of its size?")" 10 60; then
-        ENABLE_AUTOSYNC=true
-    else
-        ENABLE_AUTOSYNC=false
-    fi
-
-    msg_info "$(translate "Cleaning previous Log2RAM installation...")"
-
-    systemctl stop log2ram log2ram-daily.timer >/dev/null 2>&1 || true
-    systemctl disable log2ram log2ram-daily.timer >/dev/null 2>&1 || true
-
-    rm -f /etc/cron.d/log2ram /etc/cron.d/log2ram-auto-sync \
-          /etc/cron.hourly/log2ram /etc/cron.daily/log2ram \
-          /etc/cron.weekly/log2ram /etc/cron.monthly/log2ram 2>/dev/null || true
-    rm -f /usr/local/bin/log2ram-check.sh /usr/local/bin/log2ram /usr/sbin/log2ram 2>/dev/null || true
-    rm -f /etc/systemd/system/log2ram.service \
-          /etc/systemd/system/log2ram-daily.timer \
-          /etc/systemd/system/log2ram-daily.service \
-          /etc/systemd/system/sysinit.target.wants/log2ram.service 2>/dev/null || true
-    rm -rf /etc/systemd/system/log2ram.service.d 2>/dev/null || true
-    rm -f /etc/log2ram.conf* 2>/dev/null || true
-    rm -rf /etc/logrotate.d/log2ram /var/log.hdd /tmp/log2ram 2>/dev/null || true
-
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl restart cron >/dev/null 2>&1 || true
-
-    msg_ok "$(translate "Previous installation cleaned")"
-    msg_info "$(translate "Installing Log2RAM from GitHub...")"
-
-    if ! command -v git >/dev/null 2>&1; then
-        msg_info "$(translate "Installing required package: git")"
-        apt-get update -qq >/dev/null 2>&1
-        apt-get install -y git >/dev/null 2>&1
-    fi
-
-    rm -rf /tmp/log2ram 2>/dev/null || true
-    if ! git clone https://github.com/azlux/log2ram.git /tmp/log2ram >/dev/null 2>>/tmp/log2ram_install.log; then
-        msg_error "$(translate "Failed to clone log2ram repository. Check /tmp/log2ram_install.log")"
-        return 1
-    fi
-
-    cd /tmp/log2ram || { msg_error "$(translate "Failed to access log2ram directory")"; return 1; }
-
-    if ! bash install.sh >>/tmp/log2ram_install.log 2>&1; then
-        msg_error "$(translate "Failed to run log2ram installer. Check /tmp/log2ram_install.log")"
-        return 1
-    fi
-
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl enable --now log2ram >/dev/null 2>&1 || true
-
-    if [[ -f /etc/log2ram.conf ]] && command -v log2ram >/dev/null 2>&1; then
-        msg_ok "$(translate "Log2RAM installed successfully")"
-    else
-        msg_error "$(translate "Log2RAM installation verification failed. Check /tmp/log2ram_install.log")"
-        return 1
-    fi
-
-    sed -i "s/^SIZE=.*/SIZE=$LOG2RAM_SIZE/" /etc/log2ram.conf
-    LOG2RAM_BIN="$(command -v log2ram || echo /usr/sbin/log2ram)"
-
-    cat > /etc/cron.d/log2ram <<EOF
-# Log2RAM periodic sync - Created by ProxMenux
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-MAILTO=""
-0 */$CRON_HOURS * * * root $LOG2RAM_BIN write >/dev/null 2>&1
-EOF
-    chmod 0644 /etc/cron.d/log2ram
-    chown root:root /etc/cron.d/log2ram
-    msg_ok "$(translate "Log2RAM write scheduled every") $CRON_HOURS $(translate "hour(s)")"
-
-    if [[ "$ENABLE_AUTOSYNC" == true ]]; then
-        cat > /usr/local/bin/log2ram-check.sh <<'EOF'
-#!/usr/bin/env bash
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-CONF_FILE="/etc/log2ram.conf"
-L2R_BIN="$(command -v log2ram || true)"
-[[ -z "$L2R_BIN" && -x /usr/sbin/log2ram ]] && L2R_BIN="/usr/sbin/log2ram"
-[[ -z "$L2R_BIN" ]] && exit 0
-
-SIZE_MiB="$(grep -E '^SIZE=' "$CONF_FILE" 2>/dev/null | cut -d'=' -f2 | tr -dc '0-9')"
-[[ -z "$SIZE_MiB" ]] && SIZE_MiB=128
-LIMIT_BYTES=$(( SIZE_MiB * 1024 * 1024 ))
-THRESHOLD_BYTES=$(( LIMIT_BYTES * 90 / 100 ))
-
-USED_BYTES="$(df -B1 --output=used /var/log 2>/dev/null | tail -1 | tr -dc '0-9')"
-[[ -z "$USED_BYTES" ]] && exit 0
-
-LOCK="/run/log2ram-check.lock"
-exec 9>"$LOCK" 2>/dev/null || exit 0
-flock -n 9 || exit 0
-
-if (( USED_BYTES > THRESHOLD_BYTES )); then
-  "$L2R_BIN" write 2>/dev/null || true
-fi
-EOF
-        chmod +x /usr/local/bin/log2ram-check.sh
-
-        cat > /etc/cron.d/log2ram-auto-sync <<'EOF'
-# Log2RAM auto-sync based on /var/log usage - Created by ProxMenux
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-MAILTO=""
-*/5 * * * * root /usr/local/bin/log2ram-check.sh >/dev/null 2>&1
-EOF
-        chmod 0644 /etc/cron.d/log2ram-auto-sync
-        chown root:root /etc/cron.d/log2ram-auto-sync
-
-        msg_ok "$(translate "Auto-sync enabled when /var/log exceeds 90% of") $LOG2RAM_SIZE"
-    else
-        rm -f /usr/local/bin/log2ram-check.sh /etc/cron.d/log2ram-auto-sync 2>/dev/null || true
-        msg_info2 "$(translate "Auto-sync was not enabled")"
-    fi
-
-    systemctl restart cron >/dev/null 2>&1 || true
-    systemctl restart log2ram >/dev/null 2>&1 || true
-    
-    msg_success "$(translate "Log2RAM installation and configuration completed successfully.")"
-    register_tool "log2ram" true
-}
 
 
 
@@ -3900,8 +2422,10 @@ Compress=yes
 SystemMaxUse=${USE_MB}M
 SystemKeepFree=${KEEP_MB}M
 RuntimeMaxUse=${RUNTIME_MB}M
-MaxLevelStore=warning
-MaxLevelSyslog=warning
+# MaxLevelStore=info: required for ProxMenux Monitor log display and Fail2Ban detection.
+# Using "warning" silently discards most system logs making date filters useless.
+MaxLevelStore=info
+MaxLevelSyslog=info
 MaxLevelKMsg=warning
 MaxLevelConsole=notice
 MaxLevelWall=crit
@@ -3948,7 +2472,9 @@ EOF
 setup_persistent_network() {
     local LINK_DIR="/etc/systemd/network"
     local BACKUP_DIR="/etc/systemd/network/backup-$(date +%Y%m%d-%H%M%S)"
-    
+    local pve_version
+    pve_version=$(pveversion 2>/dev/null | grep -oP 'pve-manager/\K[0-9]+' | head -1)
+
     msg_info "$(translate "Setting up persistent network interfaces")"
     sleep 2
 
@@ -3984,6 +2510,14 @@ EOF
     
     if [[ $count -gt 0 ]]; then
         msg_ok "$(translate "Created persistent names for") $count $(translate "interfaces")"
+        # In PVE9, systemd-networkd is the native network backend and udev processes
+        # .link files directly. Reloading udev rules makes the new .link files effective
+        # immediately for any interface added later (hotplug, new NICs) without waiting
+        # for a full reboot. On PVE8 (ifupdown2), names are resolved at boot anyway.
+        if [[ "$pve_version" -ge 9 ]]; then
+            udevadm control --reload-rules 2>/dev/null || true
+            msg_ok "$(translate "PVE9: udev rules reloaded — new interfaces will get correct names without reboot")"
+        fi
         msg_ok "$(translate "Changes will apply after reboot.")"
     else
         msg_warn "$(translate "No physical interfaces found")"
@@ -4010,97 +2544,8 @@ EOF
 #        Auxiliary help functions
 # ==========================================================
 
-# Rest of the functions remain the same...
-cleanup_duplicate_repos() {
-    msg_info "$(translate "Cleaning up duplicate repositories...")"
-    
-    local sources_file="/etc/apt/sources.list"
-    local temp_file=$(mktemp)
-    local cleaned_count=0
-    declare -A seen_repos
-    
-    # Clean main sources.list
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "$line" ]]; then
-            echo "$line" >> "$temp_file"
-            continue
-        fi
-        
-        if [[ "$line" =~ ^deb ]]; then
-            read -r _ url dist components <<< "$line"
-            local key="${url}_${dist}"
-            if [[ -v "seen_repos[$key]" ]]; then
-                echo "# $line" >> "$temp_file"
-                cleaned_count=$((cleaned_count + 1))
-            else
-                echo "$line" >> "$temp_file"
-                seen_repos[$key]="$components"
-            fi
-        else
-            echo "$line" >> "$temp_file"
-        fi
-    done < "$sources_file"
-    
-    mv "$temp_file" "$sources_file"
-    chmod 644 "$sources_file"
-    
-    # Clean up old Proxmox repository files
-    local old_pve_files=(/etc/apt/sources.list.d/pve-*.list)
-    for file in "${old_pve_files[@]}"; do
-        if [ -f "$file" ] && [[ "$file" != "/etc/apt/sources.list.d/pve-enterprise.list" ]]; then
-            # Check if we have the new .sources format
-            if [ -f "/etc/apt/sources.list.d/proxmox.sources" ]; then
-                msg_info "$(translate "Removing old repository file: $(basename "$file")")"
-                rm -f "$file"
-                cleaned_count=$((cleaned_count + 1))
-            fi
-        fi
-    done
-    
-    if [ $cleaned_count -gt 0 ]; then
-        msg_ok "$(translate "Cleaned up $cleaned_count duplicate/old repositories")"
-        apt-get update > /dev/null 2>&1
-    else
-        msg_ok "$(translate "No duplicate repositories found")"
-    fi
-}
 
 
-
-
-
-
-
-
-lvm_repair_check() {
-    msg_info "$(translate "Checking and repairing old LVM PV headers (if needed)...")"
-    
-    pvs_output=$(LC_ALL=C pvs -v 2>&1 | grep "old PV header")
-    if [ -z "$pvs_output" ]; then
-        msg_ok "$(translate "No PVs with old headers found.")"
-        return
-    fi
-    
-    declare -A vg_map
-    while read -r line; do
-        pv=$(echo "$line" | grep -o '/dev/[^ ]*')
-        vg=$(pvs -o vg_name --noheadings "$pv" | awk '{print $1}')
-        if [ -n "$vg" ]; then
-            vg_map["$vg"]=1
-        fi
-    done <<< "$pvs_output"
-    
-    for vg in "${!vg_map[@]}"; do
-        msg_warn "$(translate "Old PV header(s) found in VG $vg. Updating metadata...")"
-        vgck --updatemetadata "$vg"
-        vgchange -ay "$vg"
-        if [ $? -ne 0 ]; then
-            msg_warn "$(translate "Metadata update failed for VG $vg. Review manually.")"
-        else
-            msg_ok "$(translate "Metadata updated successfully for VG $vg")"
-        fi
-    done
-}
 
 
 
@@ -4114,6 +2559,73 @@ lvm_repair_check() {
 
 
 
+
+
+
+
+install_system_utils() {
+    msg_info2 "$(translate "Installing system utilities...")"
+
+    # Build checklist from global PROXMENUX_UTILS array
+    local checklist_items=()
+    for util_entry in "${PROXMENUX_UTILS[@]}"; do
+        IFS=':' read -r pkg cmd desc <<< "$util_entry"
+        checklist_items+=("$pkg" "$(translate "$desc")" "OFF")
+    done
+
+    exec 3>&1
+    local selected
+    selected=$(dialog --clear --backtitle "ProxMenux" \
+        --title "$(translate "Select utilities to install")" \
+        --checklist "$(translate "Use SPACE to select, ENTER to confirm")" \
+        25 80 20 "${checklist_items[@]}" 2>&1 1>&3)
+    local dialog_exit=$?
+    exec 3>&-
+
+    if [[ $dialog_exit -ne 0 || -z "$selected" ]]; then
+        msg_warn "$(translate "No utilities selected")"
+        return 0
+    fi
+
+    clear
+    show_proxmenux_logo
+
+    if ! ensure_repositories; then
+        msg_error "$(translate "Failed to configure repositories. Installation aborted.")"
+        return 1
+    fi
+
+    local success=0 failed=0 warning=0
+    local selected_array
+    IFS=' ' read -ra selected_array <<< "$selected"
+
+    for util in "${selected_array[@]}"; do
+        util=$(echo "$util" | tr -d '"')
+        local pkg_cmd="$util" pkg_desc="$util"
+        for util_entry in "${PROXMENUX_UTILS[@]}"; do
+            IFS=':' read -r epkg ecmd edesc <<< "$util_entry"
+            if [[ "$epkg" == "$util" ]]; then
+                pkg_cmd="$ecmd"
+                pkg_desc="$edesc"
+                break
+            fi
+        done
+        install_single_package "$util" "$pkg_cmd" "$pkg_desc"
+        case $? in
+            0) success=$((success + 1)) ;;
+            1) failed=$((failed + 1)) ;;
+            2) warning=$((warning + 1)) ;;
+        esac
+    done
+
+    hash -r 2>/dev/null
+    echo
+    msg_info2 "$(translate "Installation summary"):"
+    [[ $success -gt 0 ]] && msg_ok "$(translate "Successful"): $success"
+    [[ $warning -gt 0 ]] && msg_warn "$(translate "With warnings"): $warning"
+    [[ $failed -gt 0 ]] && msg_error "$(translate "Failed"): $failed"
+    msg_success "$(translate "Utilities installation completed")"
+}
 
 
 
@@ -4141,15 +2653,13 @@ main_menu() {
     "System|Optimize journald|JOURNALD"
     "System|Optimize logrotate|LOGROTATE"
     "System|Increase various system limits|LIMITS"
-    "System|Ensure entropy pools are populated|ENTROPY"
+    # Entropy (haveged) removed — modern kernels 5.6+ have built-in entropy generation
     "System|Optimize Memory|MEMORYFIXES"
     "System|Enable fast reboots|KEXEC"
     "System|Enable restart on kernel panic|KERNELPANIC"
-    "System|Install kernel headers|KERNELHEADERS"
     "Optional|Apply AMD CPU fixes|AMDFIXES"
     "Virtualization|Install relevant guest agent|GUESTAGENT"
     "Virtualization|Enable VFIO IOMMU support|VFIO_IOMMU"
-    "Virtualization|KSM control daemon|KSMTUNED"
     "Network|Force APT to use IPv4|APTIPV4"
     "Network|Apply network optimizations|NET"
     "Network|Install Open vSwitch|OPENVSWITCH"
@@ -4159,8 +2669,6 @@ main_menu() {
     "Storage|Install ZFS auto-snapshot|ZFSAUTOSNAPSHOT"
     "Storage|Increase vzdump backup speed|VZDUMP"
     "Security|Disable portmapper/rpcbind|DISABLERPC"
-    "Security|Protect web interface with fail2ban|FAIL2BAN"
-    "Security|Install Lynis security tool|LYNIS"
     "Customization|Customize bashrc|BASHRC"
     "Customization|Set up custom MOTD banner|MOTD"
     "Customization|Remove subscription banner|NOSUBBANNER"
@@ -4169,7 +2677,6 @@ main_menu() {
     "Optional|Install and configure Fastfetch|FASTFETCH"
     "Optional|Update Proxmox VE Appliance Manager|PVEAM"
     "Optional|Add latest Ceph support|CEPH"
-    "Optional|Add Proxmox testing repository|REPOTEST"
     "Optional|Enable High Availability services|ENABLE_HA"
     "Optional|Install Figurine|FIGURINE"
     "Optional|Install and configure Log2RAM|LOG2RAM"
@@ -4295,15 +2802,13 @@ done
         JOURNALD) optimize_journald ;;
         LOGROTATE) optimize_logrotate ;;
         LIMITS) increase_system_limits ;;
-        ENTROPY) configure_entropy ;;
+        # ENTROPY removed — modern kernels 5.6+ have built-in entropy
         MEMORYFIXES) optimize_memory_settings ;;
         KEXEC) enable_kexec ;;
         KERNELPANIC) configure_kernel_panic ;;
-        KERNELHEADERS) install_kernel_headers ;;
         AMDFIXES) apply_amd_fixes ;;
         GUESTAGENT) install_guest_agent ;;
         VFIO_IOMMU) enable_vfio_iommu ;;
-        KSMTUNED) configure_ksmtuned ;;
         APTIPV4) force_apt_ipv4 ;;
         NET) apply_network_optimizations ;;
         OPENVSWITCH) install_openvswitch ;;
@@ -4312,8 +2817,6 @@ done
         ZFSAUTOSNAPSHOT) install_zfs_auto_snapshot ;;
         VZDUMP) optimize_vzdump ;;
         DISABLERPC) disable_rpc ;;
-        FAIL2BAN) install_fail2ban ;;
-        LYNIS) install_lynis ;;
         BASHRC) customize_bashrc ;;
         MOTD) setup_motd ;;
         NOSUBBANNER) remove_subscription_banner ;;
@@ -4321,7 +2824,6 @@ done
         PIGZ) configure_pigz ;;
         FASTFETCH) configure_fastfetch ;;
         CEPH) install_ceph ;;
-        REPOTEST) add_repo_test ;;
         ENABLE_HA) enable_ha ;;
         FIGURINE) configure_figurine ;;
         LOG2RAM) configure_log2ram ;;

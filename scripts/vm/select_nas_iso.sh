@@ -7,7 +7,7 @@
 # Copyright   : (c) 2024 MacRimi
 # License     : (GPL-3.0) (https://github.com/MacRimi/ProxMenux/blob/main/LICENSE)
 # Version     : 1.0
-# Last Updated: 07/05/2025
+# Last Updated: 04/04/2026
 # ==========================================================
 # Description:
 # This script is part of the central ProxMenux VM creation module. It allows users
@@ -24,11 +24,20 @@
 # consistent and maintainable way, using ProxMenux standards.
 # ==========================================================
 
-
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_SCRIPTS_LOCAL="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCAL_SCRIPTS_DEFAULT="/usr/local/share/proxmenux/scripts"
+LOCAL_SCRIPTS="$LOCAL_SCRIPTS_DEFAULT"
 BASE_DIR="/usr/local/share/proxmenux"
-UTILS_FILE="$BASE_DIR/utils.sh"
+UTILS_FILE="$LOCAL_SCRIPTS/utils.sh"
 VENV_PATH="/opt/googletrans-env"
-LOCAL_SCRIPTS="/usr/local/share/proxmenux/scripts"
+
+if [[ -f "$LOCAL_SCRIPTS_LOCAL/utils.sh" ]]; then
+  LOCAL_SCRIPTS="$LOCAL_SCRIPTS_LOCAL"
+  UTILS_FILE="$LOCAL_SCRIPTS/utils.sh"
+elif [[ ! -f "$UTILS_FILE" ]]; then
+  UTILS_FILE="$BASE_DIR/utils.sh"
+fi
 
 [[ -f "$UTILS_FILE" ]] && source "$UTILS_FILE"
 load_language
@@ -36,6 +45,138 @@ initialize_cache
 
 ISO_DIR="/var/lib/vz/template/iso"
 mkdir -p "$ISO_DIR"
+
+function _has_curl() {
+  command -v curl >/dev/null 2>&1
+}
+
+function _latest_version_from_lines() {
+  awk 'NF' | sort -V | tail -n 1
+}
+
+function resolve_truenas_scale_iso() {
+  local default_ver="25.10.2.1"
+  local base_url="https://download.sys.truenas.net/TrueNAS-SCALE-Goldeye"
+  local detected_ver=""
+
+  if _has_curl; then
+    detected_ver=$(
+      curl -fsSL "${base_url}/" 2>/dev/null \
+        | grep -Eo '>[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?/' \
+        | tr -d '>/' \
+        | _latest_version_from_lines
+    )
+  fi
+
+  [[ -z "$detected_ver" ]] && detected_ver="$default_ver"
+
+  ISO_NAME="TrueNAS SCALE ${detected_ver} (Goldeye)"
+  ISO_FILE="TrueNAS-SCALE-${detected_ver}.iso"
+  ISO_URL="${base_url}/${detected_ver}/${ISO_FILE}"
+  ISO_PATH="$ISO_DIR/$ISO_FILE"
+  HN="TrueNAS-Scale"
+}
+
+function resolve_truenas_core_iso() {
+  local default_file="TrueNAS-13.3-U1.2.iso"
+  local detected_file=""
+  local base_url="https://download.freenas.org/13.3/STABLE/latest/x64"
+
+  if _has_curl; then
+    detected_file=$(
+      curl -fsSL "${base_url}/" 2>/dev/null \
+        | grep -Eo 'TrueNAS-13\.3-[^"]+\.iso' \
+        | head -n 1
+    )
+  fi
+
+  [[ -z "$detected_file" ]] && detected_file="$default_file"
+
+  ISO_NAME="TrueNAS CORE 13.3"
+  ISO_FILE="$detected_file"
+  ISO_URL="${base_url}/${ISO_FILE}"
+  ISO_PATH="$ISO_DIR/$ISO_FILE"
+  HN="TrueNAS-Core"
+}
+
+function resolve_omv_iso() {
+  local default_ver="8.1.1"
+  local detected_ver=""
+
+  if _has_curl; then
+    detected_ver=$(
+      curl -fsSL "https://sourceforge.net/projects/openmediavault/files/iso/" 2>/dev/null \
+        | grep -Eo '/projects/openmediavault/files/iso/[0-9]+\.[0-9]+\.[0-9]+/' \
+        | sed -E 's|.*/iso/([0-9]+\.[0-9]+\.[0-9]+)/$|\1|' \
+        | _latest_version_from_lines
+    )
+  fi
+
+  [[ -z "$detected_ver" ]] && detected_ver="$default_ver"
+
+  ISO_NAME="OpenMediaVault ${detected_ver}"
+  ISO_FILE="openmediavault_${detected_ver}-amd64.iso"
+  ISO_URL="https://sourceforge.net/projects/openmediavault/files/iso/${detected_ver}/${ISO_FILE}/download"
+  ISO_PATH="$ISO_DIR/$ISO_FILE"
+  HN="OpenMediaVault"
+}
+
+function resolve_xigmanas_iso() {
+  local default_train="14.3.0.5"
+  local default_build="14.3.0.5.10566"
+  local detected_train=""
+  local detected_build=""
+
+  if _has_curl; then
+    detected_train=$(
+      curl -fsSL "https://sourceforge.net/projects/xigmanas/files/" 2>/dev/null \
+        | grep -Eo '/projects/xigmanas/files/XigmaNAS-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/' \
+        | sed -E 's|.*/XigmaNAS-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/$|\1|' \
+        | _latest_version_from_lines
+    )
+  fi
+
+  [[ -z "$detected_train" ]] && detected_train="$default_train"
+
+  if _has_curl; then
+    detected_build=$(
+      curl -fsSL "https://sourceforge.net/projects/xigmanas/files/XigmaNAS-${detected_train}/" 2>/dev/null \
+        | grep -Eo "/projects/xigmanas/files/XigmaNAS-${detected_train}/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/" \
+        | sed -E "s|.*/XigmaNAS-${detected_train}/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/$|\\1|" \
+        | _latest_version_from_lines
+    )
+  fi
+
+  [[ -z "$detected_build" ]] && detected_build="$default_build"
+
+  ISO_NAME="XigmaNAS-${detected_train}"
+  ISO_FILE="XigmaNAS-x64-LiveCD-${detected_build}.iso"
+  ISO_URL="https://sourceforge.net/projects/xigmanas/files/XigmaNAS-${detected_train}/${detected_build}/${ISO_FILE}/download"
+  ISO_PATH="$ISO_DIR/$ISO_FILE"
+  HN="XigmaNAS"
+}
+
+function resolve_rockstor_iso() {
+  local default_file="Rockstor-Leap15.6-generic.x86_64-5.0.15-0.install.iso"
+  local detected_file=""
+  local base_url="https://rockstor.com/downloads/installer/leap/15.6/x86_64"
+
+  if _has_curl; then
+    detected_file=$(
+      curl -fsSL "${base_url}/" 2>/dev/null \
+        | grep -Eo 'Rockstor-Leap15\.6-generic\.x86_64-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.install\.iso' \
+        | _latest_version_from_lines
+    )
+  fi
+
+  [[ -z "$detected_file" ]] && detected_file="$default_file"
+
+  ISO_NAME="Rockstor"
+  ISO_FILE="$detected_file"
+  ISO_URL="${base_url}/${ISO_FILE}"
+  ISO_PATH="$ISO_DIR/$ISO_FILE"
+  HN="Rockstor"
+}
 
 function select_nas_iso() {
 
@@ -68,39 +209,19 @@ function select_nas_iso() {
       return 1
       ;;
     2)
-      ISO_NAME="TrueNAS SCALE 25 (Goldeye)"
-      ISO_URL="https://download.sys.truenas.net/TrueNAS-SCALE-Goldeye/25.10.0.1/TrueNAS-SCALE-25.10.0.1.iso"
-      ISO_FILE="TrueNAS-SCALE-25.10.0.1.iso"
-      ISO_PATH="$ISO_DIR/$ISO_FILE"
-      HN="TrueNAS-Scale"
+      resolve_truenas_scale_iso
       ;;
     3)
-      ISO_NAME="TrueNAS CORE 13.3"
-      ISO_URL="https://download.freenas.org/13.3/STABLE/latest/x64/TrueNAS-13.3-U1.2.iso"
-      ISO_FILE="TrueNAS-13.3-U1.2.iso"
-      ISO_PATH="$ISO_DIR/$ISO_FILE"
-      HN="TrueNAS-Core"
+      resolve_truenas_core_iso
       ;;
     4)
-      ISO_NAME="OpenMediaVault 7.4.17"
-      ISO_URL="https://sourceforge.net/projects/openmediavault/files/iso/7.4.17/openmediavault_7.4.17-amd64.iso/download"
-      ISO_FILE="openmediavault_7.4.17-amd64.iso"
-      ISO_PATH="$ISO_DIR/$ISO_FILE"
-      HN="OpenMediaVault"
+      resolve_omv_iso
       ;;
     5)
-      ISO_NAME="XigmaNAS-14.3.0.5"
-      ISO_URL="https://sourceforge.net/projects/xigmanas/files/XigmaNAS-14.3.0.5/14.3.0.5.10566/XigmaNAS-x64-LiveCD-14.3.0.5.10566.iso/download"
-      ISO_FILE="XigmaNAS-x64-LiveCD-14.3.0.5.10566.iso"
-      ISO_PATH="$ISO_DIR/$ISO_FILE"
-      HN="XigmaNAS"
+      resolve_xigmanas_iso
       ;;
     6)
-      ISO_NAME="Rockstor"
-      ISO_URL="https://rockstor.com/downloads/installer/leap/15.6/x86_64/Rockstor-Leap15.6-generic.x86_64-5.0.15-0.install.iso"
-      ISO_FILE="Rockstor-Leap15.6-generic.x86_64-5.0.15-0.install.iso"
-      ISO_PATH="$ISO_DIR/$ISO_FILE"
-      HN="Rockstor"
+      resolve_rockstor_iso
       ;;
     7)
       bash "$LOCAL_SCRIPTS/vm/zimaos.sh"

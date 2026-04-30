@@ -144,9 +144,12 @@ The following dependencies are installed automatically during setup:
 | `python3` + `python3-venv` | Translation support *(Translation version only)* |
 | `googletrans` | Google Translate library *(Translation version only)* |
 
+<br>
+
+> **🛡️ Security Note / VirusTotal False Positive**
+> If you scan the raw installation URL on VirusTotal, you might see a 1/95 detection by heuristic engines like *Chong Lua Dao*. This is a **known false positive**. Because this script uses the standard `curl | bash` installation pattern and downloads legitimate binaries (like `jq` from its official GitHub release), overly aggressive scanners flag the *behavior*. The script is 100% open source and safe to review. You can read more about this in [Issue #162](https://github.com/MacRimi/ProxMenux/issues/162).
 
 ---
-
 
 ## ⭐ Support the Project!
 If you find **ProxMenux** useful, consider giving it a ⭐ on GitHub to help others discover it!
