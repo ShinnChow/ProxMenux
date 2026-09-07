@@ -4662,7 +4662,7 @@
     ],
     "notes": [],
     "port": 3000,
-    "website": "https://drawdb.vercel.app",
+    "website": "https://www.drawdb.app",
     "documentation": "https://github.com/drawdb-io/drawdb",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/drawdb.webp",
     "updateable": true,
@@ -10923,7 +10923,7 @@
     "updateable": false,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "vm"
     ],
@@ -17179,36 +17179,6 @@
     "website": "https://simplelogin.io/",
     "documentation": "https://github.com/simple-login/app/blob/master/docs/",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/simplelogin.webp",
-    "updateable": true,
-    "privileged": false,
-    "has_arm": false,
-    "is_dev": true,
-    "execute_in": [
-      "lxc"
-    ],
-    "config_path": "",
-    "os": ""
-  },
-  {
-    "name": "Skylite-UX",
-    "slug": "skylite-ux",
-    "desc": "Skylite-UX is an open-source, self-hosted family management app with calendar, todos, shopping lists, and user management.",
-    "script": "ct/skylite-ux.sh",
-    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/skylite-ux.sh",
-    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/skylite-ux.sh",
-    "type": "lxc",
-    "type_id": "nm9bra8mzye2scg",
-    "categories": [
-      "scriptcat00019"
-    ],
-    "category_names": [
-      "Automation & Scheduling"
-    ],
-    "notes": [],
-    "port": 3000,
-    "website": "https://github.com/Wetzel402/Skylite-UX",
-    "documentation": "https://github.com/Wetzel402/Skylite-UX",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/skylite-ux.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
