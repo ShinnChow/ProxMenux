@@ -7075,7 +7075,7 @@
     ],
     "notes": [],
     "port": 8080,
-    "website": "https://hammereditor.com",
+    "website": "https://hammer.ink/",
     "documentation": "https://github.com/Darkrock-Studios/hammer-editor/blob/develop/HOW-TO-RUN-A-SERVER.md",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hammer-editor.webp",
     "updateable": true,
