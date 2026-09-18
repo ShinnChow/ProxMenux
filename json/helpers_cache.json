@@ -445,7 +445,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "vm"
     ],
@@ -4088,6 +4088,36 @@
     "default_credentials": {
       "username": "root",
       "password": ""
+    },
+    "os": ""
+  },
+  {
+    "name": "DietPi",
+    "slug": "dietpi",
+    "desc": "DietPi is a lightweight Debian-based OS with a curated software catalogue (dietpi-software) and simple configuration tools. The script creates a Debian LXC and converts it with the official dietpi-installer.",
+    "script": "ct/dietpi.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dietpi.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dietpi.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 0,
+    "website": "https://dietpi.com/",
+    "documentation": "https://dietpi.com/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/dietpi.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "root",
+      "password": "dietpi"
     },
     "os": ""
   },
@@ -9952,6 +9982,36 @@
     "os": ""
   },
   {
+    "name": "LocalAI",
+    "slug": "localai",
+    "desc": "LocalAI is a drop-in replacement for the OpenAI API that runs entirely on your own hardware. One binary serves text generation, image generation, speech-to-text and text-to-speech behind OpenAI-compatible endpoints, backed by a model gallery and pluggable inference backends. Heavier than llama.cpp, but multi-modal and self-managing.",
+    "script": "ct/localai.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/localai.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/localai.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://localai.io/",
+    "documentation": "https://localai.io/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/localai.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Logseq",
     "slug": "logseq",
     "desc": "Logseq is a privacy-first, open-source knowledge base and outliner for organizing notes, tasks and connected thoughts with Markdown and a local-first graph. This deployment builds and serves the self-hosted web version behind Nginx.",
@@ -11880,6 +11940,36 @@
     "os": ""
   },
   {
+    "name": "NextDNS",
+    "slug": "nextdns",
+    "desc": "NextDNS is a DNS-over-HTTPS (DoH) client and resolver that blocks ads, trackers and malware using cloud-managed profiles. This script installs a minimal Debian LXC with the official NextDNS CLI from the NextDNS apt repository, prompts for your profile ID, and configures router mode so DNS is served on TCP/UDP port 53.",
+    "script": "ct/nextdns.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nextdns.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nextdns.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00005"
+    ],
+    "category_names": [
+      "Adblock & DNS"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://nextdns.io/",
+    "documentation": "https://github.com/nextdns/nextdns/wiki",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/nextdns.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Nexterm",
     "slug": "nexterm",
     "desc": "Nexterm is an open-source server management software for SSH, VNC & RDP. It bundles a web interface, file management, monitoring, and team collaboration with two-factor authentication, OIDC SSO, and encrypted credential storage.",
@@ -13125,6 +13215,40 @@
     "os": ""
   },
   {
+    "name": "OpenList",
+    "slug": "openlist",
+    "desc": "OpenList is a file list program that mounts many storage backends - S3, WebDAV, OneDrive, Google Drive, SFTP, local disks and more - behind one web UI, and serves them again over WebDAV, FTP and S3. It is the community-driven fork of AList.",
+    "script": "ct/openlist.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/openlist.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/openlist.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00011"
+    ],
+    "category_names": [
+      "Files & Downloads"
+    ],
+    "notes": [],
+    "port": 5244,
+    "website": "https://oplist.org/",
+    "documentation": "https://doc.oplist.org/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/openlist.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "OpenObserve",
     "slug": "openobserve",
     "desc": "OpenObserve is a simple yet sophisticated log search, infrastructure monitoring, and APM solution.",
@@ -13246,6 +13370,36 @@
     "privileged": true,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "OpenViking",
+    "slug": "openviking",
+    "desc": "OpenViking is a self-evolving context database for AI agents that unifies agent memory, knowledge RAG and skills. Run it as a standalone HTTP server and connect any client (Python SDK, CLI, or the bundled Web Studio).",
+    "script": "ct/openviking.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/openviking.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/openviking.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 1933,
+    "website": "https://www.openviking.ai/",
+    "documentation": "https://docs.openviking.ai/",
+    "logo": "https://raw.githubusercontent.com/volcengine/OpenViking/main/web-studio/public/icon-512.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -15990,6 +16144,36 @@
     "os": ""
   },
   {
+    "name": "Razzia",
+    "slug": "razzia",
+    "desc": "Razzia is a self-hosted, open-source quiz platform for smaller events. A manager hosts a live quiz from the browser while participants join with a room code from their own devices, with quizzes, results and custom branding stored as files in the config folder.",
+    "script": "ct/razzia.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/razzia.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/razzia.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00024"
+    ],
+    "category_names": [
+      "Gaming & Leisure"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://github.com/Ralex91/Razzia",
+    "documentation": "https://github.com/Ralex91/Razzia/blob/main/docs/README.md",
+    "logo": "https://cdn.jsdelivr.net/gh/Ralex91/Razzia@main/packages/web/public/icon.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Rclone",
     "slug": "rclone",
     "desc": "Rclone is a command-line program to manage files on cloud storage. It is a feature-rich alternative to cloud vendors' web storage interfaces",
@@ -18431,6 +18615,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "T3 Code",
+    "slug": "t3code",
+    "desc": "T3 Code is a web and desktop control surface for running coding agents on your machine.",
+    "script": "ct/t3code.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/t3code.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/t3code.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 3773,
+    "website": "https://t3.codes",
+    "documentation": "https://github.com/pingdotgg/t3code/tree/main/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/t3code.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -21147,6 +21361,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "WRP",
+    "slug": "wrp",
+    "desc": "WRP (Web Rendering Proxy) is a browser-in-browser proxy server that lets historical and vintage web browsers use the modern web. It drives a headless Chromium instance and renders pages back as clickable images or simplified HTML, so clients as old as Mosaic can browse today's HTTPS-only web.",
+    "script": "ct/wrp.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/wrp.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/wrp.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00004"
+    ],
+    "category_names": [
+      "Network & Firewall"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://github.com/tenox7/wrp",
+    "documentation": "https://github.com/tenox7/wrp#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/chromium.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
