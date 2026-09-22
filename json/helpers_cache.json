@@ -1402,7 +1402,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -9487,6 +9487,40 @@
       "lxc"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "LibreDB Studio",
+    "slug": "libredbstudio",
+    "desc": "LibreDB Studio is a browser-based SQL IDE you run on your own server. It connects to PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, SQL Server, MongoDB, Redis, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Apache Trino and Apache Cassandra. Optional AI query assistance works with a local Ollama model, and read-only access is enforced by the database itself rather than by parsing SQL.",
+    "script": "ct/libredbstudio.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/libredbstudio.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/libredbstudio.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://libredb.org/",
+    "documentation": "https://github.com/libredb/libredb-studio/blob/main/README.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/libredb-studio.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin@libredb.org",
+      "password": ""
+    },
     "os": ""
   },
   {
