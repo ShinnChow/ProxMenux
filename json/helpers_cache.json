@@ -4392,7 +4392,7 @@
     "notes": [],
     "port": 3000,
     "website": "https://dockhand.pro/",
-    "documentation": "",
+    "documentation": "https://dockhand.pro/manual/",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/dockhand.webp",
     "updateable": true,
     "privileged": false,
