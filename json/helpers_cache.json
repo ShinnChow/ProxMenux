@@ -5679,6 +5679,36 @@
     "os": ""
   },
   {
+    "name": "Firefox Syncserver",
+    "slug": "firefox-syncserver",
+    "desc": "Firefox Syncserver (syncstorage-rs) is Mozilla's own Rust server behind Firefox Sync, combining the sync storage and the tokenserver in one binary. Self-hosted, it keeps your Firefox bookmarks, history, passwords, open tabs, add-ons and form data on your own infrastructure, while you still sign in with a regular Mozilla account. Firefox encrypts every record before upload, so the server never sees their contents.",
+    "script": "ct/firefox-syncserver.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/firefox-syncserver.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/firefox-syncserver.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00007"
+    ],
+    "category_names": [
+      "Backup & Recovery"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://www.mozilla.org/firefox/features/sync/",
+    "documentation": "https://mozilla-services.github.io/syncstorage-rs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/firefox.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "fireshare",
     "slug": "fireshare",
     "desc": "Fireshare is a self-hosted app that lets you share videos — particularly gaming clips — via unique links. You upload videos to a folder, and the app generates shareable URLs for each one. It's designed as a lightweight alternative to services like Medal or YouTube for people who want full control over their content without relying on third-party platforms.",
@@ -6460,6 +6490,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Gitea Runner",
+    "slug": "gitea-runner",
+    "desc": "Gitea Runner (act_runner) is the daemon that executes CI/CD jobs for Gitea Actions. It connects to your Gitea instance, polls for queued workflow runs, and executes tasks using either host execution or containerized engines.",
+    "script": "ct/gitea-runner.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/gitea-runner.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/gitea-runner.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://gitea.com/gitea/runner",
+    "documentation": "https://docs.gitea.com/runner/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/gitea.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -8930,6 +8990,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Keeper",
+    "slug": "keeper",
+    "desc": "Keeper is an open-source calendar syncing tool. It pulls events from iCal/ICS links, CalDAV, iCloud, Fastmail, Google Calendar and Outlook, and pushes them to one or many destination calendars, removing copies again when the source event is deleted. Self-hosted instances get every Pro feature.",
+    "script": "ct/keeper.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/keeper.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/keeper.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://www.keeper.sh/",
+    "documentation": "https://github.com/ridafkih/keeper.sh#self-hosted",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/keeper.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -14644,6 +14734,40 @@
     "os": ""
   },
   {
+    "name": "PigeonPod",
+    "slug": "pigeonpod",
+    "desc": "PigeonPod turns YouTube and Bilibili channels and playlists into podcast RSS feeds you can subscribe to in any podcast app. It downloads new episodes as audio or video with yt-dlp, and supports per-feed keyword and duration filters, cookies for restricted content, proxies, and local or S3 storage.",
+    "script": "ct/pigeonpod.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/pigeonpod.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/pigeonpod.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://pigeonpod.cloud/",
+    "documentation": "https://github.com/aizhimou/pigeon-pod/wiki",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/pigeonpod.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "root",
+      "password": "Root@123"
+    },
+    "os": ""
+  },
+  {
     "name": "Pi-Hole",
     "slug": "pihole",
     "desc": "Pi-hole is a free, open-source network-level advertisement and Internet tracker blocking application. It runs on a Raspberry Pi or other Linux-based systems and acts as a DNS sinkhole, blocking unwanted traffic before it reaches a user's device. Pi-hole can also function as a DHCP server, providing IP addresses and other network configuration information to devices on a network. The software is highly configurable and supports a wide range of customizations, such as allowing or blocking specific domains, setting up blocklists and whitelists, and customizing the appearance of the web-based interface. The main purpose of Pi-hole is to protect users' privacy and security by blocking unwanted and potentially malicious content, such as ads, trackers, and malware. It is designed to be easy to set up and use, and can be configured through a web-based interface or through a terminal-based command-line interface.",
@@ -18624,6 +18748,36 @@
     "os": ""
   },
   {
+    "name": "Streamystats",
+    "slug": "streamystats",
+    "desc": "Streamystats is a statistics and analytics service for Jellyfin. It tracks playback sessions through the Jellyfin API and shows watch history, per-user, library and client statistics, and watch-time graphs. It supports multiple servers and can import history from Jellystat and the Playback Reporting plugin. Optional AI features add library chat and embedding-based recommendations through OpenAI-compatible, Ollama or Anthropic providers.",
+    "script": "ct/streamystats.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/streamystats.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/streamystats.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://github.com/fredrikburmester/streamystats",
+    "documentation": "https://github.com/fredrikburmester/streamystats/blob/main/DOCKERLESS.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/streamystats.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Stylus",
     "slug": "stylus",
     "desc": "Stylus (style + status) is a lightweight status page for infrastructure and networks. Configure a set of bash scripts that test the various parts of your infrastructure, set up visualizations with minimal configuration, and Stylus will generate you a dashboard for your system.",
@@ -19992,6 +20146,40 @@
     "os": ""
   },
   {
+    "name": "Tvheadend",
+    "slug": "tvheadend",
+    "desc": "Tvheadend is a TV streaming server and Digital Video Recorder for Linux, supporting DVB-S/S2, DVB-C, DVB-T/T2, ATSC, IPTV, SAT>IP and HDHomeRun as input sources, with HTSP and HTTP streaming output.",
+    "script": "ct/tvheadend.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/tvheadend.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/tvheadend.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 9981,
+    "website": "https://tvheadend.org/",
+    "documentation": "https://docs.tvheadend.org",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/tvheadend.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": "auto-generated"
+    },
+    "os": ""
+  },
+  {
     "name": "Twenty",
     "slug": "twenty",
     "desc": "Twenty is a modern open-source CRM platform that helps you manage customer relationships, track deals, and organize contacts with a clean and powerful interface.",
@@ -21177,6 +21365,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Weblate",
+    "slug": "weblate",
+    "desc": "Weblate is a web-based continuous localization system with tight version control integration. Translators work in the browser while Weblate pulls from and pushes to your Git or Mercurial repositories, with quality checks, translation memory, machine translation, glossaries and add-ons across dozens of file formats.",
+    "script": "ct/weblate.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/weblate.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/weblate.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://weblate.org/",
+    "documentation": "https://docs.weblate.org/en/latest/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/weblate.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
