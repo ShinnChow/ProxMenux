@@ -30,6 +30,40 @@
     "os": ""
   },
   {
+    "name": "8mb.local",
+    "slug": "8mblocal",
+    "desc": "8mb.local is a self-hosted video compressor inspired by 8mb.video. Drop in a video, pick a target size such as 8, 25 or 50 MB, and it calculates the bitrate and encodes to H.264, HEVC or AV1, with NVIDIA NVENC, Intel Quick Sync, VAAPI or CPU encoders, live progress, trimming, batch uploads, presets and a watched folder. This script builds the FastAPI backend, Celery worker and SvelteKit UI from source and runs them with Redis and FFmpeg.",
+    "script": "ct/8mblocal.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/8mblocal.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/8mblocal.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 8001,
+    "website": "https://github.com/JMS1717/8mb.local",
+    "documentation": "https://github.com/JMS1717/8mb.local#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/8mb-local.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Actual Budget Prometheus Exporter",
     "slug": "actual-budget-prometheus-exporter",
     "desc": "Prometheus exporter for Actual Budget. Exposes account balances, budget balances, transaction counts and uncategorized/transfer counts as metrics on /metrics. Installs as an addon into an existing LXC (e.g. alongside your Actual Budget server) and builds from source with Node.js.",
@@ -2798,6 +2832,36 @@
     "os": ""
   },
   {
+    "name": "Cinephage",
+    "slug": "cinephage",
+    "desc": "Cinephage is a self-hosted media manager that covers in one app what usually takes Radarr, Sonarr, Prowlarr, Bazarr and Overseerr: it discovers, searches, downloads and organizes movies and TV shows, manages indexers and subtitles, and adds smart lists, .strm streaming and Live TV. Cloudflare-protected indexers are handled by a built-in headless browser (Camoufox) instead of FlareSolverr. Downloads go to external clients such as qBittorrent, SABnzbd or NZBGet.",
+    "script": "ct/cinephage.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/cinephage.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/cinephage.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00014"
+    ],
+    "category_names": [
+      "*Arr Suite"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://github.com/MoldyTaint/Cinephage",
+    "documentation": "https://docs.cinephage.net/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/cinephage.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "PVE LXC Cleaner",
     "slug": "clean-lxcs",
     "desc": "This script provides options to delete logs and cache, and repopulate apt lists for Ubuntu and Debian systems.",
@@ -3733,6 +3797,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Databasement",
+    "slug": "databasement",
+    "desc": "Databasement is a self-hosted database backup manager with a web UI. It registers MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and Redis/Valkey servers, optionally through an SSH tunnel, runs scheduled or on-demand backups with retention and compression or encryption, stores them on local disk, S3, SFTP, FTP, Samba or Azure Blob storage, and restores snapshots to any registered server. This script runs it with PHP-FPM, nginx and SQLite.",
+    "script": "ct/databasement.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/databasement.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/databasement.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00007"
+    ],
+    "category_names": [
+      "Backup & Recovery"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://david-crty.github.io/databasement/",
+    "documentation": "https://david-crty.github.io/databasement/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/databasement.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -5634,6 +5728,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Figranium",
+    "slug": "figranium",
+    "desc": "Figranium is a self-hosted browser automation platform. Workflows are stacked from blocks such as navigate, click, type, wait, loops, conditions, JavaScript and extraction in a visual editor, run in a headless Chromium driven by Playwright, and are triggered from the UI, on a schedule or through the REST API with runtime variables. A built-in noVNC viewer shows a visible browser for picking selectors and debugging runs.",
+    "script": "ct/figranium.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/figranium.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/figranium.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 11345,
+    "website": "https://figranium.dev/",
+    "documentation": "https://figranium.dev/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/figranium.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -7923,6 +8047,36 @@
     "os": ""
   },
   {
+    "name": "HomeTube",
+    "slug": "hometube",
+    "desc": "HomeTube is a web UI for yt-dlp that downloads single videos or whole playlists into a clean folder structure for Plex, Jellyfin or Emby. It picks the best AV1/VP9 quality profile automatically, embeds subtitles, chapters and metadata, marks or removes sponsor segments with SponsorBlock, cuts clips, keeps playlists in sync and can trigger a Jellyfin library refresh after each download.",
+    "script": "ct/hometube.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hometube.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hometube.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 8501,
+    "website": "https://hometube.latentnoise.dev/",
+    "documentation": "https://github.com/EgalitarianMonkey/hometube/blob/main/docs/README.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hometube.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "HortusFox",
     "slug": "hortusfox",
     "desc": "HortusFox is a collaborative plant management system for plant enthusiasts. Manage, document and track your entire plant collection – self-hosted and privacy-friendly.",
@@ -8038,6 +8192,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Ideon",
+    "slug": "ideon",
+    "desc": "Ideon is a self-hosted visual workspace that maps a project on an infinite canvas. Notes, files, links, tasks, kanban boards, sketches and live Git repository blocks (GitHub, GitLab, Gitea, Forgejo) sit side by side, are edited together in real time and can be rewound to earlier snapshots. This script builds Ideon from source and runs it with PostgreSQL.",
+    "script": "ct/ideon.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/ideon.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/ideon.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://www.theideon.com/",
+    "documentation": "https://www.theideon.com/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/ideon.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -12784,6 +12968,36 @@
     "os": ""
   },
   {
+    "name": "Note Mark",
+    "slug": "notemark",
+    "desc": "Note Mark is a lightning-fast, minimal web-based Markdown note-taking app. Notes are kept as plain Markdown files in folders on disk, with a SQLite database for users and the folder cache, and can be shared per note with other users or publicly. It offers a CodeMirror editor with optional Vim keybindings, rendered previews, asset uploads, a scratch pad and optional OpenID Connect login. This script builds the Go backend and the SolidJS/WebAssembly frontend from source.",
+    "script": "ct/notemark.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/notemark.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/notemark.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://notemark.docs.enchantedcode.co.uk/",
+    "documentation": "https://notemark.docs.enchantedcode.co.uk/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/note-mark.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Notifiarr",
     "slug": "notifiarr",
     "desc": "Notifiarr is a purpose built system to bring many applications together to manage and customize notifications via Discord. You can monitor many aspects of your network(s), be notified of downtime, be notified of health issues, etc",
@@ -16816,6 +17030,40 @@
     "os": ""
   },
   {
+    "name": "Reconya",
+    "slug": "reconya",
+    "desc": "Reconya is a network reconnaissance and asset discovery tool written in Go. It sweeps the networks you define with ICMP, ARP and TCP probes, identifies devices by MAC address, hostname and OS fingerprint, scans their top ports with service detection, passively picks up IPv6 neighbours, and raises alerts for new devices, risky open ports or unreachable hosts. Everything is shown in a web console with a topology map and a live event log.",
+    "script": "ct/reconya.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/reconya.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/reconya.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00004"
+    ],
+    "category_names": [
+      "Network & Firewall"
+    ],
+    "notes": [],
+    "port": 3008,
+    "website": "https://reconya.com/",
+    "documentation": "https://github.com/Dyneteq/reconya#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/reconya.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Recyclarr",
     "slug": "recyclarr",
     "desc": "Recyclarr is an automation tool that integrates with media management software like Sonarr and Radarr. It helps users manage and organize their media libraries by automatically searching for and adding content from indexers, based on user-defined criteria. It streamlines the process of maintaining and updating media collections without manual intervention.",
@@ -18217,6 +18465,40 @@
     "os": ""
   },
   {
+    "name": "Soulbeet",
+    "slug": "soulbeet",
+    "desc": "Soulbeet is a self-hosted music downloader and library manager. You search for an album or track, it picks the best source on Soulseek, downloads it through slskd, tags and files it into your library with beets, and can push discovery playlists built from your Last.fm or ListenBrainz history to Navidrome. This script builds Soulbeet from source and installs beets; slskd and Navidrome run separately.",
+    "script": "ct/soulbeet.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/soulbeet.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/soulbeet.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 9765,
+    "website": "https://github.com/terry90/soulbeet",
+    "documentation": "https://github.com/terry90/soulbeet#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/soulbeet.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": "admin"
+    },
+    "os": ""
+  },
+  {
     "name": "SoulSync",
     "slug": "soulsync",
     "desc": "SoulSync is an intelligent music discovery and automation platform. It monitors artists, generates playlists, downloads missing tracks from multiple sources, verifies audio fingerprints, enriches metadata, and syncs with your media server.",
@@ -19233,6 +19515,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "TaskView",
+    "slug": "taskview",
+    "desc": "TaskView is a self-hosted project and task management platform for teams. Projects hold task lists, Kanban boards, a dependency graph and sprints, with priorities, tags, deadlines, assignees, recurring tasks and time tracking, plus organizations with role-based permissions, SSO and SCIM, webhooks, GitHub/GitLab/Gitea issue sync, API tokens and an MCP server for AI assistants. This script builds the API and web client from source and runs them with PostgreSQL behind Nginx.",
+    "script": "ct/taskview.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/taskview.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/taskview.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://taskview.tech/",
+    "documentation": "https://taskview.tech/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/taskview.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "user",
+      "password": "user1!#Q"
+    },
     "os": ""
   },
   {
@@ -21028,6 +21344,36 @@
     "os": ""
   },
   {
+    "name": "Vane",
+    "slug": "vane",
+    "desc": "Vane (formerly Perplexica) is a self-hosted AI answering engine in the style of Perplexity. It searches the web through SearXNG, reads the results and answers with cited sources, using a local LLM through Ollama or a cloud provider such as OpenAI, Anthropic, Gemini or Groq. It also offers speed, balanced and quality modes, academic and discussion search, image and video search, file uploads and a search history. This script builds Vane from source and runs a private SearXNG instance with JSON output next to it.",
+    "script": "ct/vane.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/vane.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/vane.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://github.com/ItzCrazyKns/Vane",
+    "documentation": "https://github.com/ItzCrazyKns/Vane/tree/master/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/ItzCrazyKns/Vane@master/public/icon.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Vaultwarden",
     "slug": "vaultwarden",
     "desc": "Vaultwarden is a self-hosted password manager which provides secure and encrypted password storage. It uses client-side encryption and provides access to passwords through a web interface and mobile apps.",
@@ -21353,6 +21699,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "WatchState",
+    "slug": "watchstate",
+    "desc": "WatchState syncs play state (watched/unwatched and resume progress) between Plex, Jellyfin and Emby without relying on third-party services. It pulls changes from the media servers through scheduled imports or webhooks and pushes them to the others one-way or two-way, maps the users of each server, keeps portable backups of the play state and audits mismatched records with Media Health. This script builds the PHP backend and the web UI from source and serves them with nginx, PHP-FPM and Redis.",
+    "script": "ct/watchstate.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/watchstate.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/watchstate.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://github.com/arabcoders/watchstate",
+    "documentation": "https://github.com/arabcoders/watchstate/blob/master/FAQ.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/watchstate.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
