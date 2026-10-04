@@ -4769,6 +4769,36 @@
     "os": ""
   },
   {
+    "name": "Dragonfly",
+    "slug": "dragonfly",
+    "desc": "Dragonfly is an in-memory data store compatible with the Redis and Memcached APIs, so existing Redis clients, libraries and tools work against it unchanged. It is multi-threaded with a shared-nothing design that uses every core it is given, and it takes snapshots without forking, which keeps the memory overhead of a save low. This script installs the official package with a generated password and periodic snapshots.",
+    "script": "ct/dragonfly.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dragonfly.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dragonfly.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 6379,
+    "website": "https://www.dragonflydb.io/",
+    "documentation": "https://www.dragonflydb.io/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/dragonflydb/dragonfly@main/.github/images/logo-full.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "DrawDB",
     "slug": "drawdb",
     "desc": "DrawDB is a free, simple, and intuitive database entity relationship (DBER) editor right in your browser. Build diagrams with a few clicks, export SQL scripts, and customize your editor.",
@@ -5452,6 +5482,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "FalkorDB",
+    "slug": "falkordb",
+    "desc": "FalkorDB is a low-latency property graph database built on sparse matrices and linear algebra (GraphBLAS), aimed at knowledge graphs and GraphRAG for LLM applications. It runs as a Redis module, is queried with OpenCypher through the GRAPH.* commands from any Redis client, and comes with FalkorDB Browser, a web UI for running queries and exploring graphs.",
+    "script": "ct/falkordb.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/falkordb.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/falkordb.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://www.falkordb.com/",
+    "documentation": "https://docs.falkordb.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/FalkorDB/falkordb-browser@main/public/icons/F-light.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -10779,6 +10839,36 @@
       "username": "admin",
       "password": "auto-generated"
     },
+    "os": ""
+  },
+  {
+    "name": "Mathesar",
+    "slug": "mathesar",
+    "desc": "Mathesar is a spreadsheet-like web interface for PostgreSQL. Users of any technical skill level can view, edit, query and collaborate on Postgres data directly, build relationships between tables, import CSV files and create forms, while access is governed by native PostgreSQL roles and privileges.",
+    "script": "ct/mathesar.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/mathesar.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/mathesar.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Databases"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://mathesar.org/",
+    "documentation": "https://docs.mathesar.org/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/mathesar.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -21683,6 +21773,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Windmill",
+    "slug": "windmill",
+    "desc": "Windmill is an open-source developer platform that turns scripts into webhooks, workflows and UIs. Scripts in Python, TypeScript, Bash, SQL and other languages get an auto-generated form and API, can be chained into flows with branches, loops, retries and approval steps, run on schedules or from webhooks and other triggers, and back low-code apps. This script runs the Community Edition binary in standalone mode (server and worker in one process) with PostgreSQL.",
+    "script": "ct/windmill.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/windmill.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/windmill.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://www.windmill.dev/",
+    "documentation": "https://www.windmill.dev/docs/intro",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/windmill.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin@windmill.dev",
+      "password": "changeme"
+    },
     "os": ""
   },
   {
