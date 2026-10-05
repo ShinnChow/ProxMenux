@@ -1333,15 +1333,15 @@
     "type": "lxc",
     "type_id": "nm9bra8mzye2scg",
     "categories": [
-      "scriptcat00014"
+      "scriptcat00012"
     ],
     "category_names": [
-      "*Arr Suite"
+      "Documents & Notes"
     ],
     "notes": [],
     "port": 3010,
     "website": "https://community-scripts.org",
-    "documentation": "community-scripts/ProxmoxVED/blob/main/tools/arr-stack.sh",
+    "documentation": "community-scripts/DevScripts/blob/main/tools/arr-stack.sh",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/ProxmoxVE.webp",
     "updateable": true,
     "privileged": false,
@@ -11387,6 +11387,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Meme Search",
+    "slug": "memesearch",
+    "desc": "Meme Search is a self-hosted search engine for your own meme collection. A local vision model writes a description of each image, and the memes can then be found by keyword or by meaning (vector search), tagged, and fetched through a read-only search API. This script runs the Rails app with PostgreSQL and pgvector, plus the Python image-to-text service on the CPU.",
+    "script": "ct/memesearch.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/memesearch.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/memesearch.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://meme-search.neonwatty.com/",
+    "documentation": "https://github.com/meme-search/meme-search#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/meme-search.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
