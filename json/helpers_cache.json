@@ -2038,6 +2038,36 @@
     "os": ""
   },
   {
+    "name": "Blinko",
+    "slug": "blinko",
+    "desc": "Blinko is a self-hosted, open-source AI note-taking tool. Short \"blinkos\" capture fleeting ideas, longer notes hold everything else, both written in Markdown with tags, todos, attachments and references between notes. With an AI provider of your choice (OpenAI, Anthropic, Ollama and others) it adds RAG search and a chat over your own notes. This script builds the server and web app from source and runs them with PostgreSQL.",
+    "script": "ct/blinko.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/blinko.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/blinko.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 1111,
+    "website": "https://blinko.space/",
+    "documentation": "https://docs.blinko.space/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/blinko.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "BlissOS",
     "slug": "blissos-vm",
     "desc": "BlissOS is Android x86 as a full desktop operating system, running on its own kernel rather than inside a host. It suits a VM with a passed-through GPU, where Android apps get real graphics acceleration and their own machine.",
@@ -2494,6 +2524,40 @@
     "os": ""
   },
   {
+    "name": "Casdoor",
+    "slug": "casdoor",
+    "desc": "Casdoor is an open-source identity and access management (IAM) and single sign-on platform with a web UI. It acts as an OAuth 2.0, OIDC, SAML and CAS provider, adds LDAP, RADIUS and SCIM endpoints, social and enterprise login providers, MFA and WebAuthn, and manages organizations, users, roles and Casbin-based permissions. This script installs the prebuilt release with a local PostgreSQL database.",
+    "script": "ct/casdoor.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/casdoor.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/casdoor.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00006"
+    ],
+    "category_names": [
+      "Authentication & Security"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://casdoor.ai/",
+    "documentation": "https://casdoor.ai/docs/overview",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/casdoor.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": "123"
+    },
+    "os": ""
+  },
+  {
     "name": "Castopod",
     "slug": "castopod",
     "desc": "Castopod is a free and open-source podcast hosting platform with Podcasting 2.0, analytics and ActivityPub federation features.",
@@ -2677,6 +2741,38 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "ChartDB",
+    "slug": "chartdb",
+    "desc": "ChartDB is a database diagram editor that runs in the browser. A single query run against PostgreSQL, MySQL, MariaDB, SQL Server, SQLite, ClickHouse or CockroachDB returns the schema as JSON, which ChartDB turns into an editable entity-relationship diagram; diagrams can also be built from scratch, imported from DBML or SQL, and exported as SQL, DBML or images. This script builds the web app from source and serves it with nginx.",
+    "script": "ct/chartdb.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/chartdb.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/chartdb.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00008",
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "Databases",
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 443,
+    "website": "https://chartdb.io/",
+    "documentation": "https://docs.chartdb.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/chartdb.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -7110,6 +7206,40 @@
     "os": ""
   },
   {
+    "name": "Gopeed",
+    "slug": "gopeed",
+    "desc": "Gopeed is a fast, modern download manager for HTTP(S), BitTorrent, Magnet links and ed2k, written in Go and Flutter. It adds JavaScript extensions, a REST API, webhooks, post-download scripts and browser integration. This script installs the headless web edition, a single binary that serves the web UI and the API on port 9999 with login enabled.",
+    "script": "ct/gopeed.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/gopeed.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/gopeed.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00011"
+    ],
+    "category_names": [
+      "Files & Downloads"
+    ],
+    "notes": [],
+    "port": 9999,
+    "website": "https://gopeed.com/",
+    "documentation": "https://gopeed.com/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/gopeed.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "gopeed",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Gotenberg",
     "slug": "gotenberg",
     "desc": "Gotenberg is a developer-friendly API for converting numerous document formats (HTML, Markdown, URLs and LibreOffice-supported office documents such as DOCX, XLSX, PPTX and ODF) into PDF. It also merges, splits, flattens and manipulates PDFs using Chromium, LibreOffice, QPDF, pdfcpu, PDFtk and ExifTool. This script builds Gotenberg from source and runs it bare-metal instead of via Docker.",
@@ -7481,6 +7611,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Hanko",
+    "slug": "hanko",
+    "desc": "Hanko is an open-source authentication and user management backend, an alternative to Auth0 or Clerk. It provides passkeys, passwords, email passcodes, TOTP and security-key MFA, OAuth/OIDC and SAML single sign-on, sessions and JWTs, and web apps add the login through the Hanko Elements web components or SDKs. This script runs the Hanko backend (public and admin API) with PostgreSQL.",
+    "script": "ct/hanko.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hanko.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hanko.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00006"
+    ],
+    "category_names": [
+      "Authentication & Security"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://www.hanko.io/",
+    "documentation": "https://docs.hanko.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hanko.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -12802,6 +12962,40 @@
     "os": ""
   },
   {
+    "name": "Nightingale",
+    "slug": "nightingale",
+    "desc": "Nightingale is an open-source monitoring and alerting platform. Like Grafana it connects to existing data sources such as Prometheus, VictoriaMetrics, Elasticsearch, Loki, ClickHouse or MySQL, but its focus is the alerting engine: alert rules, muting, subscriptions, event pipelines and notifications to more than 20 channels, plus dashboards, a host inventory fed by the Categraf agent and a built-in time series database. This script installs the prebuilt release with MariaDB and Redis.",
+    "script": "ct/nightingale.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nightingale.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nightingale.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 17000,
+    "website": "https://n9e.github.io/",
+    "documentation": "https://n9e.github.io/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/n9e/n9e.github.io@main/static/apple-touch-icon.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "root",
+      "password": "root.2020"
+    },
+    "os": ""
+  },
+  {
     "name": "Nightscout",
     "slug": "nightscout",
     "desc": "Nightscout is an open source, DIY project that allows real time access to a CGM data via personal website, smartwatch watchers, or apps and widgets available for smartphones.",
@@ -15886,7 +16080,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -20733,6 +20927,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Typecho",
+    "slug": "typecho",
+    "desc": "Typecho is a lightweight, open-source PHP blogging platform with a Markdown editor, pages, categories and tags, threaded comments, themes, plugins and an XML-RPC API for desktop and mobile editors. This script installs the official release with nginx, PHP-FPM and SQLite and completes the setup with upstream's command-line installer, so no setup page is ever left open.",
+    "script": "ct/typecho.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/typecho.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/typecho.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://typecho.org/",
+    "documentation": "https://docs.typecho.org/",
+    "logo": "https://avatars.githubusercontent.com/u/2030842?v=4",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
