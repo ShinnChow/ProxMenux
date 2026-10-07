@@ -1256,7 +1256,7 @@
     "updateable": false,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "vm"
     ],
@@ -5761,7 +5761,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "vm"
     ],
@@ -11751,7 +11751,7 @@
     "notes": [],
     "port": 0,
     "website": "https://mikrotik.com/software",
-    "documentation": "https://help.mikrotik.com/docs/",
+    "documentation": "https://help.mikrotik.com/docs/spaces/ROS/pages/18350234/Cloud+Hosted+Router+CHR",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/mikrotik.webp",
     "updateable": false,
     "privileged": false,
@@ -11761,6 +11761,10 @@
       "vm"
     ],
     "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
