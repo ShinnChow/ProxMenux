@@ -19434,6 +19434,36 @@
     "os": ""
   },
   {
+    "name": "Stump",
+    "slug": "stump",
+    "desc": "Stump is a free and open-source comics, manga and digital book server with OPDS support. It scans folders of CBZ, CBR, EPUB and PDF files into libraries and series, reads them in the browser with progress tracking, and serves them to OPDS readers and the Stump mobile apps. This script installs the official Linux server release together with PDFium for PDF support.",
+    "script": "ct/stump.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/stump.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/stump.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 10801,
+    "website": "https://www.stumpapp.dev/",
+    "documentation": "https://www.stumpapp.dev/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/stump.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Stylus",
     "slug": "stylus",
     "desc": "Stylus (style + status) is a lightweight status page for infrastructure and networks. Configure a set of bash scripts that test the various parts of your infrastructure, set up visualizations with minimal configuration, and Stylus will generate you a dashboard for your system.",
@@ -21242,6 +21272,38 @@
     "os": ""
   },
   {
+    "name": "UniFi Protect Backup",
+    "slug": "unifi-protect-backup",
+    "desc": "Backs up UniFi Protect motion and smart-detection event clips to local or rclone-supported off-site storage in real time.",
+    "script": "ct/unifi-protect-backup.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/unifi-protect-backup.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/unifi-protect-backup.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00007",
+      "scriptcat00015"
+    ],
+    "category_names": [
+      "Backup & Recovery",
+      "NVR & Cameras"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://github.com/ep1cman/unifi-protect-backup",
+    "documentation": "https://github.com/ep1cman/unifi-protect-backup/blob/main/README.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/unifi.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Unmanic",
     "slug": "unmanic",
     "desc": "Unmanic is a simple tool for optimising your file library. You can use it to convert your files into a single, uniform format, manage file movements based on timestamps, or execute custom commands against a file based on its file size.",
@@ -21685,6 +21747,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "VictoriaLogs",
+    "slug": "victorialogs",
+    "desc": "VictoriaLogs is a fast, cost-effective and scalable open-source log database that can efficiently handle terabytes of logs with minimal resources.",
+    "script": "ct/victorialogs.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/victorialogs.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/victorialogs.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 9428,
+    "website": "https://victoriametrics.com/products/victorialogs/",
+    "documentation": "https://docs.victoriametrics.com/victorialogs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/victoriametrics.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -22535,6 +22627,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Woodpecker CI",
+    "slug": "woodpecker-ci",
+    "desc": "Woodpecker CI is a simple, community-driven CI/CD engine. Pipelines are YAML files in the repository that run on push, pull request, tag, release, cron or manual events, with matrix builds, secrets, approvals for forks and a web UI with live logs. This script installs the official server and one agent with the local backend and SQLite, and connects it to Forgejo, Gitea, GitHub, GitLab or Bitbucket.",
+    "script": "ct/woodpecker-ci.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/woodpecker-ci.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/woodpecker-ci.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://woodpecker-ci.org/",
+    "documentation": "https://woodpecker-ci.org/docs/intro",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/woodpecker-ci.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
