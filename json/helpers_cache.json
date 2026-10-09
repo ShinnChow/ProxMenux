@@ -64,6 +64,36 @@
     "os": ""
   },
   {
+    "name": "Activepieces",
+    "slug": "activepieces",
+    "desc": "Activepieces is an open-source workflow automation platform and Zapier alternative. Flows are built in a visual editor from several hundred integrations (pieces), branches, loops, human approvals and TypeScript code steps, run on schedules, webhooks or app events, and can call AI agents; every piece is also available as an MCP tool for LLM clients. This script builds the server, worker and web UI from source and runs them with PostgreSQL and Redis.",
+    "script": "ct/activepieces.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/activepieces.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/activepieces.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.activepieces.com/",
+    "documentation": "https://www.activepieces.com/docs/install/overview",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/activepieces.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Actual Budget Prometheus Exporter",
     "slug": "actual-budget-prometheus-exporter",
     "desc": "Prometheus exporter for Actual Budget. Exposes account balances, budget balances, transaction counts and uncategorized/transfer counts as metrics on /metrics. Installs as an addon into an existing LXC (e.g. alongside your Actual Budget server) and builds from source with Node.js.",
@@ -2275,6 +2305,36 @@
     "privileged": false,
     "has_arm": false,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Budibase",
+    "slug": "budibase",
+    "desc": "Budibase is a low-code platform for building internal tools: forms, portals, admin panels and approval apps on top of its built-in database or external sources such as PostgreSQL, MySQL, REST APIs and Google Sheets, plus automations triggered by events, schedules or webhooks. This script builds the app server and worker from source and runs them with CouchDB, Clouseau, SQS, Redis, Silo object storage and nginx, without Docker.",
+    "script": "ct/budibase.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/budibase.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/budibase.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://budibase.com/",
+    "documentation": "https://docs.budibase.com/docs/hosting-methods",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/budibase.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -6371,7 +6431,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -6432,6 +6492,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Formbricks",
+    "slug": "formbricks",
+    "desc": "Formbricks is an open-source survey and experience management platform and an alternative to Qualtrics. It runs link, website and in-app surveys with logic, multiple languages, hidden fields and partial responses, and passes responses on through webhooks, the API and integrations such as Slack, Notion and Zapier. This script builds the web app from source and runs it with PostgreSQL, Valkey and SpiceDB, which Formbricks 6 uses for authorization.",
+    "script": "ct/formbricks.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/formbricks.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/formbricks.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://formbricks.com/",
+    "documentation": "https://formbricks.com/docs/self-hosting/overview",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/formbricks.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -9954,6 +10044,36 @@
     "os": ""
   },
   {
+    "name": "Kyoo",
+    "slug": "kyoo",
+    "desc": "Kyoo is a self-hosted media server for movies, series and anime, an alternative to Jellyfin or Plex. It identifies files without a required folder structure, pulls metadata from TheMovieDB and TheTVDB, transcodes on the fly with automatic quality switching and hardware acceleration, detects intros and credits, and renders ASS and PGS subtitles in the browser. This script builds its auth, API, scanner, transcoder and web app from source and runs them with PostgreSQL behind nginx.",
+    "script": "ct/kyoo.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/kyoo.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/kyoo.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 443,
+    "website": "https://kyoo.zoriya.dev/",
+    "documentation": "https://github.com/zoriya/Kyoo/blob/master/INSTALLING.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/kyoo.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "LanguageTool",
     "slug": "languagetool",
     "desc": "LanguageTool is an Open Source proofreading software for English, Spanish, French, German, Portuguese, Polish, Dutch, and more than 20 other languages. It finds many errors that a simple spell checker cannot detect.",
@@ -10716,7 +10836,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -13157,6 +13277,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Norish",
+    "slug": "norish",
+    "desc": "Norish is a realtime, self-hosted recipe app for families and friends. Recipes are imported from a link, pasted text or photos, organised in cookbooks, planned on a calendar and turned into a shared grocery list that updates live for everyone in the household. This script builds the web app from source and runs it with PostgreSQL, Redis, the bundled recipe parser and the Obscura headless browser that renders pages for URL imports.",
+    "script": "ct/norish.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/norish.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/norish.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00024"
+    ],
+    "category_names": [
+      "Gaming & Leisure"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://norish.dev/",
+    "documentation": "https://docs.norish.dev/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/norish.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -17078,6 +17228,40 @@
     "os": ""
   },
   {
+    "name": "Rauthy",
+    "slug": "rauthy",
+    "desc": "Rauthy is a single sign-on identity and access management server. It is an OpenID Connect and OAuth 2 provider with an admin UI, passkey (FIDO2/WebAuthn) and OTP multi-factor login, upstream login providers, SCIM, forward auth and PAM/SSH login. This script builds Rauthy from the release source and runs it with its embedded Hiqlite (Raft-replicated SQLite) database, served over HTTPS with a self-signed certificate.",
+    "script": "ct/rauthy.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/rauthy.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/rauthy.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00006"
+    ],
+    "category_names": [
+      "Authentication & Security"
+    ],
+    "notes": [],
+    "port": 8443,
+    "website": "https://github.com/sebadob/rauthy",
+    "documentation": "https://sebadob.github.io/rauthy/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/rauthy.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin@localhost",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Razzia",
     "slug": "razzia",
     "desc": "Razzia is a self-hosted, open-source quiz platform for smaller events. A manager hosts a live quiz from the browser while participants join with a room code from their own devices, with quizzes, results and custom branding stored as files in the config folder.",
@@ -17620,6 +17804,36 @@
     "privileged": false,
     "has_arm": false,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Ryot",
+    "slug": "ryot",
+    "desc": "Ryot (Roll Your Own Tracker) is a self-hosted tracker for the media you consume and the workouts you do. It logs progress, ratings and reviews for movies, shows, books, audiobooks, anime, manga, comics, video games, podcasts, music and visual novels, pulls their metadata from providers such as TMDB, IGDB, OpenLibrary and AniList, imports history from Trakt, Goodreads, Jellyfin and others, and records workouts, exercises and body measurements. This script builds the Rust backend and the React frontend from source and runs them with PostgreSQL behind nginx.",
+    "script": "ct/ryot.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/ryot.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/ryot.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00024"
+    ],
+    "category_names": [
+      "Gaming & Leisure"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://ryot.io/",
+    "documentation": "https://docs.ryot.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/ryot.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -20892,7 +21106,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -21603,6 +21817,32 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "useSend",
+    "slug": "usesend",
+    "desc": "useSend is an open-source email sending platform and self-hosted alternative to Resend, SendGrid or Postmark. It sends transactional email through a REST API, SDKs or SMTP, and marketing campaigns to contact books from a visual editor, with domain verification, delivery, open and click tracking, bounces, suppression lists and webhooks. Delivery runs through Amazon SES. This script builds the web app and the SMTP proxy from source and runs them with PostgreSQL and Redis.",
+    "script": "ct/usesend.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/usesend.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/usesend.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 3000,
+    "website": "https://usesend.com/",
+    "documentation": "https://docs.usesend.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/usesend/useSend@main/apps/web/public/logo-squircle.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
