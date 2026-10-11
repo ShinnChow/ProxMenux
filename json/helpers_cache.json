@@ -3010,7 +3010,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -5016,6 +5016,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Downtify",
+    "slug": "downtify",
+    "desc": "Downtify is a self-hosted music downloader with a web interface. Paste a Spotify, YouTube Music or Deezer link, or search by name, and it reads the metadata without a Spotify account or API key, downloads the matching audio from YouTube Music with yt-dlp and tags it with cover art and lyrics. It also has a library with a built-in player, a Playlist Monitor that downloads new tracks from watched playlists and artists, podcasts, M3U export for Jellyfin, Navidrome and Plex, and accounts for several users.",
+    "script": "ct/downtify.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/downtify.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/downtify.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://downtify.henriquesebastiao.com/",
+    "documentation": "https://downtify.henriquesebastiao.com/getting-started/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/downtify.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": "downtify"
+    },
     "os": ""
   },
   {
@@ -14168,6 +14202,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "openGym",
+    "slug": "opengym",
+    "desc": "openGym is a self-hosted gym and body-weight tracker. Plan weekly routines, log workouts with supersets and cardio, track body weight, measurements and personal records, and browse a library of more than 5,600 exercises with animations. Every profile keeps its own data and syncs across devices; the web app installs to the home screen, and an Android app can pair with your server. This script builds the web app from source and runs the Node.js API behind nginx.",
+    "script": "ct/opengym.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/opengym.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/opengym.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00024"
+    ],
+    "category_names": [
+      "Gaming & Leisure"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://opengym.ch/",
+    "documentation": "https://github.com/DuarteSantos8/openGym/blob/main/docs/SELF_HOSTING.md",
+    "logo": "https://cdn.jsdelivr.net/gh/DuarteSantos8/openGym@main/frontend/public/icon-512.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
