@@ -5147,6 +5147,36 @@
     "os": ""
   },
   {
+    "name": "Dreeve",
+    "slug": "dreeve",
+    "desc": "Dreeve is a self-hosted dashboard for sports and fitness data. It imports your Strava activities and turns them into statistics, heatmaps, gear tracking, training analysis and yearly overviews - formerly known as Statistics for Strava.",
+    "script": "ct/dreeve.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dreeve.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dreeve.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://dreeve.app/",
+    "documentation": "https://docs.dreeve.app/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/dreeve.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "DroppedNeedle",
     "slug": "droppedneedle",
     "desc": "DroppedNeedle is a self-hosted music request and discovery app with a built-in native library and download engine (no Lidarr required). Search the full MusicBrainz catalogue, request whole albums or single tracks, and let the engine scan, tag, and organise your library while it drives downloads through your own slskd or Usenet/SABnzbd. Stream from Jellyfin, Navidrome, Plex, or your local files, get recommendations from your listening history, and scrobble to ListenBrainz and Last.fm. Play your library in third-party apps like Symfonium and Finamp over the OpenSubsonic and Jellyfin APIs. It all runs as a single Docker container, configured from the web UI.",
@@ -22414,7 +22444,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
