@@ -397,6 +397,36 @@
     "os": ""
   },
   {
+    "name": "AIOStreams",
+    "slug": "aiostreams",
+    "desc": "AIOStreams consolidates multiple Stremio addons and debrid services into a single, highly customisable super-addon, with filtering, sorting, and formatting of results.",
+    "script": "ct/aiostreams.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/aiostreams.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/aiostreams.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://github.com/Viren070/AIOStreams",
+    "documentation": "https://docs.aiostreams.viren070.me/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/aiostreams.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "AirTrail",
     "slug": "airtrail",
     "desc": "AirTrail is a modern, self-hosted personal flight tracking system. Log your flights, visualize them on an interactive world map, view detailed statistics, share flights between multiple users, and import from sources such as MyFlightRadar24, Flighty and OpenFlights.",
@@ -850,6 +880,38 @@
       "username": "anki",
       "password": "Generated during installation"
     },
+    "os": ""
+  },
+  {
+    "name": "Anubis",
+    "slug": "anubis",
+    "desc": "Anubis is a reverse proxy that sits in front of a web service and stops AI scrapers and abusive bots with a proof-of-work challenge, while letting real browsers and well-behaved crawlers through.",
+    "script": "ct/anubis.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/anubis.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/anubis.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00021",
+      "scriptcat00006"
+    ],
+    "category_names": [
+      "Webservers & Proxies",
+      "Authentication & Security"
+    ],
+    "notes": [],
+    "port": 8923,
+    "website": "https://anubis.techaro.lol/",
+    "documentation": "https://anubis.techaro.lol/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/anubis.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -2515,6 +2577,32 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Calagopus",
+    "slug": "calagopus",
+    "desc": "Modern game server management panel built in Rust. Deploy, monitor, and manage Minecraft, Hytale, and other game servers with industry-leading performance.",
+    "script": "ct/calagopus.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/calagopus.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/calagopus.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 8000,
+    "website": "https://calagopus.com",
+    "documentation": "https://calagopus.com/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/calagopus.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
