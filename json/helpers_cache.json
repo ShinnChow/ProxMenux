@@ -5129,7 +5129,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -8498,6 +8498,36 @@
     "website": "https://hometube.latentnoise.dev/",
     "documentation": "https://github.com/EgalitarianMonkey/hometube/blob/main/docs/README.md",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hometube.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Honcho",
+    "slug": "honcho",
+    "desc": "Honcho is an open-source memory server for building stateful AI agents. Applications write the messages of users and agents into workspaces, peers and sessions through a REST API or the Python and TypeScript SDKs; a background deriver has an LLM draw conclusions about every peer, keeps peer cards and session summaries and consolidates them in periodic dreams, and the dialectic chat endpoint answers questions about a peer in natural language. This script runs the FastAPI server and the deriver on Python 3.13 with PostgreSQL 17 (pgvector) and Redis, with JWT authentication switched on. Honcho has no web interface; the interactive API docs are at /docs.",
+    "script": "ct/honcho.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/honcho.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/honcho.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://honcho.dev/",
+    "documentation": "https://honcho.dev/docs/v3/contributing/self-hosting",
+    "logo": "https://cdn.jsdelivr.net/gh/plastic-labs/honcho@main/docs/favicon.svg",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -14379,7 +14409,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
