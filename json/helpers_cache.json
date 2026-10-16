@@ -5485,6 +5485,36 @@
     "os": ""
   },
   {
+    "name": "EmDash",
+    "slug": "emdash",
+    "desc": "EmDash is a full-stack TypeScript CMS built on Astro and meant as a modern successor to WordPress. It brings an admin panel with a visual schema builder, a media library, menus, widgets, revisions and scheduled publishing, stores rich text as structured Portable Text, runs plugins in sandboxes with declared capabilities, imports WordPress sites and ships an MCP server for AI tools. This script creates a site from one of the Node.js templates with upstream's create-emdash, builds it against the published packages and runs it on Node.js with SQLite and local media storage.",
+    "script": "ct/emdash.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/emdash.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/emdash.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00021"
+    ],
+    "category_names": [
+      "Webservers & Proxies"
+    ],
+    "notes": [],
+    "port": 4321,
+    "website": "https://emdashcms.com/",
+    "documentation": "https://docs.emdashcms.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/emdash-cms/emdash@main/docs/public/favicon.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "EMQX",
     "slug": "emqx",
     "desc": "EMQX is an open-source MQTT broker that features a high-performance, real-time message processing engine. It is designed to handle large-scale IoT deployments, providing fast and reliable message delivery for connected devices. EMQX is known for its scalability, reliability, and low latency, making it a popular choice for IoT and M2M applications. It also offers a wide range of features and plugins for enhanced security, monitoring, and management.",
