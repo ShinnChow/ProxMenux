@@ -32,7 +32,7 @@
   {
     "name": "8mb.local",
     "slug": "8mblocal",
-    "desc": "8mb.local is a self-hosted video compressor inspired by 8mb.video. Drop in a video, pick a target size such as 8, 25 or 50 MB, and it calculates the bitrate and encodes to H.264, HEVC or AV1, with NVIDIA NVENC, Intel Quick Sync, VAAPI or CPU encoders, live progress, trimming, batch uploads, presets and a watched folder. This script builds the FastAPI backend, Celery worker and SvelteKit UI from source and runs them with Redis and FFmpeg.",
+    "desc": "8mb.local is a self-hosted video compressor inspired by 8mb.video, free for non-commercial use (CC BY-NC 4.0). Pick a target size such as 8, 25 or 50 MB and it works out the bitrate and encodes to H.264, HEVC or AV1, on the CPU or with NVENC, Quick Sync or VAAPI.",
     "script": "ct/8mblocal.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/8mblocal.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/8mblocal.sh",
@@ -66,7 +66,7 @@
   {
     "name": "Activepieces",
     "slug": "activepieces",
-    "desc": "Activepieces is an open-source workflow automation platform and Zapier alternative. Flows are built in a visual editor from several hundred integrations (pieces), branches, loops, human approvals and TypeScript code steps, run on schedules, webhooks or app events, and can call AI agents; every piece is also available as an MCP tool for LLM clients. This script builds the server, worker and web UI from source and runs them with PostgreSQL and Redis.",
+    "desc": "Activepieces is an open-source workflow automation platform and Zapier alternative. Flows are built visually from hundreds of integrations, branches, loops, approvals and TypeScript code steps, run on schedules, webhooks or app events, and every integration is also available as an MCP tool.",
     "script": "ct/activepieces.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/activepieces.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/activepieces.sh",
@@ -2132,7 +2132,7 @@
   {
     "name": "Blinko",
     "slug": "blinko",
-    "desc": "Blinko is a self-hosted, open-source AI note-taking tool. Short \"blinkos\" capture fleeting ideas, longer notes hold everything else, both written in Markdown with tags, todos, attachments and references between notes. With an AI provider of your choice (OpenAI, Anthropic, Ollama and others) it adds RAG search and a chat over your own notes. This script builds the server and web app from source and runs them with PostgreSQL.",
+    "desc": "Blinko is a self-hosted, open-source AI note-taking tool. Short \"blinkos\" capture quick ideas and longer notes hold the rest, all in Markdown with tags and todos. With an AI provider such as OpenAI, Anthropic or Ollama it adds RAG search and a chat over your notes.",
     "script": "ct/blinko.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/blinko.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/blinko.sh",
@@ -2376,7 +2376,7 @@
   {
     "name": "Budibase",
     "slug": "budibase",
-    "desc": "Budibase is a low-code platform for building internal tools: forms, portals, admin panels and approval apps on top of its built-in database or external sources such as PostgreSQL, MySQL, REST APIs and Google Sheets, plus automations triggered by events, schedules or webhooks. This script builds the app server and worker from source and runs them with CouchDB, Clouseau, SQS, Redis, Silo object storage and nginx, without Docker.",
+    "desc": "Budibase is a low-code platform for building internal tools such as forms, portals, admin panels and approval apps. Apps run on its built-in database or on PostgreSQL, MySQL, REST APIs and Google Sheets, with automations triggered by events, schedules or webhooks.",
     "script": "ct/budibase.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/budibase.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/budibase.sh",
@@ -2468,7 +2468,7 @@
   {
     "name": "ByteChef",
     "slug": "bytechef",
-    "desc": "ByteChef is an open-source API integration and workflow automation platform. Workflows are built in a visual editor from 170+ connectors, flow controls such as conditions, loops and branches, and JavaScript, Python or Ruby code steps, and run manually, on a schedule or from webhooks. This script builds the server and web client from source and runs them with PostgreSQL.",
+    "desc": "ByteChef is an open-source API integration and workflow automation platform. Workflows are built visually from 170+ connectors, conditions, loops and JavaScript, Python or Ruby code steps, and run manually, on a schedule or from webhooks.",
     "script": "ct/bytechef.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/bytechef.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/bytechef.sh",
@@ -2674,7 +2674,7 @@
   {
     "name": "Casdoor",
     "slug": "casdoor",
-    "desc": "Casdoor is an open-source identity and access management (IAM) and single sign-on platform with a web UI. It acts as an OAuth 2.0, OIDC, SAML and CAS provider, adds LDAP, RADIUS and SCIM endpoints, social and enterprise login providers, MFA and WebAuthn, and manages organizations, users, roles and Casbin-based permissions. This script installs the prebuilt release with a local PostgreSQL database.",
+    "desc": "Casdoor is an open-source identity and access management (IAM) and single sign-on platform. It acts as an OAuth 2.0, OIDC, SAML and CAS provider with LDAP, RADIUS and SCIM endpoints, social logins, MFA and WebAuthn, and Casbin-based permissions.",
     "script": "ct/casdoor.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/casdoor.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/casdoor.sh",
@@ -2896,7 +2896,7 @@
   {
     "name": "ChartDB",
     "slug": "chartdb",
-    "desc": "ChartDB is a database diagram editor that runs in the browser. A single query run against PostgreSQL, MySQL, MariaDB, SQL Server, SQLite, ClickHouse or CockroachDB returns the schema as JSON, which ChartDB turns into an editable entity-relationship diagram; diagrams can also be built from scratch, imported from DBML or SQL, and exported as SQL, DBML or images. This script builds the web app from source and serves it with nginx.",
+    "desc": "ChartDB is a database diagram editor that runs in the browser. One query against PostgreSQL, MySQL, MariaDB, SQL Server, SQLite, ClickHouse or CockroachDB returns the schema, which ChartDB turns into an editable ER diagram that can be exported as SQL, DBML or an image.",
     "script": "ct/chartdb.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/chartdb.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/chartdb.sh",
@@ -2928,7 +2928,7 @@
   {
     "name": "Chatto",
     "slug": "chatto",
-    "desc": "Chatto is a fully-featured, privacy-first team and group chat application that is free and easy to self-host. It ships as a single binary with an embedded NATS/JetStream store (no external database) and supports voice/video calls and screensharing via an optional LiveKit server.",
+    "desc": "Chatto is a privacy-first team and group chat app built for self-hosting. It runs as a single binary with an embedded NATS/JetStream store, so it needs no external database, and supports voice and video calls and screensharing through an optional LiveKit server.",
     "script": "ct/chatto.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/chatto.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/chatto.sh",
@@ -3422,19 +3422,17 @@
   {
     "name": "Colanode",
     "slug": "colanode",
-    "desc": "Open-source, local-first collaboration workspace — a self-hosted Slack and Notion alternative with real-time chat, rich text pages, customizable databases, and file management.",
+    "desc": "Colanode is an open-source, local-first collaboration workspace and a self-hosted alternative to Slack and Notion, with real-time chat, rich text pages, customizable databases and file management.",
     "script": "ct/colanode.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/colanode.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/colanode.sh",
     "type": "lxc",
     "type_id": "nm9bra8mzye2scg",
     "categories": [
-      "scriptcat00012",
-      "scriptcat000026"
+      "scriptcat00012"
     ],
     "category_names": [
-      "Documents & Notes",
-      "Productivity & Workflows"
+      "Documents & Notes"
     ],
     "notes": [],
     "port": 4000,
@@ -4050,7 +4048,7 @@
   {
     "name": "Databasement",
     "slug": "databasement",
-    "desc": "Databasement is a self-hosted database backup manager with a web UI. It registers MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and Redis/Valkey servers, optionally through an SSH tunnel, runs scheduled or on-demand backups with retention and compression or encryption, stores them on local disk, S3, SFTP, FTP, Samba or Azure Blob storage, and restores snapshots to any registered server. This script runs it with PHP-FPM, nginx and SQLite.",
+    "desc": "Databasement is a self-hosted backup manager for MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and Redis/Valkey. It runs scheduled or on-demand backups, optionally through an SSH tunnel, stores them locally or on S3, SFTP, FTP, Samba or Azure, and restores them to any registered server.",
     "script": "ct/databasement.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/databasement.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/databasement.sh",
@@ -4332,7 +4330,7 @@
   {
     "name": "Deemix",
     "slug": "deemix",
-    "desc": "Deemix is a Deezer music downloader with a web interface. It searches the Deezer catalogue and downloads tracks, albums, playlists and artist discographies with tags and cover art, in MP3 or FLAC depending on the account. This is the maintained community fork by bambanah, which revived the discontinued original.",
+    "desc": "Deemix is a Deezer music downloader with a web interface, in the maintained community fork by bambanah. It downloads tracks, albums, playlists and discographies from Deezer with tags and cover art, in MP3 or FLAC depending on the account.",
     "script": "ct/deemix.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/deemix.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/deemix.sh",
@@ -5143,7 +5141,7 @@
   {
     "name": "Dragonfly",
     "slug": "dragonfly",
-    "desc": "Dragonfly is an in-memory data store compatible with the Redis and Memcached APIs, so existing Redis clients, libraries and tools work against it unchanged. It is multi-threaded with a shared-nothing design that uses every core it is given, and it takes snapshots without forking, which keeps the memory overhead of a save low. This script installs the official package with a generated password and periodic snapshots.",
+    "desc": "Dragonfly is an in-memory data store compatible with the Redis and Memcached APIs, so existing Redis clients and tools work against it unchanged. It is multi-threaded, uses every core it is given and takes snapshots without forking.",
     "script": "ct/dragonfly.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dragonfly.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dragonfly.sh",
@@ -5237,7 +5235,7 @@
   {
     "name": "Dreeve",
     "slug": "dreeve",
-    "desc": "Dreeve is a self-hosted dashboard for sports and fitness data. It imports your Strava activities and turns them into statistics, heatmaps, gear tracking, training analysis and yearly overviews - formerly known as Statistics for Strava.",
+    "desc": "Dreeve, formerly Statistics for Strava, is a self-hosted dashboard for sports and fitness data. It imports your Strava activities and turns them into statistics, heatmaps, gear tracking, training analysis and yearly overviews.",
     "script": "ct/dreeve.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dreeve.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dreeve.sh",
@@ -5487,7 +5485,7 @@
   {
     "name": "EmDash",
     "slug": "emdash",
-    "desc": "EmDash is a full-stack TypeScript CMS built on Astro and meant as a modern successor to WordPress. It brings an admin panel with a visual schema builder, a media library, menus, widgets, revisions and scheduled publishing, stores rich text as structured Portable Text, runs plugins in sandboxes with declared capabilities, imports WordPress sites and ships an MCP server for AI tools. This script creates a site from one of the Node.js templates with upstream's create-emdash, builds it against the published packages and runs it on Node.js with SQLite and local media storage.",
+    "desc": "EmDash is a full-stack TypeScript CMS built on Astro and meant as a modern successor to WordPress. It has a visual schema builder, a media library, revisions and scheduled publishing, sandboxed plugins, WordPress import and an MCP server for AI tools.",
     "script": "ct/emdash.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/emdash.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/emdash.sh",
@@ -5923,7 +5921,7 @@
   {
     "name": "FalkorDB",
     "slug": "falkordb",
-    "desc": "FalkorDB is a low-latency property graph database built on sparse matrices and linear algebra (GraphBLAS), aimed at knowledge graphs and GraphRAG for LLM applications. It runs as a Redis module, is queried with OpenCypher through the GRAPH.* commands from any Redis client, and comes with FalkorDB Browser, a web UI for running queries and exploring graphs.",
+    "desc": "FalkorDB is a low-latency property graph database built on sparse matrices (GraphBLAS), aimed at knowledge graphs and GraphRAG. It runs as a Redis module queried with OpenCypher from any Redis client, and FalkorDB Browser adds a web UI for queries and exploring graphs.",
     "script": "ct/falkordb.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/falkordb.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/falkordb.sh",
@@ -6073,7 +6071,7 @@
   {
     "name": "Figranium",
     "slug": "figranium",
-    "desc": "Figranium is a self-hosted browser automation platform. Workflows are stacked from blocks such as navigate, click, type, wait, loops, conditions, JavaScript and extraction in a visual editor, run in a headless Chromium driven by Playwright, and are triggered from the UI, on a schedule or through the REST API with runtime variables. A built-in noVNC viewer shows a visible browser for picking selectors and debugging runs.",
+    "desc": "Figranium is a self-hosted browser automation platform. You build workflows from blocks such as navigate, click, type and extract in a visual editor, run them in headless Chromium, and trigger them from the UI, on a schedule or through the REST API.",
     "script": "ct/figranium.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/figranium.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/figranium.sh",
@@ -6263,7 +6261,7 @@
   {
     "name": "Firefox Syncserver",
     "slug": "firefox-syncserver",
-    "desc": "Firefox Syncserver (syncstorage-rs) is Mozilla's own Rust server behind Firefox Sync, combining the sync storage and the tokenserver in one binary. Self-hosted, it keeps your Firefox bookmarks, history, passwords, open tabs, add-ons and form data on your own infrastructure, while you still sign in with a regular Mozilla account. Firefox encrypts every record before upload, so the server never sees their contents.",
+    "desc": "Firefox Syncserver (syncstorage-rs) is Mozilla's server behind Firefox Sync. It keeps your bookmarks, history, passwords, tabs and add-ons on your own hardware, encrypted by Firefox before upload, while you still sign in with a regular Mozilla account.",
     "script": "ct/firefox-syncserver.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/firefox-syncserver.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/firefox-syncserver.sh",
@@ -6683,7 +6681,7 @@
   {
     "name": "Formbricks",
     "slug": "formbricks",
-    "desc": "Formbricks is an open-source survey and experience management platform and an alternative to Qualtrics. It runs link, website and in-app surveys with logic, multiple languages, hidden fields and partial responses, and passes responses on through webhooks, the API and integrations such as Slack, Notion and Zapier. This script builds the web app from source and runs it with PostgreSQL, Valkey and SpiceDB, which Formbricks 6 uses for authorization.",
+    "desc": "Formbricks is an open-source survey and experience management platform and an alternative to Qualtrics. It runs link, website and in-app surveys with logic and multiple languages, and passes responses on through webhooks, the API and integrations such as Slack, Notion and Zapier.",
     "script": "ct/formbricks.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/formbricks.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/formbricks.sh",
@@ -7480,7 +7478,7 @@
   {
     "name": "Gopeed",
     "slug": "gopeed",
-    "desc": "Gopeed is a fast, modern download manager for HTTP(S), BitTorrent, Magnet links and ed2k, written in Go and Flutter. It adds JavaScript extensions, a REST API, webhooks, post-download scripts and browser integration. This script installs the headless web edition, a single binary that serves the web UI and the API on port 9999 with login enabled.",
+    "desc": "Gopeed is a fast download manager for HTTP(S), BitTorrent, Magnet links and ed2k, written in Go and Flutter. It supports JavaScript extensions, a REST API, webhooks, post-download scripts and browser integration.",
     "script": "ct/gopeed.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/gopeed.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/gopeed.sh",
@@ -7892,7 +7890,7 @@
   {
     "name": "Hanko",
     "slug": "hanko",
-    "desc": "Hanko is an open-source authentication and user management backend, an alternative to Auth0 or Clerk. It provides passkeys, passwords, email passcodes, TOTP and security-key MFA, OAuth/OIDC and SAML single sign-on, sessions and JWTs, and web apps add the login through the Hanko Elements web components or SDKs. This script runs the Hanko backend (public and admin API) with PostgreSQL.",
+    "desc": "Hanko is an open-source authentication and user management backend, an alternative to Auth0 or Clerk. It provides passkeys, passwords, email passcodes, MFA and single sign-on, and web apps add the login through the Hanko Elements web components or SDKs.",
     "script": "ct/hanko.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hanko.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hanko.sh",
@@ -8481,7 +8479,7 @@
   {
     "name": "HomeTube",
     "slug": "hometube",
-    "desc": "HomeTube is a web UI for yt-dlp that downloads single videos or whole playlists into a clean folder structure for Plex, Jellyfin or Emby. It picks the best AV1/VP9 quality profile automatically, embeds subtitles, chapters and metadata, marks or removes sponsor segments with SponsorBlock, cuts clips, keeps playlists in sync and can trigger a Jellyfin library refresh after each download.",
+    "desc": "HomeTube is a web UI for yt-dlp that downloads single videos or whole playlists into a clean folder structure for Plex, Jellyfin or Emby. It embeds subtitles, chapters and metadata, skips sponsor segments with SponsorBlock and keeps playlists in sync.",
     "script": "ct/hometube.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hometube.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hometube.sh",
@@ -8511,7 +8509,7 @@
   {
     "name": "Honcho",
     "slug": "honcho",
-    "desc": "Honcho is an open-source memory server for building stateful AI agents. Applications write the messages of users and agents into workspaces, peers and sessions through a REST API or the Python and TypeScript SDKs; a background deriver has an LLM draw conclusions about every peer, keeps peer cards and session summaries and consolidates them in periodic dreams, and the dialectic chat endpoint answers questions about a peer in natural language. This script runs the FastAPI server and the deriver on Python 3.13 with PostgreSQL 17 (pgvector) and Redis, with JWT authentication switched on. Honcho has no web interface; the interactive API docs are at /docs.",
+    "desc": "Honcho is an open-source memory server for building stateful AI agents. Apps store the messages of users and agents through a REST API or the Python and TypeScript SDKs, and an LLM derives conclusions about each peer that agents can then query in natural language.",
     "script": "ct/honcho.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/honcho.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/honcho.sh",
@@ -8661,7 +8659,7 @@
   {
     "name": "Ideon",
     "slug": "ideon",
-    "desc": "Ideon is a self-hosted visual workspace that maps a project on an infinite canvas. Notes, files, links, tasks, kanban boards, sketches and live Git repository blocks (GitHub, GitLab, Gitea, Forgejo) sit side by side, are edited together in real time and can be rewound to earlier snapshots. This script builds Ideon from source and runs it with PostgreSQL.",
+    "desc": "Ideon is a self-hosted visual workspace that maps a project on an infinite canvas. Notes, files, links, tasks, kanban boards, sketches and live Git repository blocks sit side by side, are edited together in real time and can be rewound to earlier snapshots.",
     "script": "ct/ideon.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/ideon.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/ideon.sh",
@@ -10258,7 +10256,7 @@
   {
     "name": "Kyoo",
     "slug": "kyoo",
-    "desc": "Kyoo is a self-hosted media server for movies, series and anime, an alternative to Jellyfin or Plex. It identifies files without a required folder structure, pulls metadata from TheMovieDB and TheTVDB, transcodes on the fly with automatic quality switching and hardware acceleration, detects intros and credits, and renders ASS and PGS subtitles in the browser. This script builds its auth, API, scanner, transcoder and web app from source and runs them with PostgreSQL behind nginx.",
+    "desc": "Kyoo is a self-hosted media server for movies, series and anime, an alternative to Jellyfin or Plex. It identifies files without a required folder structure, pulls metadata from TheMovieDB and TheTVDB, and transcodes on the fly with hardware acceleration.",
     "script": "ct/kyoo.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/kyoo.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/kyoo.sh",
@@ -10472,7 +10470,7 @@
   {
     "name": "LibreDB Studio",
     "slug": "libredbstudio",
-    "desc": "LibreDB Studio is a browser-based SQL IDE you run on your own server. It connects to PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, SQL Server, MongoDB, Redis, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Apache Trino and Apache Cassandra. Optional AI query assistance works with a local Ollama model, and read-only access is enforced by the database itself rather than by parsing SQL.",
+    "desc": "LibreDB Studio is a browser-based SQL IDE you run on your own server. It connects to PostgreSQL, MySQL, SQLite, SQL Server, MongoDB, Redis, ClickHouse, Elasticsearch and many more databases, with optional AI query help from a local Ollama model.",
     "script": "ct/libredbstudio.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/libredbstudio.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/libredbstudio.sh",
@@ -10904,7 +10902,7 @@
   {
     "name": "llama.cpp",
     "slug": "llama-cpp",
-    "desc": "llama.cpp runs GGUF language models directly in C/C++ with no Python runtime. This installs llama-server, which serves a built-in web chat UI plus an OpenAI-compatible API on the same port, so it can back tools like AnythingLLM, Open WebUI or Claude Code. Lighter and closer to the metal than Ollama.",
+    "desc": "llama.cpp runs GGUF language models directly in C/C++ with no Python runtime. Its llama-server offers a built-in web chat and an OpenAI-compatible API, so it can back tools like AnythingLLM, Open WebUI or Claude Code.",
     "script": "ct/llama-cpp.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/llama-cpp.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/llama-cpp.sh",
@@ -11134,7 +11132,7 @@
     "port": 41337,
     "website": "https://epicgames.github.io/lore/",
     "documentation": "https://epicgames.github.io/lore/",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/lore-epic-games.webp",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/lore.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -11886,7 +11884,7 @@
   {
     "name": "Meme Search",
     "slug": "memesearch",
-    "desc": "Meme Search is a self-hosted search engine for your own meme collection. A local vision model writes a description of each image, and the memes can then be found by keyword or by meaning (vector search), tagged, and fetched through a read-only search API. This script runs the Rails app with PostgreSQL and pgvector, plus the Python image-to-text service on the CPU.",
+    "desc": "Meme Search is a self-hosted search engine for your own meme collection. A local vision model writes a description of each image, and the memes can then be found by keyword or by meaning, tagged, and fetched through a read-only search API.",
     "script": "ct/memesearch.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/memesearch.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/memesearch.sh",
@@ -12893,6 +12891,38 @@
     "os": ""
   },
   {
+    "name": "Netronome",
+    "slug": "netronome",
+    "desc": "Netronome is a network speed test and monitoring tool with a web interface. It runs Speedtest.net, LibreSpeed and iperf3 tests on demand or on a schedule, watches packet loss and DNS, and collects metrics from agents on your servers.",
+    "script": "ct/netronome.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/netronome.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/netronome.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00004",
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Network & Firewall",
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 7575,
+    "website": "https://netrono.me/",
+    "documentation": "https://netrono.me/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/netronome.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "NetworkOptimizer",
     "slug": "networkoptimizer",
     "desc": "Network Optimizer is a self-hosted optimization, monitoring (NMS) and security audit tool for UniFi networks. It scores and optimizes Wi-Fi, runs DNS, VLAN and firewall security checks, hosts a centralized WAN and LAN speed test server with L2 tracing, and monitors ISP and WAN health. Built on .NET 10 / Blazor Server with a local SQLite database.",
@@ -13050,7 +13080,7 @@
   {
     "name": "NextDNS",
     "slug": "nextdns",
-    "desc": "NextDNS is a DNS-over-HTTPS (DoH) client and resolver that blocks ads, trackers and malware using cloud-managed profiles. This script installs a minimal Debian LXC with the official NextDNS CLI from the NextDNS apt repository, prompts for your profile ID, and configures router mode so DNS is served on TCP/UDP port 53.",
+    "desc": "NextDNS is a DNS-over-HTTPS (DoH) client and resolver that blocks ads, trackers and malware using cloud-managed profiles. It serves DNS for your network on port 53; profiles are managed at my.nextdns.io, there is no local web interface.",
     "script": "ct/nextdns.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nextdns.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nextdns.sh",
@@ -13300,7 +13330,7 @@
   {
     "name": "Nightingale",
     "slug": "nightingale",
-    "desc": "Nightingale is an open-source monitoring and alerting platform. Like Grafana it connects to existing data sources such as Prometheus, VictoriaMetrics, Elasticsearch, Loki, ClickHouse or MySQL, but its focus is the alerting engine: alert rules, muting, subscriptions, event pipelines and notifications to more than 20 channels, plus dashboards, a host inventory fed by the Categraf agent and a built-in time series database. This script installs the prebuilt release with MariaDB and Redis.",
+    "desc": "Nightingale is an open-source monitoring and alerting platform. It queries data sources such as Prometheus, VictoriaMetrics, Elasticsearch or Loki, and adds alert rules, muting, notifications to more than 20 channels, dashboards and a built-in time series database.",
     "script": "ct/nightingale.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nightingale.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nightingale.sh",
@@ -13496,7 +13526,7 @@
   {
     "name": "Norish",
     "slug": "norish",
-    "desc": "Norish is a realtime, self-hosted recipe app for families and friends. Recipes are imported from a link, pasted text or photos, organised in cookbooks, planned on a calendar and turned into a shared grocery list that updates live for everyone in the household. This script builds the web app from source and runs it with PostgreSQL, Redis, the bundled recipe parser and the Obscura headless browser that renders pages for URL imports.",
+    "desc": "Norish is a realtime, self-hosted recipe app for families and friends. Recipes are imported from a link, pasted text or photos, organised in cookbooks, planned on a calendar and turned into a shared grocery list that updates live for everyone in the household.",
     "script": "ct/norish.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/norish.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/norish.sh",
@@ -13560,7 +13590,7 @@
   {
     "name": "Note Mark",
     "slug": "notemark",
-    "desc": "Note Mark is a lightning-fast, minimal web-based Markdown note-taking app. Notes are kept as plain Markdown files in folders on disk, with a SQLite database for users and the folder cache, and can be shared per note with other users or publicly. It offers a CodeMirror editor with optional Vim keybindings, rendered previews, asset uploads, a scratch pad and optional OpenID Connect login. This script builds the Go backend and the SolidJS/WebAssembly frontend from source.",
+    "desc": "Note Mark is a fast, minimal web-based Markdown note-taking app. Notes are kept as plain Markdown files on disk and can be shared with other users or publicly, with a CodeMirror editor, optional Vim keybindings and optional OpenID Connect login.",
     "script": "ct/notemark.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/notemark.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/notemark.sh",
@@ -15882,10 +15912,10 @@
     "type": "lxc",
     "type_id": "nm9bra8mzye2scg",
     "categories": [
-      "scriptcat00022"
+      "scriptcat00000"
     ],
     "category_names": [
-      "Communication & Community"
+      "Miscellaneous"
     ],
     "notes": [],
     "port": 80,
@@ -16793,7 +16823,7 @@
   {
     "name": "ProxCenter",
     "slug": "proxcenter",
-    "desc": "ProxCenter is a web console for running several Proxmox VE clusters and Proxmox Backup Server instances from one place: inventory and topology, in-browser noVNC/SPICE consoles, backup visibility, migrations from VMware, Hyper-V, Nutanix and XCP-ng, RBAC and SSO. This script installs the open-source Community Edition with its PostgreSQL database.",
+    "desc": "ProxCenter is a web console for running several Proxmox VE clusters and Proxmox Backup Server instances from one place, with inventory, in-browser consoles, backup visibility, migrations from VMware and other hypervisors, RBAC and SSO. This is the open-source Community Edition.",
     "script": "ct/proxcenter.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/proxcenter.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/proxcenter.sh",
@@ -17472,7 +17502,7 @@
   {
     "name": "Rauthy",
     "slug": "rauthy",
-    "desc": "Rauthy is a single sign-on identity and access management server. It is an OpenID Connect and OAuth 2 provider with an admin UI, passkey (FIDO2/WebAuthn) and OTP multi-factor login, upstream login providers, SCIM, forward auth and PAM/SSH login. This script builds Rauthy from the release source and runs it with its embedded Hiqlite (Raft-replicated SQLite) database, served over HTTPS with a self-signed certificate.",
+    "desc": "Rauthy is a single sign-on identity and access management server. It is an OpenID Connect and OAuth 2 provider with an admin UI, passkey (FIDO2/WebAuthn) and OTP multi-factor login, upstream login providers, SCIM, forward auth and PAM/SSH login.",
     "script": "ct/rauthy.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/rauthy.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/rauthy.sh",
@@ -17686,7 +17716,7 @@
   {
     "name": "Reconya",
     "slug": "reconya",
-    "desc": "Reconya is a network reconnaissance and asset discovery tool written in Go. It sweeps the networks you define with ICMP, ARP and TCP probes, identifies devices by MAC address, hostname and OS fingerprint, scans their top ports with service detection, passively picks up IPv6 neighbours, and raises alerts for new devices, risky open ports or unreachable hosts. Everything is shown in a web console with a topology map and a live event log.",
+    "desc": "Reconya is a network reconnaissance and asset discovery tool. It sweeps your networks with ICMP, ARP and TCP probes, identifies devices and their open ports, and alerts on new devices or risky ports, all in a web console with a topology map.",
     "script": "ct/reconya.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/reconya.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/reconya.sh",
@@ -18055,7 +18085,7 @@
   {
     "name": "Ryot",
     "slug": "ryot",
-    "desc": "Ryot (Roll Your Own Tracker) is a self-hosted tracker for the media you consume and the workouts you do. It logs progress, ratings and reviews for movies, shows, books, audiobooks, anime, manga, comics, video games, podcasts, music and visual novels, pulls their metadata from providers such as TMDB, IGDB, OpenLibrary and AniList, imports history from Trakt, Goodreads, Jellyfin and others, and records workouts, exercises and body measurements. This script builds the Rust backend and the React frontend from source and runs them with PostgreSQL behind nginx.",
+    "desc": "Ryot (Roll Your Own Tracker) is a self-hosted tracker for the media you consume and the workouts you do. It logs movies, shows, books, games, anime, podcasts and more with metadata from TMDB, IGDB, OpenLibrary and AniList, and records workouts and body measurements.",
     "script": "ct/ryot.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/ryot.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/ryot.sh",
@@ -18810,12 +18840,10 @@
     "type": "lxc",
     "type_id": "nm9bra8mzye2scg",
     "categories": [
-      "scriptcat00006",
-      "scriptcat00022"
+      "scriptcat00006"
     ],
     "category_names": [
-      "Authentication & Security",
-      "Communication & Community"
+      "Authentication & Security"
     ],
     "notes": [],
     "port": 80,
@@ -19151,7 +19179,7 @@
   {
     "name": "Soulbeet",
     "slug": "soulbeet",
-    "desc": "Soulbeet is a self-hosted music downloader and library manager. You search for an album or track, it picks the best source on Soulseek, downloads it through slskd, tags and files it into your library with beets, and can push discovery playlists built from your Last.fm or ListenBrainz history to Navidrome. This script builds Soulbeet from source and installs beets; slskd and Navidrome run separately.",
+    "desc": "Soulbeet is a self-hosted music downloader and library manager. It finds albums and tracks on Soulseek through slskd, tags and files them into your library with beets, and can push discovery playlists from your Last.fm or ListenBrainz history to Navidrome.",
     "script": "ct/soulbeet.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/soulbeet.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/soulbeet.sh",
@@ -19682,7 +19710,7 @@
   {
     "name": "Stoatchat",
     "slug": "stoatchat",
-    "desc": "A self-hostable open-source chat platform and community server. Stoatchat is a fork of Revolt, featuring real-time messaging, voice channels, file sharing, and a full-featured web client. Built with Rust (backend) and SolidJS (frontend).",
+    "desc": "Stoatchat is an open-source chat platform and community server, forked from Revolt. It offers real-time messaging, voice channels, file sharing and a full-featured web client.",
     "script": "ct/stoatchat.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/stoatchat.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/stoatchat.sh",
@@ -19698,7 +19726,7 @@
     "port": 80,
     "website": "https://stoat.chat",
     "documentation": "https://github.com/stoatchat/self-hosted",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/stoat.webp",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/stoatchat.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -19866,7 +19894,7 @@
   {
     "name": "Streamystats",
     "slug": "streamystats",
-    "desc": "Streamystats is a statistics and analytics service for Jellyfin. It tracks playback sessions through the Jellyfin API and shows watch history, per-user, library and client statistics, and watch-time graphs. It supports multiple servers and can import history from Jellystat and the Playback Reporting plugin. Optional AI features add library chat and embedding-based recommendations through OpenAI-compatible, Ollama or Anthropic providers.",
+    "desc": "Streamystats is a statistics and analytics service for Jellyfin. It shows watch history, per-user, library and client statistics and watch-time graphs for one or more servers, and can import history from Jellystat and the Playback Reporting plugin.",
     "script": "ct/streamystats.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/streamystats.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/streamystats.sh",
@@ -19896,7 +19924,7 @@
   {
     "name": "Stump",
     "slug": "stump",
-    "desc": "Stump is a free and open-source comics, manga and digital book server with OPDS support. It scans folders of CBZ, CBR, EPUB and PDF files into libraries and series, reads them in the browser with progress tracking, and serves them to OPDS readers and the Stump mobile apps. This script installs the official Linux server release together with PDFium for PDF support.",
+    "desc": "Stump is a free and open-source comics, manga and digital book server. It organizes CBZ, CBR, EPUB and PDF files into libraries and series, reads them in the browser with progress tracking, and serves them to OPDS readers and the Stump mobile apps.",
     "script": "ct/stump.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/stump.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/stump.sh",
@@ -20234,7 +20262,7 @@
   {
     "name": "TaskView",
     "slug": "taskview",
-    "desc": "TaskView is a self-hosted project and task management platform for teams. Projects hold task lists, Kanban boards, a dependency graph and sprints, with priorities, tags, deadlines, assignees, recurring tasks and time tracking, plus organizations with role-based permissions, SSO and SCIM, webhooks, GitHub/GitLab/Gitea issue sync, API tokens and an MCP server for AI assistants. This script builds the API and web client from source and runs them with PostgreSQL behind Nginx.",
+    "desc": "TaskView is a source-available project and task management platform for teams. It offers task lists, Kanban boards, sprints and time tracking, plus organizations with role-based permissions, SSO, webhooks and issue sync with GitHub, GitLab and Gitea.",
     "script": "ct/taskview.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/taskview.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/taskview.sh",
@@ -21422,7 +21450,7 @@
   {
     "name": "Typecho",
     "slug": "typecho",
-    "desc": "Typecho is a lightweight, open-source PHP blogging platform with a Markdown editor, pages, categories and tags, threaded comments, themes, plugins and an XML-RPC API for desktop and mobile editors. This script installs the official release with nginx, PHP-FPM and SQLite and completes the setup with upstream's command-line installer, so no setup page is ever left open.",
+    "desc": "Typecho is a lightweight, open-source PHP blogging platform with a Markdown editor, pages, categories and tags, threaded comments, themes, plugins and an XML-RPC API for desktop and mobile editors.",
     "script": "ct/typecho.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/typecho.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/typecho.sh",
@@ -21856,7 +21884,7 @@
   {
     "name": "Unsloth",
     "slug": "unsloth",
-    "desc": "Unsloth Studio is a local web UI for running and fine-tuning language models. It can search, download and serve GGUF, LoRA and safetensors models, compare two models side by side, export to other formats, and expose OpenAI- and Anthropic-compatible endpoints so local models can be used from Claude Code, Codex and similar tools. Fine-tuning with LoRA is configured entirely through the UI.",
+    "desc": "Unsloth Studio is a local web UI for running and fine-tuning language models. It downloads and serves GGUF, LoRA and safetensors models, compares models side by side, and exposes OpenAI- and Anthropic-compatible endpoints for tools like Claude Code and Codex.",
     "script": "ct/unsloth.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/unsloth.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/unsloth.sh",
@@ -22096,7 +22124,7 @@
   {
     "name": "useSend",
     "slug": "usesend",
-    "desc": "useSend is an open-source email sending platform and self-hosted alternative to Resend, SendGrid or Postmark. It sends transactional email through a REST API, SDKs or SMTP, and marketing campaigns to contact books from a visual editor, with domain verification, delivery, open and click tracking, bounces, suppression lists and webhooks. Delivery runs through Amazon SES. This script builds the web app and the SMTP proxy from source and runs them with PostgreSQL and Redis.",
+    "desc": "useSend is an open-source email sending platform and self-hosted alternative to Resend, SendGrid or Postmark. It sends transactional email through a REST API, SDKs or SMTP and marketing campaigns from a visual editor, with tracking, bounce handling and webhooks, delivered through Amazon SES.",
     "script": "ct/usesend.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/usesend.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/usesend.sh",
@@ -22182,7 +22210,7 @@
   {
     "name": "Vane",
     "slug": "vane",
-    "desc": "Vane (formerly Perplexica) is a self-hosted AI answering engine in the style of Perplexity. It searches the web through SearXNG, reads the results and answers with cited sources, using a local LLM through Ollama or a cloud provider such as OpenAI, Anthropic, Gemini or Groq. It also offers speed, balanced and quality modes, academic and discussion search, image and video search, file uploads and a search history. This script builds Vane from source and runs a private SearXNG instance with JSON output next to it.",
+    "desc": "Vane (formerly Perplexica) is a self-hosted AI answering engine in the style of Perplexity. It searches the web through SearXNG and answers with cited sources, using a local LLM through Ollama or a cloud provider such as OpenAI, Anthropic, Gemini or Groq.",
     "script": "ct/vane.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/vane.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/vane.sh",
@@ -23020,7 +23048,7 @@
   {
     "name": "Windmill",
     "slug": "windmill",
-    "desc": "Windmill is an open-source developer platform that turns scripts into webhooks, workflows and UIs. Scripts in Python, TypeScript, Bash, SQL and other languages get an auto-generated form and API, can be chained into flows with branches, loops, retries and approval steps, run on schedules or from webhooks and other triggers, and back low-code apps. This script runs the Community Edition binary in standalone mode (server and worker in one process) with PostgreSQL.",
+    "desc": "Windmill is an open-source developer platform that turns scripts into webhooks, workflows and UIs. Scripts in Python, TypeScript, Bash, SQL and more get an auto-generated form and API, and can be chained into flows, run on schedules or triggers, and back low-code apps.",
     "script": "ct/windmill.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/windmill.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/windmill.sh",
@@ -23150,7 +23178,7 @@
   {
     "name": "Woodpecker CI",
     "slug": "woodpecker-ci",
-    "desc": "Woodpecker CI is a simple, community-driven CI/CD engine. Pipelines are YAML files in the repository that run on push, pull request, tag, release, cron or manual events, with matrix builds, secrets, approvals for forks and a web UI with live logs. This script installs the official server and one agent with the local backend and SQLite, and connects it to Forgejo, Gitea, GitHub, GitLab or Bitbucket.",
+    "desc": "Woodpecker CI is a simple, community-driven CI/CD engine for Forgejo, Gitea, GitHub, GitLab and Bitbucket. Pipelines are YAML files in the repository that run on pushes, pull requests, tags or schedules, with matrix builds, secrets and a web UI with live logs.",
     "script": "ct/woodpecker-ci.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/woodpecker-ci.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/woodpecker-ci.sh",
@@ -23428,7 +23456,7 @@
   {
     "name": "Youtarr",
     "slug": "youtarr",
-    "desc": "Youtarr is a self-hosted YouTube downloader that subscribes to channels and playlists and downloads new videos on a schedule with yt-dlp. Videos are organized per channel with NFO files, posters and embedded MP4 metadata, so they show up cleanly in Plex, Jellyfin, Emby or Kodi. It also mirrors playlists into those servers, syncs watch status back, supports SponsorBlock and age, space or watched-based cleanup, and plays videos in its own web UI.",
+    "desc": "Youtarr is a self-hosted YouTube downloader that subscribes to channels and playlists and downloads new videos on a schedule with yt-dlp. It adds NFO files, posters and metadata so the videos show up cleanly in Plex, Jellyfin, Emby or Kodi.",
     "script": "ct/youtarr.sh",
     "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/youtarr.sh",
     "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/youtarr.sh",
