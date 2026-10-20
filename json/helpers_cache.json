@@ -23855,7 +23855,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "zitadel-admin@zitadel.localhost",
-      "password": "Password1!"
+      "password": "cat ~/zitadel.creds"
     },
     "os": ""
   },
