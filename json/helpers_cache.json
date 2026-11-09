@@ -1291,7 +1291,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "archivebox",
-      "password": "community-scripts.org"
+      "password": "cat ~/archivebox.creds"
     },
     "os": ""
   },
@@ -1599,7 +1599,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "authelia",
-      "password": "authelia"
+      "password": "cat ~/authelia.creds"
     },
     "os": ""
   },
@@ -3691,7 +3691,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin",
-      "password": "community-scripts.org"
+      "password": "cat ~/copyparty.creds"
     },
     "os": ""
   },
@@ -6223,7 +6223,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin",
-      "password": "community-scripts.org"
+      "password": "cat ~/filebrowser.creds"
     },
     "os": ""
   },
@@ -6258,7 +6258,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin",
-      "password": "community-scripts.org"
+      "password": "cat ~/filebrowser-quantum.creds"
     },
     "os": ""
   },
@@ -8540,7 +8540,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin",
-      "password": "admin"
+      "password": "cat ~/homelable.creds"
     },
     "os": ""
   },
@@ -10040,7 +10040,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "tmpadm",
-      "password": "admin123"
+      "password": "cat ~/keycloak.creds"
     },
     "os": ""
   },
@@ -10105,8 +10105,8 @@
     ],
     "config_path": "",
     "default_credentials": {
-      "username": "admin@community-scripts.org",
-      "password": "community-scripts.org"
+      "username": "admin",
+      "password": "cat ~/kimai.creds"
     },
     "os": ""
   },
@@ -12515,7 +12515,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin@community-scripts.org",
-      "password": "community-scripts.org"
+      "password": "cat ~/monica.creds"
     },
     "os": ""
   },
@@ -12797,7 +12797,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "nagiosadmin",
-      "password": "nagiosadmin"
+      "password": "cat ~/nagios.creds"
     },
     "os": ""
   },
@@ -12922,7 +12922,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "",
-      "password": "admin"
+      "password": "cat ~/neko.creds"
     },
     "os": ""
   },
@@ -13680,8 +13680,8 @@
     ],
     "config_path": "",
     "default_credentials": {
-      "username": "helper-scripts",
-      "password": "helper-scripts"
+      "username": "community-scripts",
+      "password": "cat ~/nodebb.creds"
     },
     "os": ""
   },
@@ -13869,7 +13869,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin@local.com",
-      "password": "community-scripts.org"
+      "password": "cat ~/npmplus.creds"
     },
     "os": ""
   },
@@ -15626,7 +15626,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin@paymenter.org",
-      "password": "paymenter"
+      "password": "cat ~/paymenter.creds"
     },
     "os": ""
   },
@@ -15874,7 +15874,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin",
-      "password": "changeme"
+      "password": "cat ~/photoprism.creds"
     },
     "os": ""
   },
@@ -17472,7 +17472,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin",
-      "password": "changeme"
+      "password": "cat ~/qbittorrent.creds"
     },
     "os": ""
   },
@@ -17597,7 +17597,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "proxmox",
-      "password": "proxmox"
+      "password": "cat ~/rabbitmq.creds"
     },
     "os": ""
   },
@@ -19146,7 +19146,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "admin",
-      "password": "admin"
+      "password": "cat ~/snapotter.creds"
     },
     "os": ""
   },
@@ -23109,7 +23109,7 @@
     "config_path": "",
     "default_credentials": {
       "username": "root",
-      "password": "root"
+      "password": "cat ~/webmin.creds"
     },
     "os": ""
   },
@@ -23299,6 +23299,10 @@
       "pve"
     ],
     "config_path": "",
+    "default_credentials": {
+      "username": "admin@example.com",
+      "password": "cat ~/wikijs.creds"
+    },
     "os": ""
   },
   {
