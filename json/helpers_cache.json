@@ -12618,6 +12618,40 @@
     "os": ""
   },
   {
+    "name": "Mage",
+    "slug": "mage-ai",
+    "desc": "Mage is an open-source data pipeline tool for building, running and monitoring ETL and ELT pipelines. Pipelines are made of Python, SQL or R blocks edited in a notebook-style UI, and run on schedules, events or API triggers, with data integrations for syncing sources into warehouses.",
+    "script": "ct/mage-ai.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/mage-ai.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/mage-ai.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 6789,
+    "website": "https://www.mage.ai/",
+    "documentation": "https://docs.mage.ai/",
+    "logo": "https://cdn.jsdelivr.net/gh/mage-ai/mage-ai@master/docs/favicons/m1.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin@admin.com",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "MagicMirror Server",
     "slug": "magicmirror",
     "desc": "MagicMirror² is a smart mirror software that allows you to build your own personal smart mirror. It uses modular components that you can customize to display information such as the weather, news, calendar, to-do list, and more. The platform is open source, allowing for community contributions and customization.",
@@ -17290,6 +17324,38 @@
     "os": ""
   },
   {
+    "name": "PG Back Web",
+    "slug": "pgbackweb",
+    "desc": "PG Back Web is a web interface for scheduled PostgreSQL backups with pg_dump. It runs backups of PostgreSQL 13 to 18 servers on cron schedules, stores them on local disk or any number of S3 buckets with retention, and restores or downloads them from the browser, with execution logs and webhooks for monitoring.",
+    "script": "ct/pgbackweb.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/pgbackweb.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/pgbackweb.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00007",
+      "scriptcat00008"
+    ],
+    "category_names": [
+      "Backup & Recovery",
+      "Databases"
+    ],
+    "notes": [],
+    "port": 8085,
+    "website": "https://github.com/eduardolat/pgbackweb",
+    "documentation": "https://github.com/eduardolat/pgbackweb#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/pg-back-web.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "PhotoPrism",
     "slug": "photoprism",
     "desc": "PhotoPrism is an AI-Powered Photos App for the Decentralized Web. It makes use of the latest technologies to tag and find pictures automatically without getting in your way.",
@@ -18881,6 +18947,40 @@
       "lxc"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Pydio Cells",
+    "slug": "pydio-cells",
+    "desc": "Pydio Cells is a self-hosted document sharing and collaboration platform. It organizes files into workspaces with fine-grained permissions, public and private share links, versioning and automated flows, and connects desktop sync and mobile clients.",
+    "script": "ct/pydio-cells.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/pydio-cells.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/pydio-cells.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00011"
+    ],
+    "category_names": [
+      "Files & Downloads"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://pydio.com/",
+    "documentation": "https://docs.pydio.com/cells-v5/",
+    "logo": "https://cdn.jsdelivr.net/gh/pydio/cells@v5.1.1/frontend/assets/gui.ajax/res/themes/common/images/PydioLogoSquare.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -21577,7 +21677,7 @@
     "port": 443,
     "website": "https://stoat.chat",
     "documentation": "https://github.com/stoatchat/self-hosted",
-    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/stoatchat.webp",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/stoat.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
