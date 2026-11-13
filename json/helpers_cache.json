@@ -86,7 +86,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -511,7 +511,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -2526,6 +2526,36 @@
     "os": ""
   },
   {
+    "name": "Browserless",
+    "slug": "browserless",
+    "desc": "Browserless runs headless Chromium as a service that Puppeteer and Playwright scripts connect to over a WebSocket. Its REST API turns a URL or HTML into screenshots, PDFs, rendered content or scraped data and runs custom functions, and a built-in debugger lets you write and test scripts in the browser.",
+    "script": "ct/browserless.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/browserless.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/browserless.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://www.browserless.io/",
+    "documentation": "https://docs.browserless.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/browserless/browserless@main/assets/logo.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Budget-Board",
     "slug": "budget-board",
     "desc": "Budget-Board is a simple self-hosted app for tracking monthly spending and working towards financial goals. It pairs a .NET web API with a web client backed by PostgreSQL.",
@@ -2610,7 +2640,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -2640,7 +2670,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -3320,6 +3350,40 @@
     "os": ""
   },
   {
+    "name": "ChirpStack",
+    "slug": "chirpstack",
+    "desc": "ChirpStack is an open-source LoRaWAN Network Server. It manages gateways, devices and applications, handles device activation and the LoRaWAN MAC layer, and forwards uplink data to MQTT, HTTP and many other integrations.",
+    "script": "ct/chirpstack.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/chirpstack.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/chirpstack.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00016"
+    ],
+    "category_names": [
+      "IoT & Smart Home"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://www.chirpstack.io/",
+    "documentation": "https://www.chirpstack.io/docs/",
+    "logo": "https://raw.githubusercontent.com/chirpstack/chirpstack-docs/refs/heads/master/theme/favicon.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": "admin"
+    },
+    "os": ""
+  },
+  {
     "name": "Chroma",
     "slug": "chroma",
     "desc": "Chroma is an open-source search and retrieval database for AI applications. It stores embeddings together with documents and metadata and answers vector similarity, metadata-filtered and full-text queries over an HTTP API, with official Python and JavaScript clients.",
@@ -3344,7 +3408,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -3718,7 +3782,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -3874,7 +3938,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -4230,6 +4294,38 @@
     "os": ""
   },
   {
+    "name": "Cryptgeon",
+    "slug": "cryptgeon",
+    "desc": "Cryptgeon is a secure note and file sharing service in the style of PrivNote. Notes are encrypted in the browser before upload, the server only keeps the ciphertext in memory and deletes it once the set number of views or the expiry time is reached.",
+    "script": "ct/cryptgeon.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/cryptgeon.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/cryptgeon.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00006",
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Authentication & Security",
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 443,
+    "website": "https://cryptgeon.org/",
+    "documentation": "https://github.com/cupcakearmy/cryptgeon#readme",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/cryptgeon.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "CryptPad",
     "slug": "cryptpad",
     "desc": "CryptPad is a collaboration suite that is end-to-end encrypted and open-source. It is designed to facilitate collaboration by synchronizing changes to documents in real time. Since all the user data is encrypted, in the event of a breach, attackers have no way of accessing the stored content",
@@ -4312,7 +4408,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -5170,6 +5266,36 @@
     "os": ""
   },
   {
+    "name": "Docling Serve",
+    "slug": "docling-serve",
+    "desc": "Docling Serve runs IBM's Docling document converter as an API service. It turns PDF, DOCX, PPTX, HTML and images into Markdown, JSON or plain text, with layout analysis, table structure recognition and OCR, and ships a web UI for trying conversions.",
+    "script": "ct/docling-serve.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/docling-serve.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/docling-serve.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 5001,
+    "website": "https://www.docling.ai/",
+    "documentation": "https://github.com/docling-project/docling-serve/tree/main/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/docling-project/docling@main/docs/assets/logo.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Docmost",
     "slug": "docmost",
     "desc": "Open-source collaborative wiki and documentation software. Create, collaborate, and share knowledge seamlessly with Docmost. Ideal for managing your wiki, knowledge-base, documentation and a lot more.",
@@ -5290,6 +5416,40 @@
       "vm"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "DokuWiki",
+    "slug": "dokuwiki",
+    "desc": "DokuWiki is a simple to use and highly versatile wiki that needs no database: pages are stored as plain text files that stay readable outside the wiki. It brings revision history, access control lists, a media manager and full-text search, and over a thousand community plugins and templates extend it.",
+    "script": "ct/dokuwiki.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/dokuwiki.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/dokuwiki.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.dokuwiki.org/",
+    "documentation": "https://www.dokuwiki.org/manual",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/dokuwiki.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -5695,6 +5855,42 @@
     "os": ""
   },
   {
+    "name": "Easy!Appointments",
+    "slug": "easyappointments",
+    "desc": "Easy!Appointments is a self-hosted appointment scheduler that lets customers book appointments online from a public booking page. Admins manage services, providers, working plans and secretaries in a backend calendar, with email notifications, Google Calendar and CalDAV sync, LDAP login and a REST API.",
+    "script": "ct/easyappointments.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/easyappointments.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/easyappointments.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019",
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Automation & Scheduling",
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://easyappointments.org/",
+    "documentation": "https://github.com/alextselegidis/easyappointments/tree/main/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/easy-appointments.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "ebusd",
     "slug": "ebusd",
     "desc": "ebusd is a daemon for handling communication with eBUS devices connected to a 2-wire `energy bus` used by numerous heating systems.",
@@ -5943,7 +6139,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -6193,7 +6389,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -6226,6 +6422,32 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Evolution API",
+    "slug": "evolution-api",
+    "desc": "Evolution API is an open-source WhatsApp integration API. Connect WhatsApp numbers as instances through WhatsApp Web (Baileys) or the official Cloud API, then send and receive messages over a REST API and webhooks, with built-in bridges to Chatwoot, Typebot, n8n, Dify, Flowise and OpenAI and a web manager.",
+    "script": "ct/evolution-api.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/evolution-api.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/evolution-api.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 8080,
+    "website": "https://evolutionfoundation.com.br/",
+    "documentation": "https://docs.evolutionfoundation.com.br/evolution-api",
+    "logo": "https://cdn.jsdelivr.net/gh/evolution-foundation/evolution-api@main/public/images/evolution-logo.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -6532,6 +6754,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Fider",
+    "slug": "fider",
+    "desc": "Fider is an open platform to collect and prioritize customer feedback. Users post ideas, vote and comment on them, while the team responds, sets each idea's status and shares a roadmap, so the most requested features rise to the top.",
+    "script": "ct/fider.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/fider.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/fider.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://fider.io/",
+    "documentation": "https://docs.fider.io/self-hosted/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/fider.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -6998,6 +7250,40 @@
       "lxc"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Floppy",
+    "slug": "floppy",
+    "desc": "Floppy is a self-hosted media tracker and diary for movies, TV, anime, books, comics, manga, games, board games, music and podcasts, a private alternative to Trakt, Letterboxd and Goodreads. It keeps progress, ratings, lists, collections, a release calendar and yearly statistics, and fills in history from Plex, Jellyfin, Emby, Pocket Casts or Last.fm.",
+    "script": "ct/floppy.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/floppy.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/floppy.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://github.com/dannyvfilms/Floppy",
+    "documentation": "https://github.com/dannyvfilms/Floppy/wiki",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/floppy.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -7826,6 +8112,36 @@
     "os": ""
   },
   {
+    "name": "GlitchTip",
+    "slug": "glitchtip",
+    "desc": "GlitchTip is an open-source error tracking platform that accepts events from the Sentry SDKs, so existing apps only need a new DSN. It groups exceptions into issues with stack traces and releases, and also offers uptime monitoring, performance traces, log ingestion and alerts by email, webhook or chat.",
+    "script": "ct/glitchtip.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/glitchtip.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/glitchtip.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 8000,
+    "website": "https://glitchtip.com/",
+    "documentation": "https://glitchtip.com/documentation",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/glitchtip.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "GlobaLeaks",
     "slug": "globaleaks",
     "desc": "GlobaLeaks is a free and open-source whistleblowing software enabling anyone to easily set up and maintain a secure reporting platform.",
@@ -7970,7 +8286,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -8662,7 +8978,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -9259,6 +9575,36 @@
     "os": ""
   },
   {
+    "name": "Hoppscotch",
+    "slug": "hoppscotch",
+    "desc": "Hoppscotch is an open-source API development platform and Postman alternative. It sends REST, GraphQL, WebSocket, SSE, Socket.IO and MQTT requests from the browser and organises them in collections and environments that teams share, with an admin dashboard for users and settings.",
+    "script": "ct/hoppscotch.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hoppscotch.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hoppscotch.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://hoppscotch.io/",
+    "documentation": "https://docs.hoppscotch.io/documentation/self-host/getting-started",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hoppscotch.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "HortusFox",
     "slug": "hortusfox",
     "desc": "HortusFox is a collaborative plant management system for plant enthusiasts. Manage, document and track your entire plant collection – self-hosted and privacy-friendly.",
@@ -9644,7 +9990,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -10209,6 +10555,40 @@
     "os": ""
   },
   {
+    "name": "Joomla",
+    "slug": "joomla",
+    "desc": "Joomla is an open-source content management system for building websites, from blogs and company sites to community portals. It manages articles, categories, menus and media, with fine-grained user groups and access levels, built-in multilingual content and a web services API. Templates control the look, and thousands of extensions add shops, forms, galleries and more.",
+    "script": "ct/joomla.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/joomla.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/joomla.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.joomla.org/",
+    "documentation": "https://docs.joomla.org/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/joomla.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Joplin Server",
     "slug": "joplin-server",
     "desc": "Joplin - the privacy-focused note taking app with sync capabilities for Windows, macOS, Linux, Android and iOS.",
@@ -10362,6 +10742,32 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "K3s",
+    "slug": "k3s-vm",
+    "desc": "K3s is a lightweight, fully conformant Kubernetes distribution in a single binary. This VM runs a server node ready to join agents.",
+    "script": "vm/k3s-vm.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/k3s-vm.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/vm/k3s-vm.sh",
+    "type": "vm",
+    "type_id": "lte524abgx960bd",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 0,
+    "website": "https://k3s.io/",
+    "documentation": "https://docs.k3s.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/k3s.webp",
+    "updateable": false,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "vm"
     ],
     "config_path": "",
     "os": ""
@@ -11072,6 +11478,40 @@
     "os": ""
   },
   {
+    "name": "Label Studio",
+    "slug": "label-studio",
+    "desc": "Label Studio is an open source data labeling tool for images, text, audio, video, HTML and time series. Teams build labeling interfaces from templates or XML configs, annotate tasks together, and export the results in a standardized format or common ML formats to train and evaluate models.",
+    "script": "ct/label-studio.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/label-studio.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/label-studio.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://labelstud.io/",
+    "documentation": "https://labelstud.io/guide/",
+    "logo": "https://cdn.jsdelivr.net/gh/HumanSignal/label-studio@develop/docs/themes/v2/source/images/favicon.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin@localhost",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Langflow",
     "slug": "langflow",
     "desc": "Langflow is a visual low-code builder for AI agents and RAG workflows. Drag components such as language models, vector stores and tools onto a canvas, test the flow in the built-in playground, and serve it as an API or MCP server. It works with OpenAI-compatible endpoints, local models through Ollama and the major cloud providers.",
@@ -11094,7 +11534,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -12418,7 +12858,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -12448,7 +12888,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -12793,6 +13233,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "MediaWiki",
+    "slug": "mediawiki",
+    "desc": "MediaWiki is the wiki software behind Wikipedia, built for collaborative documentation at any scale. Every page keeps a full revision history, and templates, categories, file uploads and a visual editor make it easy to structure and grow a knowledge base. Thousands of extensions add features like Lua modules, syntax highlighting and two-factor login.",
+    "script": "ct/mediawiki.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/mediawiki.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/mediawiki.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.mediawiki.org/",
+    "documentation": "https://www.mediawiki.org/wiki/Manual:Contents",
+    "logo": "https://cdn.jsdelivr.net/gh/wikimedia/mediawiki@master/resources/assets/mediawiki_compact.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "Admin",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -13773,6 +14247,32 @@
     "os": ""
   },
   {
+    "name": "NetBird Server",
+    "slug": "netbird-server",
+    "desc": "NetBird builds a WireGuard-based overlay network between your machines. This VM runs the self-hosted management server, signal service and relay.",
+    "script": "vm/netbird-server.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/netbird-server.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/vm/netbird-server.sh",
+    "type": "vm",
+    "type_id": "lte524abgx960bd",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 0,
+    "website": "https://netbird.io/",
+    "documentation": "https://docs.netbird.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/netbird.webp",
+    "updateable": false,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "vm"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "netboot.xyz",
     "slug": "netboot-xyz",
     "desc": "netboot.xyz is a network boot utility that lets you boot into any type of operating system or utility disk directly from a BIOS/UEFI, without needing a physical boot media. It uses iPXE to present a user-friendly menu of operating systems and tools.",
@@ -13953,7 +14453,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -14358,7 +14858,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -14399,6 +14899,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "NocoBase",
+    "slug": "nocobase",
+    "desc": "NocoBase is an extensible no-code and low-code platform for building internal tools and business applications. You model data in collections, assemble pages from tables, forms, kanban and chart blocks, automate processes with workflows and extend everything through plugins.",
+    "script": "ct/nocobase.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nocobase.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/nocobase.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 13000,
+    "website": "https://www.nocobase.com/",
+    "documentation": "https://docs.nocobase.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/nocobase.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin@nocobase.com",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -15863,6 +16397,40 @@
     "os": ""
   },
   {
+    "name": "Organizr",
+    "slug": "organizr",
+    "desc": "Organizr is a homelab services organizer that puts apps like Sonarr, Radarr, Plex or Home Assistant into tabs of a single web dashboard. It handles users and groups with per-tab access, single sign-on into many supported apps, and a homepage with widgets for downloads, calendars and media.",
+    "script": "ct/organizr.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/organizr.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/organizr.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00010"
+    ],
+    "category_names": [
+      "Dashboards & Frontends"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://organizr.app/",
+    "documentation": "https://docs.organizr.app/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/organizr.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "OTS",
     "slug": "ots",
     "desc": "One-Time-Secret sharing platform with a symmetric 256bit AES encryption in the browser.",
@@ -15953,6 +16521,36 @@
     "default_credentials": {
       "username": "admin",
       "password": "abc123"
+    },
+    "os": ""
+  },
+  {
+    "name": "ownCloud Infinite Scale",
+    "slug": "owncloud-ocis-vm",
+    "desc": "ownCloud Infinite Scale (oCIS) is the current ownCloud server, a single Go binary with a built-in web UI. This VM runs the official owncloud/ocis container on a Debian or Ubuntu cloud image with Docker and works on a plain IP address straight away.",
+    "script": "vm/owncloud-ocis-vm.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/owncloud-ocis-vm.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/vm/owncloud-ocis-vm.sh",
+    "type": "vm",
+    "type_id": "lte524abgx960bd",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 9200,
+    "website": "https://owncloud.com/",
+    "documentation": "https://doc.owncloud.com/ocis/next/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/owncloud.webp",
+    "updateable": false,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "vm"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
     },
     "os": ""
   },
@@ -17553,6 +18151,36 @@
     "os": ""
   },
   {
+    "name": "Prefect",
+    "slug": "prefect",
+    "desc": "Prefect is a workflow orchestration platform for Python. Turn any Python function into a flow with retries, caching and schedules, deploy it to a work pool and follow every run, its logs and task states in a web UI. It covers data pipelines, ML jobs and general automation.",
+    "script": "ct/prefect.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/prefect.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/prefect.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 4200,
+    "website": "https://www.prefect.io/",
+    "documentation": "https://docs.prefect.io/v3/",
+    "logo": "https://cdn.jsdelivr.net/gh/PrefectHQ/prefect@main/docs/logos/favicon.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "PriceBuddy",
     "slug": "pricebuddy",
     "desc": "PriceBuddy is a self-hosted price tracker. Paste a product URL from almost any store and it checks price and stock on a schedule, keeps the price history, compares the same product across retailers, and notifies you by email, Pushover, Gotify, ntfy, Telegram, Discord or Apprise when a deal moves in your favour.",
@@ -18569,6 +19197,36 @@
     "os": ""
   },
   {
+    "name": "Rallly",
+    "slug": "rallly",
+    "desc": "Rallly is an open-source scheduling and collaboration tool and a self-hosted alternative to Doodle. Create a meeting poll with date and time options, share the link, and participants vote on what suits them without an account; the organizer then picks the final date and everyone gets notified.",
+    "script": "ct/rallly.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/rallly.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/rallly.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00019"
+    ],
+    "category_names": [
+      "Automation & Scheduling"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://rallly.co/",
+    "documentation": "https://support.rallly.co/self-hosting/introduction",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/rallly.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Rauthy",
     "slug": "rauthy",
     "desc": "Rauthy is a single sign-on identity and access management server. It is an OpenID Connect and OAuth 2 provider with an admin UI, passkey (FIDO2/WebAuthn) and OTP multi-factor login, upstream login providers, SCIM, forward auth and PAM/SSH login.",
@@ -18877,6 +19535,40 @@
     "os": ""
   },
   {
+    "name": "Redmine",
+    "slug": "redmine",
+    "desc": "Redmine is a flexible project management web application. It handles multiple projects with per-project roles, issue tracking with custom fields and workflows, Gantt charts and calendars, wikis, forums, time tracking and repository browsing for Git, Subversion and Mercurial.",
+    "script": "ct/redmine.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/redmine.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/redmine.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://www.redmine.org/",
+    "documentation": "https://www.redmine.org/projects/redmine/wiki/Guide",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/redmine.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Reitti",
     "slug": "reitti",
     "desc": "Reitti is a self-hosted location tracking and analysis platform that detects significant places, trip patterns, and integrates with OwnTracks, GPSLogger, and Immich. It uses PostgreSQL + PostGIS, RabbitMQ, Redis, and an optional Photon geocoder.",
@@ -18966,6 +19658,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Rivet Engine",
+    "slug": "rivet",
+    "desc": "Rivet is an open alternative to Cloudflare Durable Objects. Rivet Actors are long-lived stateful processes with their own SQLite database that run inside your Node.js, Bun or Rust apps, while the engine schedules, routes and persists them. This is the self-hosted engine those apps connect to.",
+    "script": "ct/rivet.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/rivet.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/rivet.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 6420,
+    "website": "https://www.rivet.dev/",
+    "documentation": "https://rivet.dev/docs/deploy/self-host/control-plane/",
+    "logo": "https://cdn.jsdelivr.net/gh/rivet-dev/rivet@main/.github/media/platforms/rivet-bg.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -19922,6 +20644,36 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
+    "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "SiYuan",
+    "slug": "siyuan",
+    "desc": "SiYuan is a privacy-first personal knowledge management system with block-level references, bidirectional links and a Markdown WYSIWYG editor. It adds databases, flashcards, PDF annotation and optional end-to-end encrypted sync, all stored as local files in your workspace.",
+    "script": "ct/siyuan.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/siyuan.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/siyuan.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 6806,
+    "website": "https://b3log.org/siyuan/en/",
+    "documentation": "https://github.com/siyuan-note/siyuan#docker-hosting",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/siyuan.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
     "is_dev": true,
     "execute_in": [
       "lxc"
@@ -20332,7 +21084,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -21175,6 +21927,40 @@
     "os": ""
   },
   {
+    "name": "Apache Superset",
+    "slug": "superset",
+    "desc": "Apache Superset is a data exploration and visualization platform. It connects to most SQL databases, offers SQL Lab for writing queries, a no-code chart builder with dozens of chart types, and interactive dashboards with filters and fine-grained access control.",
+    "script": "ct/superset.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/superset.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/superset.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 8088,
+    "website": "https://superset.apache.org/",
+    "documentation": "https://superset.apache.org/user-docs/intro",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/apache-superset.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Sure",
     "slug": "sure",
     "desc": "The personal finance app for everyone. NOT affiliated with or endorsed by Maybe Finance Inc..",
@@ -21781,7 +22567,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -22259,7 +23045,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -23081,6 +23867,40 @@
     "os": ""
   },
   {
+    "name": "Unleash",
+    "slug": "unleash",
+    "desc": "Unleash is an open-source feature flag management platform. It lets teams turn features on and off without a deploy, roll them out gradually with activation strategies, constraints and segments, and run A/B tests with variants. SDKs for many languages evaluate flags locally against the Unleash API.",
+    "script": "ct/unleash.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/unleash.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/unleash.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 4242,
+    "website": "https://www.getunleash.io/",
+    "documentation": "https://docs.getunleash.io/",
+    "logo": "https://cdn.jsdelivr.net/gh/Unleash/unleash@main/frontend/public/logo-unleash.png",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Unmanic",
     "slug": "unmanic",
     "desc": "Unmanic is a simple tool for optimising your file library. You can use it to convert your files into a single, uniform format, manage file movements based on timestamps, or execute custom commands against a file based on its file size.",
@@ -23163,7 +23983,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -23981,6 +24801,42 @@
     "os": ""
   },
   {
+    "name": "Waydroid",
+    "slug": "waydroid-vm",
+    "desc": "Waydroid boots a full Android system in a container on a regular Linux system and shows Android apps natively through a Wayland compositor. This VM runs it on Ubuntu 24.04 or Debian 13.",
+    "script": "vm/waydroid-vm.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/waydroid-vm.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/vm/waydroid-vm.sh",
+    "type": "vm",
+    "type_id": "lte524abgx960bd",
+    "categories": [
+      "scriptcat00020",
+      "scriptcat00003"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools",
+      "Containers & Docker"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://waydro.id/",
+    "documentation": "https://docs.waydro.id/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/waydroid.webp",
+    "updateable": false,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "vm"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "ubuntu",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Wazuh",
     "slug": "wazuh",
     "desc": "Wazuh is an open-source security monitoring solution that provides endpoint protection, network monitoring, and log analysis capabilities.",
@@ -24075,7 +24931,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -25274,6 +26130,32 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Zulip",
+    "slug": "zulip",
+    "desc": "Zulip is an open-source team chat server that organizes conversations into channels and topics, so discussions stay readable and can be followed up later. It offers search, threads, integrations, bots and desktop and mobile apps.",
+    "script": "ct/zulip.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/zulip.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/zulip.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 443,
+    "website": "https://zulip.com/",
+    "documentation": "https://zulip.readthedocs.io/en/stable/production/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/zulip.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
