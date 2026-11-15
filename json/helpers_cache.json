@@ -1632,6 +1632,36 @@
     "os": ""
   },
   {
+    "name": "Atuin",
+    "slug": "atuin",
+    "desc": "Atuin replaces your shell history with a searchable SQLite database that records context such as exit code, duration and working directory. Its sync server keeps that history end-to-end encrypted and in step across all your machines, so the server never sees your commands in plain text.",
+    "script": "ct/atuin.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/atuin.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/atuin.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 8888,
+    "website": "https://atuin.sh/",
+    "documentation": "https://docs.atuin.sh/self-hosting/server-setup/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/atuin.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Audiobookshelf",
     "slug": "audiobookshelf",
     "desc": "Audiobookshelf is a Self-hosted audiobook and podcast server.",
@@ -2394,7 +2424,7 @@
     "updateable": false,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "vm"
     ],
@@ -3444,6 +3474,40 @@
     "os": ""
   },
   {
+    "name": "Chibisafe",
+    "slug": "chibisafe",
+    "desc": "Chibisafe is a self-hosted file uploader and sharing service with chunked drag-and-drop uploads, albums, snippets and a built-in URL shortener. It supports user accounts with storage quotas, public or invite-only mode, an admin panel, S3 storage and uploads from ShareX or its API.",
+    "script": "ct/chibisafe.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/chibisafe.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/chibisafe.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00011"
+    ],
+    "category_names": [
+      "Files & Downloads"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://chibisafe.app/",
+    "documentation": "https://chibisafe.app/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/chibisafe.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "ChirpStack",
     "slug": "chirpstack",
     "desc": "ChirpStack is an open-source LoRaWAN Network Server. It manages gateways, devices and applications, handles device activation and the LoRaWAN MAC layer, and forwards uplink data to MQTT, HTTP and many other integrations.",
@@ -3533,6 +3597,36 @@
     "privileged": false,
     "has_arm": false,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "ClamAV",
+    "slug": "clamav",
+    "desc": "ClamAV is an open-source antivirus engine for detecting trojans, viruses, malware and other threats. The clamd daemon serves scan requests over the network, so mail servers, Nextcloud, Paperless-ngx and other apps can use it as their virus scanner, while freshclam keeps the signatures up to date.",
+    "script": "ct/clamav.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/clamav.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/clamav.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00006"
+    ],
+    "category_names": [
+      "Authentication & Security"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://www.clamav.net/",
+    "documentation": "https://docs.clamav.net/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/clamav.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -3757,6 +3851,40 @@
       "pve"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "CloudPanel",
+    "slug": "cloudpanel",
+    "desc": "CloudPanel is a free server control panel for hosting PHP, Node.js, Python, static sites and reverse proxies. It manages NGINX vhosts, PHP-FPM versions, databases, Let's Encrypt certificates, Varnish page cache, cron jobs, SFTP users and backups from one web interface or the clpctl CLI.",
+    "script": "ct/cloudpanel.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/cloudpanel.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/cloudpanel.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00021"
+    ],
+    "category_names": [
+      "Webservers & Proxies"
+    ],
+    "notes": [],
+    "port": 8443,
+    "website": "https://www.cloudpanel.io/",
+    "documentation": "https://www.cloudpanel.io/docs/v2/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/cloudpanel.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -4191,6 +4319,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Coturn",
+    "slug": "coturn",
+    "desc": "Coturn is an open-source TURN and STUN server that relays audio, video and data for WebRTC clients that cannot connect directly through NAT or firewalls. It is the relay commonly paired with Matrix (Synapse), Jitsi Meet and Nextcloud Talk, and authenticates clients with time-limited credentials derived from a shared secret.",
+    "script": "ct/coturn.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/coturn.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/coturn.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00004"
+    ],
+    "category_names": [
+      "Network & Firewall"
+    ],
+    "notes": [],
+    "port": 3478,
+    "website": "https://github.com/coturn/coturn",
+    "documentation": "https://github.com/coturn/coturn/wiki",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/coturn.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -5068,7 +5226,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -5886,6 +6044,40 @@
       "lxc"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Drupal",
+    "slug": "drupal",
+    "desc": "Drupal is an open-source content management system for building anything from simple websites to large, structured digital platforms. Content types, fields, taxonomy and Views let you model and list content without code, with granular roles and permissions and built-in multilingual support. Thousands of contributed modules and themes extend it with commerce, search, workflows and more.",
+    "script": "ct/drupal.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/drupal.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/drupal.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.drupal.org/",
+    "documentation": "https://www.drupal.org/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/drupal.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -7160,6 +7352,36 @@
     "privileged": false,
     "has_arm": true,
     "is_dev": false,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Fizzy",
+    "slug": "fizzy",
+    "desc": "Fizzy is a Kanban tool from 37signals for tracking issues and ideas. Teams organise cards on boards with columns, comment and react on them, get notified about changes, and cards that sit untouched slowly fade into Not Now so boards stay current.",
+    "script": "ct/fizzy.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/fizzy.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/fizzy.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://fizzy.do/",
+    "documentation": "https://github.com/basecamp/fizzy/blob/main/docs/docker-deployment.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/fizzy.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
     "execute_in": [
       "lxc"
     ],
@@ -8804,6 +9026,36 @@
     "os": ""
   },
   {
+    "name": "Grimmory",
+    "slug": "grimmory",
+    "desc": "Grimmory is a self-hosted, multi-user library for ebooks, comics and audiobooks, continuing the BookLore project. It organizes books into libraries and smart shelves, fetches metadata automatically, and includes a web reader for EPUB, PDF and comics with annotations. Kobo and KOReader sync, OPDS and BookDrop imports are built in.",
+    "script": "ct/grimmory.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/grimmory.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/grimmory.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 6060,
+    "website": "https://grimmory.org/",
+    "documentation": "https://grimmory.org/docs/getting-started",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/grimmory.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Grist",
     "slug": "grist",
     "desc": "Grist is like a spreadsheet + database hybrid. It lets you store structured data, use relational links between tables, apply formulas (even with Python), build custom layouts (cards, forms, dashboards), set fine-grained access rules, and visualize data with charts or pivot-tables.",
@@ -9321,6 +9573,36 @@
     "website": "https://heyform.net/",
     "documentation": "https://docs.heyform.net/open-source/self-hosting",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/heyform.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Hi.Events",
+    "slug": "hi-events",
+    "desc": "Hi.Events is an event management and ticketing platform for conferences, concerts, workshops and club nights. Organizers sell free or paid tickets through Stripe with custom check-out questions, promo codes and capacity limits, manage attendees, check them in with the browser-based check-in app and embed ticket widgets in their own website.",
+    "script": "ct/hi-events.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/hi-events.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/hi-events.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 443,
+    "website": "https://hi.events/",
+    "documentation": "https://hi.events/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hi-events.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -11546,6 +11828,40 @@
     "os": ""
   },
   {
+    "name": "Kopia",
+    "slug": "kopia",
+    "desc": "Kopia is a fast, encrypted and deduplicating backup tool. In server mode it offers a web UI for snapshots, policies and restores, and serves repositories to remote Kopia clients over HTTPS.",
+    "script": "ct/kopia.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/kopia.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/kopia.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00007"
+    ],
+    "category_names": [
+      "Backup & Recovery"
+    ],
+    "notes": [],
+    "port": 51515,
+    "website": "https://kopia.io/",
+    "documentation": "https://kopia.io/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/kopia.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Kubo",
     "slug": "kubo",
     "desc": "Kubo, developed by IPFS, is a decentralized file storage and sharing protocol. It implements the IPFS protocol, allowing users to manage files across a distributed network, ensuring data integrity and availability. Kubo supports file versioning, pinning, provides APIs and CLI tools for developers, and allows customizable node configurations for enhanced privacy and control.",
@@ -13332,6 +13648,40 @@
     "os": ""
   },
   {
+    "name": "Mautic",
+    "slug": "mautic",
+    "desc": "Mautic is an open-source marketing automation platform. It tracks contacts and sorts them into segments, sends email campaigns and newsletters, and builds landing pages and forms. Campaigns react to what contacts do, and lead scoring shows who is ready to buy.",
+    "script": "ct/mautic.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/mautic.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/mautic.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.mautic.org/",
+    "documentation": "https://docs.mautic.org/en/latest/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/mautic.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
+    "os": ""
+  },
+  {
     "name": "Mealie",
     "slug": "mealie",
     "desc": "Mealie is a self hosted recipe manager, meal planner and shopping list with a RestAPI backend and a reactive frontend built in Vue for a pleasant user experience for the whole family. Easily add recipes into your database by providing the URL and Mealie will automatically import the relevant data, or add a family recipe with the UI editor. Mealie also provides an API for interactions from 3rd party applications.",
@@ -14440,6 +14790,36 @@
       "username": "neo4j",
       "password": "neo4j"
     },
+    "os": ""
+  },
+  {
+    "name": "NetAlertX",
+    "slug": "netalertx",
+    "desc": "NetAlertX watches your network for devices: it discovers everything on the LAN with ARP scans, nmap and imports from routers, Pi-hole or DHCP servers, and tracks when devices come and go. It alerts you about new, unknown or missing devices through email, ntfy, Telegram, MQTT, webhooks and more, and ships many plugins for other integrations.",
+    "script": "ct/netalertx.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/netalertx.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/netalertx.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00004"
+    ],
+    "category_names": [
+      "Network & Firewall"
+    ],
+    "notes": [],
+    "port": 20211,
+    "website": "https://netalertx.com/",
+    "documentation": "https://docs.netalertx.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/netalertx.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
     "os": ""
   },
   {
@@ -16267,7 +16647,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -16580,6 +16960,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "OpnForm",
+    "slug": "opnform",
+    "desc": "OpnForm is an open-source form builder and alternative to Typeform and Google Forms. Forms support conditional logic, file uploads, payments, custom themes and embedding, and submissions land in a dashboard or go out to email, webhooks, Slack, Discord and Google Sheets.",
+    "script": "ct/opnform.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/opnform.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/opnform.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://opnform.com/",
+    "documentation": "https://docs.opnform.com/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/opnform.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -20192,6 +20602,36 @@
     "os": ""
   },
   {
+    "name": "Rybbit",
+    "slug": "rybbit",
+    "desc": "Rybbit is a privacy-friendly, cookieless web and product analytics platform and an open source alternative to Google Analytics. It tracks pageviews, sessions, goals, funnels, user journeys and errors, and can record session replays.",
+    "script": "ct/rybbit.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/rybbit.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/rybbit.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://rybbit.com/",
+    "documentation": "https://rybbit.com/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/rybbit.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "Ryot",
     "slug": "ryot",
     "desc": "Ryot (Roll Your Own Tracker) is a self-hosted tracker for the media you consume and the workouts you do. It logs movies, shows, books, games, anime, podcasts and more with metadata from TMDB, IGDB, OpenLibrary and AniList, and records workouts and body measurements.",
@@ -20433,6 +20873,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Scrutiny",
+    "slug": "scrutiny",
+    "desc": "Scrutiny is a dashboard for hard drive health based on S.M.A.R.T. data. It keeps the history of every disk, compares the values against real-world failure rates from Backblaze and sends notifications when a drive starts to fail.",
+    "script": "ct/scrutiny.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/scrutiny.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/scrutiny.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://github.com/AnalogJ/scrutiny",
+    "documentation": "https://github.com/AnalogJ/scrutiny/blob/master/docs/INSTALL_MANUAL.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/scrutiny.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -20843,6 +21313,40 @@
       "lxc"
     ],
     "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Shopware",
+    "slug": "shopware",
+    "desc": "Shopware is an open-source e-commerce platform built on Symfony and Vue.js. It offers a headless Store API, a Twig storefront, rule-based pricing and promotions, and an extension system for plugins, apps and themes.",
+    "script": "ct/shopware.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/shopware.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/shopware.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00025"
+    ],
+    "category_names": [
+      "Business & ERP"
+    ],
+    "notes": [],
+    "port": 80,
+    "website": "https://www.shopware.com/",
+    "documentation": "https://developer.shopware.com/docs/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/shopware.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "default_credentials": {
+      "username": "admin",
+      "password": ""
+    },
     "os": ""
   },
   {
@@ -24869,7 +25373,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -25850,6 +26354,36 @@
     "website": "https://github.com/tenox7/wrp",
     "documentation": "https://github.com/tenox7/wrp#readme",
     "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/chromium.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "XWiki",
+    "slug": "xwiki",
+    "desc": "XWiki is a free, open source wiki platform written in Java. It offers structured data, applications inside the wiki, a powerful extension system and fine-grained permissions, and is a common alternative to Confluence.",
+    "script": "ct/xwiki.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/xwiki.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/xwiki.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00012"
+    ],
+    "category_names": [
+      "Documents & Notes"
+    ],
+    "notes": [],
+    "port": 8080,
+    "website": "https://www.xwiki.org/",
+    "documentation": "https://www.xwiki.org/xwiki/bin/view/Documentation/",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/xwiki.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
