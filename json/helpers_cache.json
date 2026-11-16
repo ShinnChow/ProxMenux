@@ -3011,6 +3011,36 @@
   },
   {
     "name": "Cap",
+    "slug": "cap",
+    "desc": "Cap is an open-source alternative to Loom. Record your screen and camera with the Cap desktop app or the browser, upload to your own server and share each recording by link, with comments, reactions and viewer analytics.",
+    "script": "ct/cap.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/cap.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/cap.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00013"
+    ],
+    "category_names": [
+      "Media & Streaming"
+    ],
+    "notes": [],
+    "port": 443,
+    "website": "https://cap.so/",
+    "documentation": "https://cap.so/docs/self-hosting",
+    "logo": "https://cdn.jsdelivr.net/gh/CapSoftware/Cap@main/apps/web/public/cap-icon.svg",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Cap",
     "slug": "cap-captcha",
     "desc": "Cap is a lightweight, privacy-friendly CAPTCHA alternative to reCAPTCHA and hCaptcha that uses proof-of-work instead of puzzles or tracking. This is its self-hosted server (capd): a dashboard to manage site keys, the challenge endpoints the widget talks to, and a siteverify API your backend uses to check tokens.",
     "script": "ct/cap-captcha.sh",
@@ -3943,6 +3973,36 @@
     "is_dev": false,
     "execute_in": [
       "pve"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Coder",
+    "slug": "coder",
+    "desc": "Coder provides self-hosted cloud development environments. Admins describe workspaces as Terraform templates on VMs, containers or plain hosts, and developers create them from a web dashboard and connect through browser IDEs, VS Code or SSH.",
+    "script": "ct/coder.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/coder.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/coder.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [
+      "scriptcat00020"
+    ],
+    "category_names": [
+      "AI / Coding & Dev-Tools"
+    ],
+    "notes": [],
+    "port": 3000,
+    "website": "https://coder.com/",
+    "documentation": "https://coder.com/docs",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/coder.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
     ],
     "config_path": "",
     "os": ""
@@ -20451,6 +20511,32 @@
     "os": ""
   },
   {
+    "name": "Roundcube",
+    "slug": "roundcube",
+    "desc": "Roundcube is a browser-based IMAP webmail client with a desktop-like interface. It handles folders, search, threads, HTML compose, attachments and an address book, and can be extended with plugins and skins.",
+    "script": "ct/roundcube.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/roundcube.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/roundcube.sh",
+    "type": "lxc",
+    "type_id": "nm9bra8mzye2scg",
+    "categories": [],
+    "category_names": [],
+    "notes": [],
+    "port": 80,
+    "website": "https://roundcube.net/",
+    "documentation": "https://github.com/roundcube/roundcubemail/wiki",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/roundcube.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
     "name": "RSS-Bridge",
     "slug": "rss-bridge",
     "desc": "RSS-Bridge is a PHP web application that generates web feeds for websites that don't have one, supporting over 400 bridges for various platforms and services.",
@@ -20903,6 +20989,36 @@
     "is_dev": true,
     "execute_in": [
       "lxc"
+    ],
+    "config_path": "",
+    "os": ""
+  },
+  {
+    "name": "Scrutiny Collector",
+    "slug": "scrutiny-collector",
+    "desc": "The Scrutiny collector reads the S.M.A.R.T. data of every physical disk on the host and sends it to a Scrutiny web UI, which keeps the history and warns when a drive starts to fail. It runs on the host because containers cannot see the disks.",
+    "script": "tools/pve/scrutiny-collector.sh",
+    "script_url": "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/scrutiny-collector.sh",
+    "script_url_mirror": "https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/tools/pve/scrutiny-collector.sh",
+    "type": "pve",
+    "type_id": "1uyjfno0fpf5buh",
+    "categories": [
+      "scriptcat00009"
+    ],
+    "category_names": [
+      "Monitoring & Analytics"
+    ],
+    "notes": [],
+    "port": 0,
+    "website": "https://github.com/AnalogJ/scrutiny",
+    "documentation": "https://github.com/AnalogJ/scrutiny/blob/master/docs/INSTALL_MANUAL.md",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/scrutiny.webp",
+    "updateable": true,
+    "privileged": false,
+    "has_arm": false,
+    "is_dev": true,
+    "execute_in": [
+      "pve"
     ],
     "config_path": "",
     "os": ""
