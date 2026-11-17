@@ -3556,7 +3556,7 @@
     "port": 8080,
     "website": "https://www.chirpstack.io/",
     "documentation": "https://www.chirpstack.io/docs/",
-    "logo": "https://raw.githubusercontent.com/chirpstack/chirpstack-docs/refs/heads/master/theme/favicon.svg",
+    "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/chirpstack.webp",
     "updateable": true,
     "privileged": false,
     "has_arm": false,
@@ -8389,7 +8389,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
@@ -14875,7 +14875,7 @@
     "updateable": true,
     "privileged": false,
     "has_arm": false,
-    "is_dev": true,
+    "is_dev": false,
     "execute_in": [
       "lxc"
     ],
